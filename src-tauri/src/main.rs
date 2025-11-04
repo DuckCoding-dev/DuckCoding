@@ -20,16 +20,39 @@ struct CliDir(Mutex<PathBuf>);
 // 辅助函数：获取扩展的PATH环境变量
 fn get_extended_path() -> String {
     let home_dir = env::var("HOME").unwrap_or_else(|_| "/Users/wufeifan".to_string());
-    let system_paths = vec![
+
+    let mut system_paths = vec![
+        // Claude Code 可能的安装路径
         format!("{}/.local/bin", home_dir),
         format!("{}/.claude/bin", home_dir),
+        format!("{}/.claude/local", home_dir),  // Claude Code local安装
+
+        // Homebrew
         "/opt/homebrew/bin".to_string(),
         "/usr/local/bin".to_string(),
+
+        // 系统路径
         "/usr/bin".to_string(),
         "/bin".to_string(),
         "/usr/sbin".to_string(),
         "/sbin".to_string(),
     ];
+
+    // 添加nvm路径（如果存在）
+    let nvm_dir = format!("{}/.nvm/versions/node", home_dir);
+    if let Ok(entries) = fs::read_dir(&nvm_dir) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_dir() {
+                    let bin_path = entry.path().join("bin");
+                    if bin_path.exists() {
+                        system_paths.push(bin_path.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
     format!("{}:{}", system_paths.join(":"), env::var("PATH").unwrap_or_default())
 }
 
@@ -1199,15 +1222,17 @@ async fn get_user_quota() -> Result<UserQuotaResult, String> {
 
     let user_info = api_response.data.ok_or("未获取到用户信息")?;
 
-    // 计算剩余额度（quota需要除以500000转换为人民币）
-    let total_quota = user_info.quota as f64 / 500000.0;
+    // 修正：API返回的quota是剩余额度，不是总额度
+    // 正确计算：总额度 = 剩余额度 + 已用额度
+    let remaining_quota = user_info.quota as f64 / 500000.0;
     let used_quota = user_info.used_quota as f64 / 500000.0;
-    let remaining_quota = total_quota - used_quota;
+    let total_quota = remaining_quota + used_quota;
 
     #[cfg(debug_assertions)]
     {
-        println!("Raw quota: {}, converted: {}", user_info.quota, total_quota);
+        println!("Raw remaining: {}, converted: {}", user_info.quota, remaining_quota);
         println!("Raw used: {}, converted: {}", user_info.used_quota, used_quota);
+        println!("Total quota: {}", total_quota);
     }
 
     Ok(UserQuotaResult {
