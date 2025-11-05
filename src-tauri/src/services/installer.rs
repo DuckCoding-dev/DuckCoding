@@ -14,6 +14,21 @@ impl InstallerService {
         }
     }
 
+    /// 检测 Windows 系统上可用的 PowerShell 版本
+    /// 返回：(可执行文件名, 是否支持 -OutputEncoding 参数)
+    #[cfg(windows)]
+    fn detect_powershell() -> (&'static str, bool) {
+        use std::process::Command;
+
+        // 优先检测 PowerShell 7+ (pwsh.exe)
+        if Command::new("pwsh").arg("-Version").output().is_ok() {
+            return ("pwsh", true);
+        }
+
+        // 回退到 PowerShell 5 (powershell.exe)，不支持 -OutputEncoding
+        ("powershell", false)
+    }
+
     /// 检查工具是否已安装
     pub async fn is_installed(&self, tool: &Tool) -> bool {
         self.executor.command_exists_async(&tool.check_command.split_whitespace().next().unwrap()).await
@@ -97,8 +112,29 @@ impl InstallerService {
         let command = match tool.id.as_str() {
             "claude-code" => {
                 if cfg!(windows) {
-                    // Windows: 使用PowerShell，强制UTF-8编码避免乱码
-                    "powershell -NoProfile -ExecutionPolicy Bypass -OutputEncoding UTF8 -Command \"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex\"".to_string()
+                    // Windows: 检测 PowerShell 版本并生成兼容命令
+                    #[cfg(windows)]
+                    {
+                        let (ps_exe, supports_encoding) = Self::detect_powershell();
+
+                        if supports_encoding {
+                            // PowerShell 7+ 支持 -OutputEncoding
+                            format!(
+                                "{} -NoProfile -ExecutionPolicy Bypass -OutputEncoding UTF8 -Command \"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex\"",
+                                ps_exe
+                            )
+                        } else {
+                            // PowerShell 5 不支持 -OutputEncoding，使用 chcp 处理编码
+                            format!(
+                                "cmd /C \"chcp 65001 >nul && {} -NoProfile -ExecutionPolicy Bypass -Command \\\"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex\\\"\"",
+                                ps_exe
+                            )
+                        }
+                    }
+                    #[cfg(not(windows))]
+                    {
+                        String::new() // 不会执行到这里
+                    }
                 } else {
                     // macOS/Linux: 使用 DuckCoding 镜像
                     "curl -fsSL https://mirror.duckcoding.com/claude-code/install.sh | bash".to_string()

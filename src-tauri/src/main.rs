@@ -1286,6 +1286,21 @@ fn main() {
                                 println!("Window found, is_visible: {:?}", window.is_visible());
                                 println!("Window is_minimized: {:?}", window.is_minimized());
 
+                                // macOS: 恢复 Dock 图标
+                                #[cfg(target_os = "macos")]
+                                {
+                                    use cocoa::appkit::NSApplication;
+                                    use cocoa::base::nil;
+                                    use cocoa::foundation::NSAutoreleasePool;
+
+                                    unsafe {
+                                        let _pool = NSAutoreleasePool::new(nil);
+                                        let app_macos = NSApplication::sharedApplication(nil);
+                                        app_macos.setActivationPolicy_(cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular);
+                                    }
+                                    println!("macOS Dock icon restored");
+                                }
+
                                 // 显示并激活窗口
                                 if let Err(e) = window.show() {
                                     println!("Error showing window: {:?}", e);
@@ -1326,6 +1341,9 @@ fn main() {
             // 处理窗口关闭事件 - 最小化到托盘而不是退出
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
+                #[cfg(target_os = "macos")]
+                let app_handle = app.app_handle().clone();
+
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                         println!("Window close requested - hiding to tray");
@@ -1334,6 +1352,22 @@ fn main() {
                         // 隐藏窗口到托盘
                         let _ = window_clone.hide();
                         println!("Window hidden");
+
+                        // macOS: 隐藏 Dock 图标
+                        #[cfg(target_os = "macos")]
+                        {
+                            use cocoa::appkit::NSApplication;
+                            use cocoa::base::{id, nil};
+                            use cocoa::foundation::NSAutoreleasePool;
+                            use objc::runtime::BOOL;
+
+                            unsafe {
+                                let _pool = NSAutoreleasePool::new(nil);
+                                let app_macos = NSApplication::sharedApplication(nil);
+                                app_macos.setActivationPolicy_(cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyAccessory);
+                            }
+                            println!("macOS Dock icon hidden");
+                        }
                     }
                 });
             }
@@ -1358,7 +1392,46 @@ fn main() {
             generate_api_key_for_tool,
             get_usage_stats,
             get_user_quota
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        ]);
+
+    // 使用自定义事件循环处理 macOS Reopen 事件
+    builder.build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::Reopened => {
+                // macOS: 从 Dock 或 Cmd+Tab 唤醒应用
+                #[cfg(target_os = "macos")]
+                {
+                    use cocoa::appkit::NSApplication;
+                    use cocoa::base::nil;
+                    use cocoa::foundation::NSAutoreleasePool;
+                    use objc::runtime::YES;
+
+                    println!("macOS Reopen event detected");
+
+                    if let Some(window) = app_handle.get_webview_window("main") {
+                        // 恢复 Dock 图标
+                        unsafe {
+                            let _pool = NSAutoreleasePool::new(nil);
+                            let app_macos = NSApplication::sharedApplication(nil);
+                            app_macos.setActivationPolicy_(cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular);
+                        }
+
+                        // 显示并激活窗口
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+
+                        // 激活应用到前台
+                        unsafe {
+                            let ns_app = NSApplication::sharedApplication(nil);
+                            ns_app.activateIgnoringOtherApps_(YES);
+                        }
+
+                        println!("Window restored from Dock/Cmd+Tab");
+                    }
+                }
+            }
+            _ => {}
+        });
 }

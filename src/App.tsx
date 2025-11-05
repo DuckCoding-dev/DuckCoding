@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CheckCircle2, XCircle, Package, Settings as SettingsIcon, RefreshCw, LayoutDashboard, Loader2, AlertCircle, Save, ExternalLink, Info, ArrowRightLeft, Key, Sparkles, BarChart3, GripVertical } from "lucide-react";
-import { checkInstallations, checkNodeEnvironment, installTool, checkAllUpdates, updateTool, configureApi, listProfiles, switchProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, type ToolStatus, type NodeEnvironment, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
+import { CheckCircle2, XCircle, Package, Settings as SettingsIcon, RefreshCw, LayoutDashboard, Loader2, AlertCircle, Save, ExternalLink, Info, ArrowRightLeft, Key, Sparkles, BarChart3, GripVertical, Trash2 } from "lucide-react";
+import { checkInstallations, checkNodeEnvironment, installTool, checkAllUpdates, updateTool, configureApi, listProfiles, switchProfile, deleteProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, type ToolStatus, type NodeEnvironment, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
 import {
   DndContext,
   closestCenter,
@@ -49,10 +49,12 @@ interface ProfileItemProps {
   profile: string;
   toolId: string;
   switching: boolean;
+  deleting: boolean;
   onSwitch: (toolId: string, profile: string) => void;
+  onDelete: (toolId: string, profile: string) => void;
 }
 
-function SortableProfileItem({ profile, toolId, switching, onSwitch }: ProfileItemProps) {
+function SortableProfileItem({ profile, toolId, switching, deleting, onSwitch, onDelete }: ProfileItemProps) {
   const {
     attributes,
     listeners,
@@ -85,25 +87,46 @@ function SortableProfileItem({ profile, toolId, switching, onSwitch }: ProfileIt
         </button>
         <span className="font-medium text-slate-900 dark:text-slate-100">{profile}</span>
       </div>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={() => onSwitch(toolId, profile)}
-        disabled={switching}
-        className="shadow-sm hover:shadow-md transition-all"
-      >
-        {switching ? (
-          <>
-            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            切换中...
-          </>
-        ) : (
-          <>
-            <ArrowRightLeft className="h-3 w-3 mr-1" />
-            切换
-          </>
-        )}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onSwitch(toolId, profile)}
+          disabled={switching || deleting}
+          className="shadow-sm hover:shadow-md transition-all"
+        >
+          {switching ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              切换中...
+            </>
+          ) : (
+            <>
+              <ArrowRightLeft className="h-3 w-3 mr-1" />
+              切换
+            </>
+          )}
+        </Button>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={() => onDelete(toolId, profile)}
+          disabled={switching || deleting}
+          className="shadow-sm hover:shadow-md transition-all"
+        >
+          {deleting ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              删除中...
+            </>
+          ) : (
+            <>
+              <Trash2 className="h-3 w-3 mr-1" />
+              删除
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -118,6 +141,7 @@ function App() {
   const [updateCheckMessage, setUpdateCheckMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   const [configuring, setConfiguring] = useState(false);
   const [switching, setSwitching] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Ref to store timeout ID for cleanup
   const updateMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -721,12 +745,40 @@ function App() {
         console.error("Failed to reload active config", error);
       }
 
-      alert("✅ 配置切换成功！");
+      alert("✅ 配置切换成功！\n\n请重启相关 CLI 工具以使新配置生效。");
     } catch (error) {
       console.error("Failed to switch profile:", error);
       alert("❌ 切换失败\n\n" + error);
     } finally {
       setSwitching(false);
+    }
+  };
+
+  const handleDeleteProfile = async (toolId: string, profile: string) => {
+    // 确认删除
+    if (!confirm(`确定要删除配置 "${profile}" 吗？\n\n此操作不可恢复。`)) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await deleteProfile(toolId, profile);
+
+      // 更新profiles列表，移除已删除的配置
+      setProfiles(prevProfiles => {
+        const updatedProfiles = { ...prevProfiles };
+        if (updatedProfiles[toolId]) {
+          updatedProfiles[toolId] = updatedProfiles[toolId].filter(p => p !== profile);
+        }
+        return updatedProfiles;
+      });
+
+      alert("✅ 配置删除成功！");
+    } catch (error) {
+      console.error("Failed to delete profile:", error);
+      alert("❌ 删除失败\n\n" + error);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -1214,6 +1266,24 @@ function App() {
                             <p className="text-xs text-muted-foreground">点击"一键生成"可自动创建 DuckCoding API Key（需先配置全局设置）</p>
                           </div>
 
+                          {provider === "duckcoding" && (
+                            <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-4">
+                              <div className="flex items-start gap-3">
+                                <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                                <div className="space-y-2">
+                                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                                    DuckCoding 默认配置
+                                  </p>
+                                  <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                                    <p>• Base URL: <code className="bg-white/50 dark:bg-slate-900/50 px-1.5 py-0.5 rounded">https://jp.duckcoding.com</code></p>
+                                    <p>• 无需手动填写 Base URL，将自动使用默认端点</p>
+                                    <p>• 切换配置后，请<strong>重启相关 CLI</strong> 以使新配置生效</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {provider === "custom" && (
                             <div className="space-y-2">
                               <Label htmlFor="base-url">Base URL *</Label>
@@ -1371,7 +1441,9 @@ function App() {
                                             profile={profile}
                                             toolId={tool.id}
                                             switching={switching}
+                                            deleting={deleting}
                                             onSwitch={handleSwitchProfile}
+                                            onDelete={handleDeleteProfile}
                                           />
                                         ))}
                                       </div>
