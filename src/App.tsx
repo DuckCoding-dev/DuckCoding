@@ -330,9 +330,9 @@ function App() {
         { value: "npm", label: "npm 安装", disabled: !nodeEnv?.npm_available }
       ];
       if (isMac) {
-        methods.unshift({ value: "brew", label: "Homebrew (推荐)" });
+        methods.unshift({ value: "brew", label: "Homebrew (推荐)", disabled: false });
       }
-      // 注意：官方安装方法暂未实现，已移除
+      // 注意:官方安装方法暂未实现，已移除
       return methods;
     } else if (toolId === "gemini-cli") {
       return [

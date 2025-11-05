@@ -1341,8 +1341,6 @@ fn main() {
             // 处理窗口关闭事件 - 最小化到托盘而不是退出
             if let Some(window) = app.get_webview_window("main") {
                 let window_clone = window.clone();
-                #[cfg(target_os = "macos")]
-                let app_handle = app.app_handle().clone();
 
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
