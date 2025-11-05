@@ -382,7 +382,7 @@ function App() {
     try {
       const updatePromises = installedTools.map(async (tool) => {
         try {
-          const result = await checkUpdate(tool.id);
+          const result = await checkUpdate(tool.id, tool.version);
           return { toolId: tool.id, result };
         } catch (error) {
           console.error(`Failed to check update for ${tool.id}:`, error);
@@ -599,7 +599,7 @@ function App() {
         tools.map(async (tool) => {
           if (tool.installed) {
             try {
-              const updateInfo: UpdateResult = await checkUpdate(tool.id);
+              const updateInfo: UpdateResult = await checkUpdate(tool.id, tool.version);
               return {
                 ...tool,
                 hasUpdate: updateInfo.has_update,

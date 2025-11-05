@@ -83,8 +83,8 @@ export async function installTool(tool: string, method: string): Promise<Install
   return await invoke<InstallResult>("install_tool", { tool, method });
 }
 
-export async function checkUpdate(tool: string): Promise<UpdateResult> {
-  return await invoke<UpdateResult>("check_update", { tool });
+export async function checkUpdate(tool: string, currentVersion?: string | null): Promise<UpdateResult> {
+  return await invoke<UpdateResult>("check_update", { tool, currentVersion });
 }
 
 export async function updateTool(tool: string): Promise<UpdateResult> {
