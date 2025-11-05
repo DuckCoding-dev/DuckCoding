@@ -28,7 +28,6 @@ build/
 
 # Tauri
 src-tauri/target/
-src-tauri/Cargo.lock
 
 # TypeScript
 *.tsbuildinfo
