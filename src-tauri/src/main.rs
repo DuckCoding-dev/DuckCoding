@@ -1,17 +1,18 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem},
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, Runtime, AppHandle,
-};
-use std::process::Command;
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use serde_json::{Value, Map};
-use serde::{Deserialize, Serialize};
+use std::process::Command;
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    AppHandle, Manager, Runtime,
+};
+use toml_edit::{table, value, DocumentMut};
 
 // Windows特定：隐藏命令行窗口
 #[cfg(target_os = "windows")]
@@ -21,19 +22,24 @@ use std::os::windows::process::CommandExt;
 fn get_extended_path() -> String {
     #[cfg(target_os = "windows")]
     {
-        let user_profile = env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string());
+        let user_profile =
+            env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string());
 
         let system_paths = vec![
             // Claude Code 可能的安装路径
             format!("{}\\AppData\\Local\\Programs\\claude-code", user_profile),
             format!("{}\\AppData\\Roaming\\npm", user_profile),
-            format!("{}\\AppData\\Local\\Programs\\Python\\Python312", user_profile),
-            format!("{}\\AppData\\Local\\Programs\\Python\\Python312\\Scripts", user_profile),
-
+            format!(
+                "{}\\AppData\\Local\\Programs\\Python\\Python312",
+                user_profile
+            ),
+            format!(
+                "{}\\AppData\\Local\\Programs\\Python\\Python312\\Scripts",
+                user_profile
+            ),
             // 常见安装路径
             "C:\\Program Files\\nodejs".to_string(),
             "C:\\Program Files\\Git\\cmd".to_string(),
-
             // 系统路径
             "C:\\Windows\\System32".to_string(),
             "C:\\Windows".to_string(),
@@ -51,12 +57,10 @@ fn get_extended_path() -> String {
             // Claude Code 可能的安装路径
             format!("{}/.local/bin", home_dir),
             format!("{}/.claude/bin", home_dir),
-            format!("{}/.claude/local", home_dir),  // Claude Code local安装
-
+            format!("{}/.claude/local", home_dir), // Claude Code local安装
             // Homebrew
             "/opt/homebrew/bin".to_string(),
             "/usr/local/bin".to_string(),
-
             // 系统路径
             "/usr/bin".to_string(),
             "/bin".to_string(),
@@ -79,7 +83,11 @@ fn get_extended_path() -> String {
             }
         }
 
-        format!("{}:{}", system_paths.join(":"), env::var("PATH").unwrap_or_default())
+        format!(
+            "{}:{}",
+            system_paths.join(":"),
+            env::var("PATH").unwrap_or_default()
+        )
     }
 }
 
@@ -115,7 +123,7 @@ async fn check_installations() -> Result<Vec<ToolStatus>, String> {
                 .env("PATH", get_extended_path())
                 .arg("/C")
                 .arg(cmd)
-                .creation_flags(0x08000000)  // CREATE_NO_WINDOW - 隐藏终端窗口
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
                 .output()
         }
 
@@ -135,7 +143,12 @@ async fn check_installations() -> Result<Vec<ToolStatus>, String> {
         let stderr_str = String::from_utf8_lossy(&output.stderr);
 
         #[cfg(debug_assertions)]
-        println!("Claude Code detection - status: {}, stdout: {}, stderr: {}", output.status.success(), stdout_str.trim(), stderr_str.trim());
+        println!(
+            "Claude Code detection - status: {}, stdout: {}, stderr: {}",
+            output.status.success(),
+            stdout_str.trim(),
+            stderr_str.trim()
+        );
 
         // 只有命令成功执行才认为已安装
         if output.status.success() {
@@ -158,7 +171,12 @@ async fn check_installations() -> Result<Vec<ToolStatus>, String> {
         let stderr_str = String::from_utf8_lossy(&output.stderr);
 
         #[cfg(debug_assertions)]
-        println!("CodeX detection - status: {}, stdout: {}, stderr: {}", output.status.success(), stdout_str.trim(), stderr_str.trim());
+        println!(
+            "CodeX detection - status: {}, stdout: {}, stderr: {}",
+            output.status.success(),
+            stdout_str.trim(),
+            stderr_str.trim()
+        );
 
         if output.status.success() {
             if let Some(tool) = tools.iter_mut().find(|t| t.id == "codex") {
@@ -179,7 +197,12 @@ async fn check_installations() -> Result<Vec<ToolStatus>, String> {
         let stderr_str = String::from_utf8_lossy(&output.stderr);
 
         #[cfg(debug_assertions)]
-        println!("Gemini CLI detection - status: {}, stdout: {}, stderr: {}", output.status.success(), stdout_str.trim(), stderr_str.trim());
+        println!(
+            "Gemini CLI detection - status: {}, stdout: {}, stderr: {}",
+            output.status.success(),
+            stdout_str.trim(),
+            stderr_str.trim()
+        );
 
         if output.status.success() {
             if let Some(tool) = tools.iter_mut().find(|t| t.id == "gemini-cli") {
@@ -207,7 +230,7 @@ async fn check_node_environment() -> Result<NodeEnvironment, String> {
                 .env("PATH", get_extended_path())
                 .arg("/C")
                 .arg(cmd)
-                .creation_flags(0x08000000)  // CREATE_NO_WINDOW - 隐藏终端窗口
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
                 .output()
         }
         #[cfg(not(target_os = "windows"))]
@@ -255,7 +278,10 @@ async fn check_node_environment() -> Result<NodeEnvironment, String> {
 #[tauri::command]
 async fn install_tool(tool: String, method: String) -> Result<InstallResult, String> {
     #[cfg(debug_assertions)]
-    println!("Installing {} via {} (pure Rust implementation)", tool, method);
+    println!(
+        "Installing {} via {} (pure Rust implementation)",
+        tool, method
+    );
 
     match tool.as_str() {
         "claude-code" => {
@@ -295,7 +321,10 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                         output: String::from_utf8_lossy(&output.stdout).to_string(),
                     })
                 } else {
-                    Err(format!("npm installation failed: {}", String::from_utf8_lossy(&output.stderr)))
+                    Err(format!(
+                        "npm installation failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    ))
                 }
             } else {
                 // official: 使用DuckCoding镜像安装脚本
@@ -306,9 +335,9 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                         .env("PATH", get_extended_path())
                         .args(&[
                             "-Command",
-                            "irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex"
+                            "irm https://mirror.duckcoding.com/claude-code/install.ps1 | iex",
                         ])
-                        .creation_flags(0x08000000)  // CREATE_NO_WINDOW - 隐藏终端窗口
+                        .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
                         .output()
                         .map_err(|e| format!("Failed to execute installation: {}", e))?;
 
@@ -319,7 +348,10 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                             output: String::from_utf8_lossy(&output.stdout).to_string(),
                         })
                     } else {
-                        Err(format!("Installation failed: {}", String::from_utf8_lossy(&output.stderr)))
+                        Err(format!(
+                            "Installation failed: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        ))
                     }
                 }
 
@@ -342,11 +374,14 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                             output: String::from_utf8_lossy(&output.stdout).to_string(),
                         })
                     } else {
-                        Err(format!("Installation failed: {}", String::from_utf8_lossy(&output.stderr)))
+                        Err(format!(
+                            "Installation failed: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        ))
                     }
                 }
             }
-        },
+        }
         "codex" => {
             // CodeX 安装
             if method == "brew" {
@@ -365,7 +400,10 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                             output: String::from_utf8_lossy(&output.stdout).to_string(),
                         })
                     } else {
-                        Err(format!("Homebrew installation failed: {}", String::from_utf8_lossy(&output.stderr)))
+                        Err(format!(
+                            "Homebrew installation failed: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        ))
                     }
                 }
                 #[cfg(not(target_os = "macos"))]
@@ -408,10 +446,13 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                         output: String::from_utf8_lossy(&output.stdout).to_string(),
                     })
                 } else {
-                    Err(format!("npm installation failed: {}", String::from_utf8_lossy(&output.stderr)))
+                    Err(format!(
+                        "npm installation failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    ))
                 }
             }
-        },
+        }
         "gemini-cli" => {
             // Gemini CLI 使用 npm 安装
             #[cfg(target_os = "windows")]
@@ -448,10 +489,13 @@ async fn install_tool(tool: String, method: String) -> Result<InstallResult, Str
                     output: String::from_utf8_lossy(&output.stdout).to_string(),
                 })
             } else {
-                Err(format!("npm installation failed: {}", String::from_utf8_lossy(&output.stderr)))
+                Err(format!(
+                    "npm installation failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ))
             }
-        },
-        _ => Err(format!("Unknown tool: {}", tool))
+        }
+        _ => Err(format!("Unknown tool: {}", tool)),
     }
 }
 
@@ -491,7 +535,10 @@ async fn fetch_latest_version_from_npm(package_name: &str) -> Result<String, Str
                 if response.status().is_success() {
                     match response.json::<NpmPackageInfo>().await {
                         Ok(package_info) => {
-                            println!("Successfully fetched version: {}", package_info.dist_tags.latest);
+                            println!(
+                                "Successfully fetched version: {}",
+                                package_info.dist_tags.latest
+                            );
                             return Ok(package_info.dist_tags.latest);
                         }
                         Err(e) => {
@@ -500,7 +547,11 @@ async fn fetch_latest_version_from_npm(package_name: &str) -> Result<String, Str
                         }
                     }
                 } else {
-                    println!("Failed to fetch from {}: status {}", mirror_url, response.status());
+                    println!(
+                        "Failed to fetch from {}: status {}",
+                        mirror_url,
+                        response.status()
+                    );
                     continue;
                 }
             }
@@ -528,7 +579,7 @@ async fn check_update(tool: String) -> Result<UpdateResult, String> {
                 .env("PATH", get_extended_path())
                 .arg("/C")
                 .arg(cmd)
-                .creation_flags(0x08000000)  // CREATE_NO_WINDOW - 隐藏终端窗口
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
                 .output()
         }
 
@@ -561,7 +612,7 @@ async fn check_update(tool: String) -> Result<UpdateResult, String> {
             } else {
                 None
             }
-        },
+        }
         "codex" => {
             if let Ok(output) = run_command("codex --version 2>&1") {
                 if output.status.success() {
@@ -579,7 +630,7 @@ async fn check_update(tool: String) -> Result<UpdateResult, String> {
             } else {
                 None
             }
-        },
+        }
         "gemini-cli" => {
             if let Ok(output) = run_command("gemini --version 2>&1") {
                 if output.status.success() {
@@ -597,7 +648,7 @@ async fn check_update(tool: String) -> Result<UpdateResult, String> {
             } else {
                 None
             }
-        },
+        }
         _ => None,
     };
 
@@ -636,7 +687,7 @@ async fn check_update(tool: String) -> Result<UpdateResult, String> {
                 current_version,
                 latest_version: Some(latest_version_str),
             })
-        },
+        }
         Err(e) => {
             println!("Failed to fetch latest version: {}", e);
             // 降级：如果npm镜像源失败，返回无法检查但不报错
@@ -665,7 +716,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
             let check_npm = Command::new("npm")
                 .env("PATH", get_extended_path())
                 .args(&["list", "-g", "@anthropic-ai/claude-code", "--depth=0"])
-                .creation_flags(0x08000000)  // CREATE_NO_WINDOW - 隐藏终端窗口
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
                 .output();
 
             #[cfg(not(target_os = "windows"))]
@@ -680,18 +731,32 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 if output.status.success() && stdout_str.contains("@anthropic-ai/claude-code") {
                     #[cfg(debug_assertions)]
                     println!("Claude Code detected as npm installation, using npm update");
-                    ("npm", vec!["update", "-g", "@anthropic-ai/claude-code"], "npm更新")
+                    (
+                        "npm",
+                        vec!["update", "-g", "@anthropic-ai/claude-code"],
+                        "npm更新",
+                    )
                 } else {
                     // 使用官方安装脚本更新（更稳定）
                     #[cfg(debug_assertions)]
-                    println!("Claude Code detected as native installation, using official installer");
+                    println!(
+                        "Claude Code detected as native installation, using official installer"
+                    );
                     #[cfg(target_os = "windows")]
                     {
-                        ("powershell", vec!["-Command", "irm https://claude.ai/install.ps1 | iex"], "官方安装脚本更新")
+                        (
+                            "powershell",
+                            vec!["-Command", "irm https://claude.ai/install.ps1 | iex"],
+                            "官方安装脚本更新",
+                        )
                     }
                     #[cfg(not(target_os = "windows"))]
                     {
-                        ("sh", vec!["-c", "curl -fsSL https://claude.ai/install.sh | bash"], "官方安装脚本更新")
+                        (
+                            "sh",
+                            vec!["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
+                            "官方安装脚本更新",
+                        )
                     }
                 }
             } else {
@@ -700,14 +765,22 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 println!("npm check failed, defaulting to official installer");
                 #[cfg(target_os = "windows")]
                 {
-                    ("powershell", vec!["-Command", "irm https://claude.ai/install.ps1 | iex"], "官方安装脚本更新")
+                    (
+                        "powershell",
+                        vec!["-Command", "irm https://claude.ai/install.ps1 | iex"],
+                        "官方安装脚本更新",
+                    )
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
-                    ("sh", vec!["-c", "curl -fsSL https://claude.ai/install.sh | bash"], "官方安装脚本更新")
+                    (
+                        "sh",
+                        vec!["-c", "curl -fsSL https://claude.ai/install.sh | bash"],
+                        "官方安装脚本更新",
+                    )
                 }
             }
-        },
+        }
         "codex" => {
             // CodeX 更新策略：根据平台选择最佳方式
             #[cfg(target_os = "macos")]
@@ -729,7 +802,11 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
 
                 if is_brew_installed {
                     // 已经是 Homebrew 安装，直接升级
-                    ("brew", vec!["upgrade", "--cask", "codex"], "Homebrew Cask更新")
+                    (
+                        "brew",
+                        vec!["upgrade", "--cask", "codex"],
+                        "Homebrew Cask更新",
+                    )
                 } else {
                     // 不是 Homebrew，切换到 Homebrew（推荐）
                     ("sh", vec!["-c", "rm -f /opt/homebrew/bin/codex /usr/local/bin/codex ~/.local/bin/codex ~/.codex/bin/codex && brew install --cask codex"], "切换到 Homebrew Cask")
@@ -745,17 +822,20 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 // Linux: 使用 npm（主要方式）
                 ("npm", vec!["update", "-g", "@openai/codex"], "npm更新")
             }
-        },
+        }
         "gemini-cli" => {
             // Gemini CLI 使用 npm 更新（跨平台）
             ("npm", vec!["update", "-g", "@google/gemini-cli"], "npm更新")
-        },
+        }
         _ => {
             return Err(format!("Unknown tool: {}", tool));
         }
     };
 
-    println!("使用{}方式更新: {} {:?}", description, update_command, update_args);
+    println!(
+        "使用{}方式更新: {} {:?}",
+        description, update_command, update_args
+    );
 
     // 执行更新，使用tokio::time::timeout添加超时（120秒）
     use tokio::time::{timeout, Duration};
@@ -766,7 +846,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
             Command::new(update_command)
                 .env("PATH", get_extended_path())
                 .args(&update_args)
-                .creation_flags(0x08000000)  // CREATE_NO_WINDOW - 隐藏终端窗口
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
                 .output()
         }
         #[cfg(not(target_os = "windows"))]
@@ -782,10 +862,10 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
         Ok(Ok(Ok(output))) => output,
         Ok(Ok(Err(e))) => {
             return Err(format!("更新失败: {}", e));
-        },
+        }
         Ok(Err(e)) => {
             return Err(format!("更新任务错误: {}", e));
-        },
+        }
         Err(_) => {
             let timeout_msg = if description.contains("DuckCoding镜像") {
                 "更新超时（120秒）。\n\n可能的原因：\n1. 镜像服务器响应慢\n2. 网络连接不稳定\n\n建议：\n1. 检查网络连接\n2. 重试更新\n3. 或使用 npm 方式：先卸载后重装\n   npm uninstall -g @anthropic-ai/claude-code\n   npm install -g @anthropic-ai/claude-code"
@@ -821,7 +901,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                     .env("PATH", get_extended_path())
                     .arg("/C")
                     .arg(cmd)
-                    .creation_flags(0x08000000)  // CREATE_NO_WINDOW - 隐藏终端窗口
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW - 隐藏终端窗口
                     .output()
             }
 
@@ -849,7 +929,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 } else {
                     None
                 }
-            },
+            }
             "codex" => {
                 if let Ok(output) = run_command("codex --version 2>&1") {
                     let stdout_str = String::from_utf8_lossy(&output.stdout);
@@ -863,7 +943,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 } else {
                     None
                 }
-            },
+            }
             "gemini-cli" => {
                 if let Ok(output) = run_command("gemini --version 2>&1") {
                     let stdout_str = String::from_utf8_lossy(&output.stdout);
@@ -877,7 +957,7 @@ async fn update_tool(tool: String) -> Result<UpdateResult, String> {
                 } else {
                     None
                 }
-            },
+            }
             _ => None,
         };
 
@@ -920,7 +1000,13 @@ fn compare_versions(current: &str, latest: &str) -> bool {
 }
 
 #[tauri::command]
-async fn configure_api(tool: String, _provider: String, api_key: String, base_url: Option<String>, profile_name: Option<String>) -> Result<(), String> {
+async fn configure_api(
+    tool: String,
+    _provider: String,
+    api_key: String,
+    base_url: Option<String>,
+    profile_name: Option<String>,
+) -> Result<(), String> {
     let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
     let base_url_str = base_url.unwrap_or_else(|| "https://jp.duckcoding.com".to_string());
 
@@ -930,7 +1016,8 @@ async fn configure_api(tool: String, _provider: String, api_key: String, base_ur
             let config_path = config_dir.join("settings.json");
 
             // 确保目录存在
-            fs::create_dir_all(&config_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+            fs::create_dir_all(&config_dir)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
 
             // 读取现有配置
             let mut config: Value = if config_path.exists() {
@@ -952,8 +1039,14 @@ async fn configure_api(tool: String, _provider: String, api_key: String, base_ur
 
             // 更新 API 配置
             let env_obj = config_obj.get_mut("env").unwrap().as_object_mut().unwrap();
-            env_obj.insert("ANTHROPIC_AUTH_TOKEN".to_string(), Value::String(api_key.clone()));
-            env_obj.insert("ANTHROPIC_BASE_URL".to_string(), Value::String(base_url_str.clone()));
+            env_obj.insert(
+                "ANTHROPIC_AUTH_TOKEN".to_string(),
+                Value::String(api_key.clone()),
+            );
+            env_obj.insert(
+                "ANTHROPIC_BASE_URL".to_string(),
+                Value::String(base_url_str.clone()),
+            );
 
             // 写入配置
             fs::write(&config_path, serde_json::to_string_pretty(&config).unwrap())
@@ -969,93 +1062,110 @@ async fn configure_api(tool: String, _provider: String, api_key: String, base_ur
                             "ANTHROPIC_BASE_URL": base_url_str
                         }
                     });
-                    fs::write(&backup_path, serde_json::to_string_pretty(&backup_config).unwrap())
-                        .map_err(|e| format!("Failed to write backup: {}", e))?;
+                    fs::write(
+                        &backup_path,
+                        serde_json::to_string_pretty(&backup_config).unwrap(),
+                    )
+                    .map_err(|e| format!("Failed to write backup: {}", e))?;
                 }
             }
-        },
+        }
         "codex" => {
             println!("Configuring CodeX directly in Rust (no cli.js)...");
             let config_dir = home_dir.join(".codex");
             let config_path = config_dir.join("config.toml");
             let auth_path = config_dir.join("auth.json");
 
-            // 确保目录存在
-            fs::create_dir_all(&config_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+            fs::create_dir_all(&config_dir)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
 
-            // 读取现有config.toml
-            let mut config_table: toml::map::Map<String, toml::Value> = if config_path.exists() {
+            let mut config_doc = if config_path.exists() {
                 let content = fs::read_to_string(&config_path)
                     .map_err(|e| format!("Failed to read config.toml: {}", e))?;
-                toml::from_str(&content).unwrap_or_else(|_| toml::map::Map::new())
+                content
+                    .parse::<DocumentMut>()
+                    .unwrap_or_else(|_| DocumentMut::new())
             } else {
-                toml::map::Map::new()
+                DocumentMut::new()
             };
 
-            // 设置基本配置
-            config_table.insert("model_provider".to_string(), toml::Value::String("duckcoding".to_string()));
-            config_table.insert("model".to_string(), toml::Value::String("gpt-5-codex".to_string()));
-            config_table.insert("model_reasoning_effort".to_string(), toml::Value::String("high".to_string()));
-            config_table.insert("network_access".to_string(), toml::Value::String("enabled".to_string()));
-            config_table.insert("disable_response_storage".to_string(), toml::Value::Boolean(true));
+            let config_table = config_doc.as_table_mut();
+            config_table["model_provider"] = value("duckcoding");
+            config_table["model"] = value("gpt-5-codex");
+            config_table["model_reasoning_effort"] = value("high");
+            config_table["network_access"] = value("enabled");
+            config_table["disable_response_storage"] = value(true);
 
-            // 设置model_providers
-            let mut providers_table = toml::map::Map::new();
-            let mut duckcoding_provider = toml::map::Map::new();
-            duckcoding_provider.insert("name".to_string(), toml::Value::String("duckcoding".to_string()));
-            duckcoding_provider.insert("base_url".to_string(), toml::Value::String(
-                if base_url_str.ends_with("/v1") {
-                    base_url_str.clone()
-                } else {
-                    format!("{}/v1", base_url_str)
-                }
-            ));
-            duckcoding_provider.insert("wire_api".to_string(), toml::Value::String("responses".to_string()));
-            duckcoding_provider.insert("requires_openai_auth".to_string(), toml::Value::Boolean(true));
+            let provider_key = if base_url_str.contains("duckcoding") {
+                "duckcoding"
+            } else {
+                "custom"
+            };
+            let provider_base_url = if base_url_str.ends_with("/v1") {
+                base_url_str.clone()
+            } else {
+                format!("{}/v1", base_url_str)
+            };
 
-            providers_table.insert("duckcoding".to_string(), toml::Value::Table(duckcoding_provider));
-            config_table.insert("model_providers".to_string(), toml::Value::Table(providers_table));
+            let providers_table = config_table
+                .entry("model_providers")
+                .or_insert(table())
+                .as_table_mut()
+                .expect("model_providers should be a table");
 
-            // 写入config.toml
-            let toml_string = toml::to_string_pretty(&config_table)
-                .map_err(|e| format!("Failed to serialize TOML: {}", e))?;
-            fs::write(&config_path, toml_string)
+            let provider_entry = providers_table.entry(provider_key).or_insert(table());
+            let provider_table = provider_entry
+                .as_table_mut()
+                .expect("provider entry should be a table");
+
+            provider_table["name"] = value(provider_key);
+            provider_table["base_url"] = value(provider_base_url);
+            provider_table["wire_api"] = value("responses");
+            provider_table["requires_openai_auth"] = value(true);
+
+            let serialized_config = config_doc.to_string();
+            fs::write(&config_path, &serialized_config)
                 .map_err(|e| format!("Failed to write config.toml: {}", e))?;
             println!("CodeX config.toml written successfully");
 
-            // 写入auth.json
             let auth_data = serde_json::json!({
                 "OPENAI_API_KEY": api_key
             });
-            fs::write(&auth_path, serde_json::to_string_pretty(&auth_data).unwrap())
-                .map_err(|e| format!("Failed to write auth.json: {}", e))?;
+            fs::write(
+                &auth_path,
+                serde_json::to_string_pretty(&auth_data).unwrap(),
+            )
+            .map_err(|e| format!("Failed to write auth.json: {}", e))?;
             println!("CodeX auth.json written successfully");
 
-            // 如果有profile_name，保存备份
             if let Some(profile) = &profile_name {
                 if !profile.is_empty() {
                     println!("Saving CodeX backup for profile: {}", profile);
-
-                    // 备份config
                     let backup_config_path = config_dir.join(format!("config.{}.toml", profile));
-                    fs::write(&backup_config_path, toml::to_string_pretty(&config_table).unwrap())
+                    fs::write(&backup_config_path, &serialized_config)
                         .map_err(|e| format!("Failed to write backup config: {}", e))?;
 
-                    // 备份auth
                     let backup_auth_path = config_dir.join(format!("auth.{}.json", profile));
-                    fs::write(&backup_auth_path, serde_json::to_string_pretty(&auth_data).unwrap())
-                        .map_err(|e| format!("Failed to write backup auth: {}", e))?;
+                    fs::write(
+                        &backup_auth_path,
+                        serde_json::to_string_pretty(&auth_data).unwrap(),
+                    )
+                    .map_err(|e| format!("Failed to write backup auth: {}", e))?;
 
-                    println!("CodeX backup saved: config.{}.toml, auth.{}.json", profile, profile);
+                    println!(
+                        "CodeX backup saved: config.{}.toml, auth.{}.json",
+                        profile, profile
+                    );
                 }
             }
-        },
+        }
         "gemini-cli" => {
             let config_dir = home_dir.join(".gemini");
             let env_path = config_dir.join(".env");
 
             // 确保目录存在
-            fs::create_dir_all(&config_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+            fs::create_dir_all(&config_dir)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
 
             // 读取现有 .env 文件
             let mut env_vars = std::collections::HashMap::new();
@@ -1080,10 +1190,12 @@ async fn configure_api(tool: String, _provider: String, api_key: String, base_ur
             }
 
             // 写入 .env 文件
-            let env_content: String = env_vars.iter()
+            let env_content: String = env_vars
+                .iter()
                 .map(|(k, v)| format!("{}={}", k, v))
                 .collect::<Vec<_>>()
-                .join("\n") + "\n";
+                .join("\n")
+                + "\n";
 
             fs::write(&env_path, env_content)
                 .map_err(|e| format!("Failed to write .env: {}", e))?;
@@ -1100,8 +1212,8 @@ async fn configure_api(tool: String, _provider: String, api_key: String, base_ur
                         .map_err(|e| format!("Failed to write backup .env: {}", e))?;
                 }
             }
-        },
-        _ => return Err(format!("Unknown tool: {}", tool))
+        }
+        _ => return Err(format!("Unknown tool: {}", tool)),
     }
 
     Ok(())
@@ -1136,7 +1248,7 @@ async fn list_profiles(tool: String) -> Result<Vec<String>, String> {
                     }
                 }
             }
-        },
+        }
         "codex" => {
             let config_dir = home_dir.join(".codex");
             if !config_dir.exists() {
@@ -1160,7 +1272,7 @@ async fn list_profiles(tool: String) -> Result<Vec<String>, String> {
                     }
                 }
             }
-        },
+        }
         "gemini-cli" => {
             let config_dir = home_dir.join(".gemini");
             if !config_dir.exists() {
@@ -1182,8 +1294,8 @@ async fn list_profiles(tool: String) -> Result<Vec<String>, String> {
                     }
                 }
             }
-        },
-        _ => return Err(format!("Unknown tool: {}", tool))
+        }
+        _ => return Err(format!("Unknown tool: {}", tool)),
     }
 
     Ok(profiles)
@@ -1240,9 +1352,12 @@ async fn switch_profile(tool: String, profile: String) -> Result<(), String> {
             }
 
             // 写入配置
-            fs::write(&active_path, serde_json::to_string_pretty(&active_config).unwrap())
-                .map_err(|e| format!("Failed to write active config: {}", e))?;
-        },
+            fs::write(
+                &active_path,
+                serde_json::to_string_pretty(&active_config).unwrap(),
+            )
+            .map_err(|e| format!("Failed to write active config: {}", e))?;
+        }
         "codex" => {
             let config_dir = home_dir.join(".codex");
             let backup_config_path = config_dir.join(format!("config.{}.toml", profile));
@@ -1254,60 +1369,55 @@ async fn switch_profile(tool: String, profile: String) -> Result<(), String> {
                 return Err(format!("Backup config not found: {:?}", backup_config_path));
             }
 
-            // 读取备份的 config.toml
             let backup_config_content = fs::read_to_string(&backup_config_path)
                 .map_err(|e| format!("Failed to read backup config: {}", e))?;
-            let backup_config: toml::Value = toml::from_str(&backup_config_content)
+            let backup_doc = backup_config_content
+                .parse::<DocumentMut>()
                 .map_err(|e| format!("Failed to parse backup TOML: {}", e))?;
 
-            // 读取当前的 config.toml
-            let mut active_config: toml::Value = if active_config_path.exists() {
+            let mut active_doc = if active_config_path.exists() {
                 let content = fs::read_to_string(&active_config_path)
                     .map_err(|e| format!("Failed to read active config: {}", e))?;
-                toml::from_str(&content).unwrap_or(toml::Value::Table(toml::map::Map::new()))
+                content
+                    .parse::<DocumentMut>()
+                    .unwrap_or_else(|_| DocumentMut::new())
             } else {
-                toml::Value::Table(toml::map::Map::new())
+                DocumentMut::new()
             };
 
-            // 合并配置：只更新必要字段
-            if let toml::Value::Table(ref backup_table) = backup_config {
-                if let toml::Value::Table(ref mut active_table) = active_config {
-                    // 更新顶层字段
-                    if let Some(provider) = backup_table.get("model_provider") {
-                        active_table.insert("model_provider".to_string(), provider.clone());
-                    }
-                    if let Some(model) = backup_table.get("model") {
-                        active_table.insert("model".to_string(), model.clone());
-                    }
-                    if let Some(effort) = backup_table.get("model_reasoning_effort") {
-                        active_table.insert("model_reasoning_effort".to_string(), effort.clone());
-                    }
-                    if let Some(network) = backup_table.get("network_access") {
-                        active_table.insert("network_access".to_string(), network.clone());
-                    }
-                    if let Some(storage) = backup_table.get("disable_response_storage") {
-                        active_table.insert("disable_response_storage".to_string(), storage.clone());
-                    }
+            {
+                let backup_table = backup_doc.as_table();
+                let active_table = active_doc.as_table_mut();
 
-                    // 更新 model_providers
-                    if let Some(backup_providers) = backup_table.get("model_providers") {
-                        if !active_table.contains_key("model_providers") {
-                            active_table.insert("model_providers".to_string(), toml::Value::Table(toml::map::Map::new()));
-                        }
-                        if let Some(toml::Value::Table(active_providers)) = active_table.get_mut("model_providers") {
-                            if let toml::Value::Table(bp) = backup_providers {
-                                for (key, value) in bp {
-                                    active_providers.insert(key.clone(), value.clone());
-                                }
-                            }
-                        }
+                for key in [
+                    "model_provider",
+                    "model",
+                    "model_reasoning_effort",
+                    "network_access",
+                    "disable_response_storage",
+                ] {
+                    if let Some(item) = backup_table.get(key) {
+                        active_table.insert(key, item.clone());
+                    }
+                }
+
+                if let Some(backup_providers) = backup_table
+                    .get("model_providers")
+                    .and_then(|item| item.as_table())
+                {
+                    let providers_table = active_table
+                        .entry("model_providers")
+                        .or_insert(table())
+                        .as_table_mut()
+                        .expect("model_providers should be a table");
+
+                    for (key, value) in backup_providers.iter() {
+                        providers_table.insert(key, value.clone());
                     }
                 }
             }
 
-            // 写入 config.toml
-            let toml_string = toml::to_string_pretty(&active_config)
-                .map_err(|e| format!("Failed to serialize TOML: {}", e))?;
+            let toml_string = active_doc.to_string();
             fs::write(&active_config_path, toml_string)
                 .map_err(|e| format!("Failed to write active config: {}", e))?;
 
@@ -1332,10 +1442,13 @@ async fn switch_profile(tool: String, profile: String) -> Result<(), String> {
                     }
                 }
 
-                fs::write(&active_auth_path, serde_json::to_string_pretty(&active_auth).unwrap())
-                    .map_err(|e| format!("Failed to write active auth: {}", e))?;
+                fs::write(
+                    &active_auth_path,
+                    serde_json::to_string_pretty(&active_auth).unwrap(),
+                )
+                .map_err(|e| format!("Failed to write active auth: {}", e))?;
             }
-        },
+        }
         "gemini-cli" => {
             let config_dir = home_dir.join(".gemini");
             let backup_env_path = config_dir.join(format!(".env.{}", profile));
@@ -1385,15 +1498,17 @@ async fn switch_profile(tool: String, profile: String) -> Result<(), String> {
             }
 
             // 写回 .env
-            let env_content: String = active_env.iter()
+            let env_content: String = active_env
+                .iter()
                 .map(|(k, v)| format!("{}={}", k, v))
                 .collect::<Vec<_>>()
-                .join("\n") + "\n";
+                .join("\n")
+                + "\n";
 
             fs::write(&active_env_path, env_content)
                 .map_err(|e| format!("Failed to write active .env: {}", e))?;
-        },
-        _ => return Err(format!("Unknown tool: {}", tool))
+        }
+        _ => return Err(format!("Unknown tool: {}", tool)),
     }
 
     Ok(())
@@ -1416,14 +1531,13 @@ async fn delete_profile(tool: String, profile: String) -> Result<(), String> {
                 return Err(err);
             }
 
-            fs::remove_file(&backup_path)
-                .map_err(|e| {
-                    let err = format!("删除配置失败: {}", e);
-                    println!("Error: {}", err);
-                    err
-                })?;
+            fs::remove_file(&backup_path).map_err(|e| {
+                let err = format!("删除配置失败: {}", e);
+                println!("Error: {}", err);
+                err
+            })?;
             println!("Successfully deleted Claude Code profile: {}", profile);
-        },
+        }
         "codex" => {
             let config_dir = home_dir.join(".codex");
             let backup_config_path = config_dir.join(format!("config.{}.toml", profile));
@@ -1437,25 +1551,23 @@ async fn delete_profile(tool: String, profile: String) -> Result<(), String> {
                 return Err(err);
             }
 
-            fs::remove_file(&backup_config_path)
-                .map_err(|e| {
-                    let err = format!("删除配置失败: {}", e);
-                    println!("Error: {}", err);
-                    err
-                })?;
+            fs::remove_file(&backup_config_path).map_err(|e| {
+                let err = format!("删除配置失败: {}", e);
+                println!("Error: {}", err);
+                err
+            })?;
             println!("Deleted config.toml for profile: {}", profile);
 
             if backup_auth_path.exists() {
-                fs::remove_file(&backup_auth_path)
-                    .map_err(|e| {
-                        let err = format!("删除认证文件失败: {}", e);
-                        println!("Error: {}", err);
-                        err
-                    })?;
+                fs::remove_file(&backup_auth_path).map_err(|e| {
+                    let err = format!("删除认证文件失败: {}", e);
+                    println!("Error: {}", err);
+                    err
+                })?;
                 println!("Deleted auth.json for profile: {}", profile);
             }
             println!("Successfully deleted CodeX profile: {}", profile);
-        },
+        }
         "gemini-cli" => {
             let config_dir = home_dir.join(".gemini");
             let backup_env_path = config_dir.join(format!(".env.{}", profile));
@@ -1465,15 +1577,14 @@ async fn delete_profile(tool: String, profile: String) -> Result<(), String> {
                 return Err(format!("配置文件不存在: {}", profile));
             }
 
-            fs::remove_file(&backup_env_path)
-                .map_err(|e| format!("删除配置失败: {}", e))?;
+            fs::remove_file(&backup_env_path).map_err(|e| format!("删除配置失败: {}", e))?;
 
             if backup_settings_path.exists() {
                 fs::remove_file(&backup_settings_path)
                     .map_err(|e| format!("删除设置文件失败: {}", e))?;
             }
-        },
-        _ => return Err(format!("Unknown tool: {}", tool))
+        }
+        _ => return Err(format!("Unknown tool: {}", tool)),
     }
 
     Ok(())
@@ -1516,7 +1627,7 @@ struct UpdateResult {
 struct ActiveConfig {
     api_key: String,
     base_url: String,
-    profile_name: Option<String>,  // 当前配置的名称
+    profile_name: Option<String>, // 当前配置的名称
 }
 
 // 全局配置结构
@@ -1621,7 +1732,10 @@ fn get_global_config_path() -> Result<PathBuf, String> {
 async fn save_global_config(user_id: String, system_token: String) -> Result<(), String> {
     println!("save_global_config called with user_id: {}", user_id);
 
-    let config = GlobalConfig { user_id, system_token };
+    let config = GlobalConfig {
+        user_id,
+        system_token,
+    };
     let config_path = get_global_config_path()?;
 
     println!("Config path: {:?}", config_path);
@@ -1629,8 +1743,7 @@ async fn save_global_config(user_id: String, system_token: String) -> Result<(),
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&config_path, json)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
+    fs::write(&config_path, json).map_err(|e| format!("Failed to write config: {}", e))?;
 
     println!("Config saved successfully");
 
@@ -1641,7 +1754,7 @@ async fn save_global_config(user_id: String, system_token: String) -> Result<(),
         let metadata = fs::metadata(&config_path)
             .map_err(|e| format!("Failed to get file metadata: {}", e))?;
         let mut perms = metadata.permissions();
-        perms.set_mode(0o600);  // -rw-------
+        perms.set_mode(0o600); // -rw-------
         fs::set_permissions(&config_path, perms)
             .map_err(|e| format!("Failed to set file permissions: {}", e))?;
     }
@@ -1658,11 +1771,11 @@ async fn get_global_config() -> Result<Option<GlobalConfig>, String> {
         return Ok(None);
     }
 
-    let content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config: {}", e))?;
+    let content =
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config: {}", e))?;
 
-    let config: GlobalConfig = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse config: {}", e))?;
+    let config: GlobalConfig =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
 
     Ok(Some(config))
 }
@@ -1671,7 +1784,8 @@ async fn get_global_config() -> Result<Option<GlobalConfig>, String> {
 #[tauri::command]
 async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyResult, String> {
     // 读取全局配置
-    let global_config = get_global_config().await?
+    let global_config = get_global_config()
+        .await?
         .ok_or("请先配置用户ID和系统访问令牌")?;
 
     // 根据工具名称获取配置
@@ -1699,7 +1813,10 @@ async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyResult,
 
     let create_response = client
         .post(create_url)
-        .header("Authorization", format!("Bearer {}", global_config.system_token))
+        .header(
+            "Authorization",
+            format!("Bearer {}", global_config.system_token),
+        )
         .header("New-Api-User", &global_config.user_id)
         .header("Content-Type", "application/json")
         .json(&create_body)
@@ -1721,12 +1838,17 @@ async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyResult,
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // 搜索刚创建的token
-    let search_url = format!("https://duckcoding.com/api/token/search?keyword={}",
-        urlencoding::encode(name));
+    let search_url = format!(
+        "https://duckcoding.com/api/token/search?keyword={}",
+        urlencoding::encode(name)
+    );
 
     let search_response = client
         .get(&search_url)
-        .header("Authorization", format!("Bearer {}", global_config.system_token))
+        .header(
+            "Authorization",
+            format!("Bearer {}", global_config.system_token),
+        )
         .header("New-Api-User", &global_config.user_id)
         .header("Content-Type", "application/json")
         .send()
@@ -1780,7 +1902,8 @@ async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyResult,
 #[tauri::command]
 async fn get_usage_stats() -> Result<UsageStatsResult, String> {
     // 读取全局配置
-    let global_config = get_global_config().await?
+    let global_config = get_global_config()
+        .await?
         .ok_or("请先配置用户ID和系统访问令牌")?;
 
     // 计算时间戳（北京时间）
@@ -1806,7 +1929,10 @@ async fn get_usage_stats() -> Result<UsageStatsResult, String> {
 
     let response = client
         .get(&url)
-        .header("Authorization", format!("Bearer {}", global_config.system_token))
+        .header(
+            "Authorization",
+            format!("Bearer {}", global_config.system_token),
+        )
         .header("New-Api-User", &global_config.user_id)
         .header("Content-Type", "application/json")
         .send()
@@ -1847,7 +1973,8 @@ async fn get_usage_stats() -> Result<UsageStatsResult, String> {
 #[tauri::command]
 async fn get_user_quota() -> Result<UserQuotaResult, String> {
     // 读取全局配置
-    let global_config = get_global_config().await?
+    let global_config = get_global_config()
+        .await?
         .ok_or("请先配置用户ID和系统访问令牌")?;
 
     // 调用API
@@ -1856,7 +1983,10 @@ async fn get_user_quota() -> Result<UserQuotaResult, String> {
 
     let response = client
         .get(url)
-        .header("Authorization", format!("Bearer {}", global_config.system_token))
+        .header(
+            "Authorization",
+            format!("Bearer {}", global_config.system_token),
+        )
         .header("New-Api-User", &global_config.user_id)
         .header("Content-Type", "application/json")
         .send()
@@ -1888,8 +2018,14 @@ async fn get_user_quota() -> Result<UserQuotaResult, String> {
 
     #[cfg(debug_assertions)]
     {
-        println!("Raw remaining: {}, converted: {}", user_info.quota, remaining_quota);
-        println!("Raw used: {}, converted: {}", user_info.used_quota, used_quota);
+        println!(
+            "Raw remaining: {}, converted: {}",
+            user_info.quota, remaining_quota
+        );
+        println!(
+            "Raw used: {}, converted: {}",
+            user_info.used_quota, used_quota
+        );
         println!("Total quota: {}", total_quota);
     }
 
@@ -1904,7 +2040,12 @@ async fn get_user_quota() -> Result<UserQuotaResult, String> {
 }
 
 // 辅助函数：检测当前配置匹配哪个profile
-fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, home_dir: &std::path::Path) -> Option<String> {
+fn detect_profile_name(
+    tool: &str,
+    active_api_key: &str,
+    active_base_url: &str,
+    home_dir: &std::path::Path,
+) -> Option<String> {
     let config_dir = match tool {
         "claude-code" => home_dir.join(".claude"),
         "codex" => home_dir.join(".codex"),
@@ -1926,20 +2067,30 @@ fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, 
             let profile_name = match tool {
                 "claude-code" => {
                     // 匹配 settings.{profile}.json
-                    if file_name_str.starts_with("settings.") && file_name_str.ends_with(".json") && file_name_str != "settings.json" {
-                        file_name_str.strip_prefix("settings.").and_then(|s| s.strip_suffix(".json"))
+                    if file_name_str.starts_with("settings.")
+                        && file_name_str.ends_with(".json")
+                        && file_name_str != "settings.json"
+                    {
+                        file_name_str
+                            .strip_prefix("settings.")
+                            .and_then(|s| s.strip_suffix(".json"))
                     } else {
                         None
                     }
-                },
+                }
                 "codex" => {
                     // 匹配 config.{profile}.toml
-                    if file_name_str.starts_with("config.") && file_name_str.ends_with(".toml") && file_name_str != "config.toml" {
-                        file_name_str.strip_prefix("config.").and_then(|s| s.strip_suffix(".toml"))
+                    if file_name_str.starts_with("config.")
+                        && file_name_str.ends_with(".toml")
+                        && file_name_str != "config.toml"
+                    {
+                        file_name_str
+                            .strip_prefix("config.")
+                            .and_then(|s| s.strip_suffix(".toml"))
                     } else {
                         None
                     }
-                },
+                }
                 "gemini-cli" => {
                     // 匹配 .env.{profile}
                     if file_name_str.starts_with(".env.") && file_name_str != ".env" {
@@ -1947,7 +2098,7 @@ fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, 
                     } else {
                         None
                     }
-                },
+                }
                 _ => None,
             };
 
@@ -1957,23 +2108,26 @@ fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, 
                     "claude-code" => {
                         if let Ok(content) = fs::read_to_string(entry.path()) {
                             if let Ok(config) = serde_json::from_str::<Value>(&content) {
-                                let backup_api_key = config.get("env")
+                                let backup_api_key = config
+                                    .get("env")
                                     .and_then(|env| env.get("ANTHROPIC_AUTH_TOKEN"))
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("");
-                                let backup_base_url = config.get("env")
+                                let backup_base_url = config
+                                    .get("env")
                                     .and_then(|env| env.get("ANTHROPIC_BASE_URL"))
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("");
 
-                                backup_api_key == active_api_key && backup_base_url == active_base_url
+                                backup_api_key == active_api_key
+                                    && backup_base_url == active_base_url
                             } else {
                                 false
                             }
                         } else {
                             false
                         }
-                    },
+                    }
                     "codex" => {
                         // 需要同时检查 config.toml 和 auth.json
                         let auth_backup = config_dir.join(format!("auth.{}.json", profile));
@@ -1981,7 +2135,8 @@ fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, 
                         let mut api_key_matches = false;
                         if let Ok(auth_content) = fs::read_to_string(&auth_backup) {
                             if let Ok(auth) = serde_json::from_str::<Value>(&auth_content) {
-                                let backup_api_key = auth.get("OPENAI_API_KEY")
+                                let backup_api_key = auth
+                                    .get("OPENAI_API_KEY")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("");
 
@@ -1994,24 +2149,28 @@ fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, 
                         } else {
                             // API Key 匹配，继续检查 base_url
                             if let Ok(config_content) = fs::read_to_string(entry.path()) {
-                                if let Ok(config) = toml::from_str::<toml::Value>(&config_content) {
-                                    if let toml::Value::Table(table) = config {
-                                        if let Some(toml::Value::Table(providers)) = table.get("model_providers") {
-                                            let mut url_matches = false;
-                                            for (_, provider) in providers {
-                                                if let toml::Value::Table(p) = provider {
-                                                    if let Some(toml::Value::String(url)) = p.get("base_url") {
-                                                        if url == active_base_url {
-                                                            url_matches = true;
-                                                            break;
-                                                        }
+                                if let Ok(doc) = config_content.parse::<DocumentMut>() {
+                                    if let Some(providers) = doc
+                                        .as_table()
+                                        .get("model_providers")
+                                        .and_then(|item| item.as_table())
+                                    {
+                                        let mut url_matches = false;
+                                        for (_, provider) in providers.iter() {
+                                            if let Some(provider_table) = provider.as_table() {
+                                                if let Some(url) = provider_table
+                                                    .get("base_url")
+                                                    .and_then(|item| item.as_value())
+                                                    .and_then(|value| value.as_str())
+                                                {
+                                                    if url == active_base_url {
+                                                        url_matches = true;
+                                                        break;
                                                     }
                                                 }
                                             }
-                                            url_matches
-                                        } else {
-                                            false
                                         }
+                                        url_matches
                                     } else {
                                         false
                                     }
@@ -2022,7 +2181,7 @@ fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, 
                                 false
                             }
                         }
-                    },
+                    }
                     "gemini-cli" => {
                         if let Ok(content) = fs::read_to_string(entry.path()) {
                             let mut backup_api_key = "";
@@ -2047,7 +2206,7 @@ fn detect_profile_name(tool: &str, active_api_key: &str, active_base_url: &str, 
                         } else {
                             false
                         }
-                    },
+                    }
                     _ => false,
                 };
 
@@ -2081,7 +2240,8 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             let config: Value = serde_json::from_str(&content)
                 .map_err(|e| format!("Failed to parse config: {}", e))?;
 
-            let raw_api_key = config.get("env")
+            let raw_api_key = config
+                .get("env")
                 .and_then(|env| env.get("ANTHROPIC_AUTH_TOKEN"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
@@ -2092,7 +2252,8 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 mask_api_key(raw_api_key)
             };
 
-            let base_url = config.get("env")
+            let base_url = config
+                .get("env")
                 .and_then(|env| env.get("ANTHROPIC_BASE_URL"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("未配置");
@@ -2109,7 +2270,7 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 base_url: base_url.to_string(),
                 profile_name,
             })
-        },
+        }
         "codex" => {
             let auth_path = home_dir.join(".codex").join("auth.json");
             let config_path = home_dir.join(".codex").join("config.toml");
@@ -2135,18 +2296,24 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             if config_path.exists() {
                 let content = fs::read_to_string(&config_path)
                     .map_err(|e| format!("Failed to read config: {}", e))?;
-                let config: toml::Value = toml::from_str(&content)
+                let config = content
+                    .parse::<DocumentMut>()
                     .map_err(|e| format!("Failed to parse TOML: {}", e))?;
 
-                if let toml::Value::Table(table) = config {
-                    if let Some(toml::Value::Table(providers)) = table.get("model_providers") {
-                        // 尝试获取 duckcoding 或 custom provider 的 base_url
-                        for (_, provider) in providers {
-                            if let toml::Value::Table(p) = provider {
-                                if let Some(toml::Value::String(url)) = p.get("base_url") {
-                                    base_url = url.clone();
-                                    break;
-                                }
+                if let Some(providers) = config
+                    .as_table()
+                    .get("model_providers")
+                    .and_then(|item| item.as_table())
+                {
+                    for (_, provider) in providers.iter() {
+                        if let Some(provider_table) = provider.as_table() {
+                            if let Some(url) = provider_table
+                                .get("base_url")
+                                .and_then(|item| item.as_value())
+                                .and_then(|value| value.as_str())
+                            {
+                                base_url = url.to_string();
+                                break;
                             }
                         }
                     }
@@ -2160,8 +2327,12 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 None
             };
 
-            Ok(ActiveConfig { api_key, base_url, profile_name })
-        },
+            Ok(ActiveConfig {
+                api_key,
+                base_url,
+                profile_name,
+            })
+        }
         "gemini-cli" => {
             let env_path = home_dir.join(".gemini").join(".env");
             if !env_path.exists() {
@@ -2172,8 +2343,8 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 });
             }
 
-            let content = fs::read_to_string(&env_path)
-                .map_err(|e| format!("Failed to read .env: {}", e))?;
+            let content =
+                fs::read_to_string(&env_path).map_err(|e| format!("Failed to read .env: {}", e))?;
 
             let mut raw_api_key = String::new();
             let mut api_key = "未配置".to_string();
@@ -2190,7 +2361,7 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                         "GEMINI_API_KEY" => {
                             raw_api_key = value.trim().to_string();
                             api_key = mask_api_key(value.trim());
-                        },
+                        }
                         "GOOGLE_GEMINI_BASE_URL" => base_url = value.trim().to_string(),
                         _ => {}
                     }
@@ -2204,9 +2375,13 @@ async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 None
             };
 
-            Ok(ActiveConfig { api_key, base_url, profile_name })
-        },
-        _ => Err(format!("Unknown tool: {}", tool))
+            Ok(ActiveConfig {
+                api_key,
+                base_url,
+                profile_name,
+            })
+        }
+        _ => Err(format!("Unknown tool: {}", tool)),
     }
 }
 
@@ -2225,16 +2400,11 @@ fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     let menu = Menu::with_items(
         app,
-        &[
-            &show_item,
-            &PredefinedMenuItem::separator(app)?,
-            &quit_item,
-        ],
+        &[&show_item, &PredefinedMenuItem::separator(app)?, &quit_item],
     )?;
 
     Ok(menu)
 }
-
 
 fn main() {
     tauri::Builder::default()
@@ -2247,9 +2417,9 @@ fn main() {
                     // 开发模式：resource_dir 是 src-tauri/target/debug
                     // 需要回到项目根目录（上三级）
                     let project_root = resource_dir
-                        .parent()  // target
-                        .and_then(|p| p.parent())  // src-tauri
-                        .and_then(|p| p.parent())  // 项目根目录
+                        .parent() // target
+                        .and_then(|p| p.parent()) // src-tauri
+                        .and_then(|p| p.parent()) // 项目根目录
                         .unwrap_or(&resource_dir);
 
                     println!("Development mode, setting dir to: {:?}", project_root);
@@ -2258,7 +2428,10 @@ fn main() {
                     // 生产模式：跨平台支持
                     let parent_dir = if cfg!(target_os = "macos") {
                         // macOS: .app/Contents/Resources/
-                        resource_dir.parent().and_then(|p| p.parent()).unwrap_or(&resource_dir)
+                        resource_dir
+                            .parent()
+                            .and_then(|p| p.parent())
+                            .unwrap_or(&resource_dir)
                     } else if cfg!(target_os = "windows") {
                         // Windows: 通常在应用程序目录
                         resource_dir.parent().unwrap_or(&resource_dir)
