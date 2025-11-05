@@ -726,6 +726,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-shell",
+ "thiserror 1.0.69",
  "tokio",
  "toml_edit 0.23.7",
  "urlencoding",
