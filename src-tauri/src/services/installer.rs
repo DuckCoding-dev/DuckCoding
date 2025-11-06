@@ -229,6 +229,31 @@ impl InstallerService {
         let method = self.detect_install_method(tool).await
             .context("无法检测安装方法")?;
 
+        // 如果使用官方脚本（镜像）更新，先检查镜像状态
+        if matches!(method, InstallMethod::Official) {
+            let version_service = VersionService::new();
+            match version_service.check_version(tool).await {
+                Ok(version_info) => {
+                    // 检查镜像是否滞后
+                    if version_info.mirror_is_stale {
+                        // 返回特殊错误，让前端弹窗询问用户
+                        let mirror_ver = version_info.mirror_version.unwrap_or_default();
+                        let official_ver = version_info.latest_version.unwrap_or_default();
+
+                        anyhow::bail!(
+                            "MIRROR_STALE|{}|{}",
+                            mirror_ver,
+                            official_ver
+                        );
+                    }
+                }
+                Err(e) => {
+                    // 版本检查失败不应阻止更新，只记录警告
+                    eprintln!("⚠️  无法检查镜像状态: {}", e);
+                }
+            }
+        }
+
         match method {
             InstallMethod::Npm => {
                 // 使用国内镜像加速

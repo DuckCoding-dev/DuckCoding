@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CheckCircle2, XCircle, Package, Settings as SettingsIcon, RefreshCw, LayoutDashboard, Loader2, AlertCircle, Save, ExternalLink, Info, ArrowRightLeft, Key, Sparkles, BarChart3, GripVertical, Trash2 } from "lucide-react";
 import { checkInstallations, checkNodeEnvironment, installTool, checkAllUpdates, updateTool, configureApi, listProfiles, switchProfile, deleteProfile, getActiveConfig, saveGlobalConfig, getGlobalConfig, generateApiKeyForTool, getUsageStats, getUserQuota, type ToolStatus, type NodeEnvironment, type ActiveConfig, type GlobalConfig, type UsageStatsResult, type UserQuotaResult } from "@/lib/tauri-commands";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 import {
   DndContext,
   closestCenter,
@@ -134,6 +136,7 @@ function SortableProfileItem({ profile, toolId, switching, deleting, onSwitch, o
 }
 
 function App() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [tools, setTools] = useState<ToolWithUpdate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -542,19 +545,31 @@ function App() {
     const trimmedToken = systemToken.trim();
 
     if (!trimmedUserId || !trimmedToken) {
-      alert("请填写用户ID和系统访问令牌");
+      toast({
+        title: "验证失败",
+        description: "请填写用户ID和系统访问令牌",
+        variant: "destructive"
+      });
       return;
     }
 
     // 验证用户ID格式（应该是纯数字）
     if (!/^\d+$/.test(trimmedUserId)) {
-      alert("用户ID格式错误，应该是纯数字（例如：123456）");
+      toast({
+        title: "格式错误",
+        description: "用户ID格式错误，应该是纯数字（例如：123456）",
+        variant: "destructive"
+      });
       return;
     }
 
     // 验证系统访问令牌格式（最少5个字符）
     if (trimmedToken.length < 5) {
-      alert("系统访问令牌格式错误，长度至少需要5个字符");
+      toast({
+        title: "格式错误",
+        description: "系统访问令牌格式错误，长度至少需要5个字符",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -562,11 +577,18 @@ function App() {
       setSavingSettings(true);
       await saveGlobalConfig(trimmedUserId, trimmedToken);
       setGlobalConfig({ user_id: trimmedUserId, system_token: trimmedToken });
-      alert("全局设置保存成功");
+      toast({
+        title: "保存成功",
+        description: "全局设置保存成功"
+      });
       setSettingsOpen(false);
     } catch (error) {
       console.error("Failed to save settings:", error);
-      alert("保存设置失败: " + error);
+      toast({
+        title: "保存失败",
+        description: String(error),
+        variant: "destructive"
+      });
     } finally {
       setSavingSettings(false);
     }
@@ -575,12 +597,20 @@ function App() {
   // 一键生成API Key
   const handleGenerateApiKey = async () => {
     if (!selectedTool) {
-      alert("请先选择要配置的工具");
+      toast({
+        title: "请先选择工具",
+        description: "请先选择要配置的工具",
+        variant: "destructive"
+      });
       return;
     }
 
     if (!globalConfig?.user_id || !globalConfig?.system_token) {
-      alert("请先在全局设置中配置用户ID和系统访问令牌");
+      toast({
+        title: "缺少配置",
+        description: "请先在全局设置中配置用户ID和系统访问令牌",
+        variant: "destructive"
+      });
       setSettingsOpen(true);
       return;
     }
@@ -591,13 +621,24 @@ function App() {
 
       if (result.success && result.api_key) {
         setApiKey(result.api_key);
-        alert("API Key生成成功！已自动填入配置框");
+        toast({
+          title: "生成成功",
+          description: "API Key生成成功！已自动填入配置框"
+        });
       } else {
-        alert("生成失败: " + result.message);
+        toast({
+          title: "生成失败",
+          description: result.message || "未知错误",
+          variant: "destructive"
+        });
       }
     } catch (error) {
       console.error("Failed to generate API key:", error);
-      alert("生成API Key失败: " + error);
+      toast({
+        title: "生成失败",
+        description: String(error),
+        variant: "destructive"
+      });
     } finally {
       setGeneratingKey(false);
     }
@@ -693,11 +734,15 @@ function App() {
             mirrorVersion: mirrorVer,
             officialVersion: officialVer
           });
-          return; // 不显示 alert，由对话框处理
+          return; // 不显示 toast，由对话框处理
         }
       }
 
-      alert("安装失败: " + error);
+      toast({
+        title: "安装失败",
+        description: String(error),
+        variant: "destructive"
+      });
     } finally {
       setInstalling(null);
     }
@@ -706,7 +751,11 @@ function App() {
   const handleUpdate = async (toolId: string) => {
     // 防止重复点击
     if (updating) {
-      alert("已有更新任务正在进行，请等待完成后再试");
+      toast({
+        title: "请稍候",
+        description: "已有更新任务正在进行，请等待完成后再试",
+        variant: "destructive"
+      });
       return;
     }
 
@@ -714,16 +763,45 @@ function App() {
       setUpdating(toolId);
       await updateTool(toolId);
       await loadToolStatus();
-      alert("更新成功！");
+      toast({
+        title: "更新成功",
+        description: "工具已更新到最新版本"
+      });
     } catch (error) {
       console.error("Failed to update " + toolId, error);
       const errorMsg = String(error);
 
+      // 检查是否是镜像滞后错误
+      if (errorMsg.includes('MIRROR_STALE')) {
+        const parts = errorMsg.split('|');
+        if (parts.length === 3) {
+          const mirrorVer = parts[1];
+          const officialVer = parts[2];
+
+          // 显示镜像滞后对话框
+          setMirrorStaleDialog({
+            open: true,
+            toolId: toolId,
+            mirrorVersion: mirrorVer,
+            officialVersion: officialVer
+          });
+          return; // 不显示 toast，由对话框处理
+        }
+      }
+
       // 检查是否是 Homebrew 锁定错误
       if (errorMsg.includes("already locked") || errorMsg.includes("Please wait for it to finish")) {
-        alert("Homebrew 正在处理其他任务，请稍后重试。\n\n如需强制解锁，请在终端运行：\npkill -9 brew && rm -rf ~/Library/Caches/Homebrew/Locks/*");
+        toast({
+          title: "Homebrew 繁忙",
+          description: "Homebrew 正在处理其他任务，请稍后重试。\n\n如需强制解锁，请在终端运行：\npkill -9 brew && rm -rf ~/Library/Caches/Homebrew/Locks/*",
+          variant: "destructive"
+        });
       } else {
-        alert("更新失败: " + error);
+        toast({
+          title: "更新失败",
+          description: String(error),
+          variant: "destructive"
+        });
       }
     } finally {
       setUpdating(null);
@@ -732,7 +810,11 @@ function App() {
 
   const handleConfigureApi = async () => {
     if (!selectedTool || !apiKey) {
-      alert("❌ 请填写必填项\n\n" + (!selectedTool ? "• 请选择工具\n" : "") + (!apiKey ? "• 请输入 API Key" : ""));
+      toast({
+        title: "请填写必填项",
+        description: (!selectedTool ? "• 请选择工具\n" : "") + (!apiKey ? "• 请输入 API Key" : ""),
+        variant: "destructive"
+      });
       return;
     }
 
@@ -756,10 +838,17 @@ function App() {
 
       // 弹窗提示成功
       const toolName = selectedTool === 'claude-code' ? 'Claude Code' : selectedTool === 'codex' ? 'CodeX' : 'Gemini CLI';
-      alert(`✅ ${toolName} 配置保存成功！${profileName ? `\n\n配置名称: ${profileName}` : ''}`);
+      toast({
+        title: "配置保存成功",
+        description: `${toolName} 配置保存成功！${profileName ? `\n配置名称: ${profileName}` : ''}`
+      });
     } catch (error) {
       console.error("Failed to configure API:", error);
-      alert("❌ 配置失败\n\n" + error);
+      toast({
+        title: "配置失败",
+        description: String(error),
+        variant: "destructive"
+      });
     } finally {
       setConfiguring(false);
     }
@@ -779,10 +868,17 @@ function App() {
         console.error("Failed to reload active config", error);
       }
 
-      alert("✅ 配置切换成功！\n\n请重启相关 CLI 工具以使新配置生效。");
+      toast({
+        title: "切换成功",
+        description: "配置切换成功！\n请重启相关 CLI 工具以使新配置生效。"
+      });
     } catch (error) {
       console.error("Failed to switch profile:", error);
-      alert("❌ 切换失败\n\n" + error);
+      toast({
+        title: "切换失败",
+        description: String(error),
+        variant: "destructive"
+      });
     } finally {
       setSwitching(false);
     }
@@ -841,10 +937,17 @@ function App() {
         // 不影响用户体验，因为 UI 已经通过乐观更新反映了删除
       }
 
-      alert("✅ 配置删除成功！");
+      toast({
+        title: "删除成功",
+        description: "配置删除成功！"
+      });
     } catch (error) {
       console.error("Failed to delete profile:", error);
-      alert("❌ 删除失败\n\n" + error);
+      toast({
+        title: "删除失败",
+        description: String(error),
+        variant: "destructive"
+      });
 
       // 删除失败，重新加载列表恢复 UI 状态
       try {
@@ -1750,7 +1853,11 @@ function App() {
               onClick={async () => {
                 const toolId = mirrorStaleDialog.toolId;
                 setMirrorStaleDialog({ open: false, toolId: "", mirrorVersion: "", officialVersion: "" });
-                alert("请注意：镜像安装将获得版本 " + mirrorStaleDialog.mirrorVersion + "，建议改用 npm 安装获取最新版本");
+                toast({
+                  title: "注意",
+                  description: `镜像安装将获得版本 ${mirrorStaleDialog.mirrorVersion}，建议改用 npm 安装获取最新版本`,
+                  variant: "destructive"
+                });
               }}
             >
               继续使用镜像 ({mirrorStaleDialog.mirrorVersion})
@@ -1770,10 +1877,17 @@ function App() {
                     setInstalling(toolId);
                     await installTool(toolId, "npm");
                     await loadToolStatus();
-                    alert("安装成功！已获取最新版本 " + mirrorStaleDialog.officialVersion);
+                    toast({
+                      title: "安装成功",
+                      description: `已获取最新版本 ${mirrorStaleDialog.officialVersion}`
+                    });
                   } catch (error) {
                     console.error("Failed to install with npm", error);
-                    alert("npm 安装失败: " + error);
+                    toast({
+                      title: "npm 安装失败",
+                      description: String(error),
+                      variant: "destructive"
+                    });
                   } finally {
                     setInstalling(null);
                   }
@@ -1786,6 +1900,7 @@ function App() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Toaster />
     </div>
   );
 }

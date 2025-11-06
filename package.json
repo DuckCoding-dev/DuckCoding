@@ -31,6 +31,7 @@
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@radix-ui/react-toast": "^1.2.15",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-shell": "^2.3.3",
     "class-variance-authority": "^0.7.1",

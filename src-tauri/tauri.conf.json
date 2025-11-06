@@ -20,7 +20,23 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "dangerousRemoteDomainIpcAccess": [
+        {
+          "domain": "mirror.duckcoding.com",
+          "enableTauriAPI": true
+        }
+      ]
+    }
+  },
+  "allowlist": {
+    "http": {
+      "all": false,
+      "scope": [
+        "https://mirror.duckcoding.com/**",
+        "https://registry.npmmirror.com/**",
+        "https://registry.npmjs.org/**"
+      ]
     }
   },
   "bundle": {
