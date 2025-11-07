@@ -9,7 +9,22 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "lint": "npm run lint:ts && npm run lint:rs",
+    "lint:fix": "npm run lint:ts:fix && npm run lint:rs:fix",
+    "lint:ts": "eslint .",
+    "lint:ts:fix": "eslint . --fix",
+    "lint:rs": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --all-features -- -D warnings",
+    "lint:rs:fix": "cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --all-features --fix --allow-dirty -- -D warnings",
+    "fmt": "npm run fmt:ts && npm run fmt:rs",
+    "fmt:fix": "npm run fmt:ts:fix && npm run fmt:rs:fix",
+    "fmt:ts": "prettier . --check",
+    "fmt:ts:fix": "prettier . --write",
+    "fmt:rs": "cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
+    "fmt:rs:fix": "cargo fmt --manifest-path src-tauri/Cargo.toml --all",
+    "format": "npm run fmt:ts:fix",
+    "check": "npm run lint && npm run fmt",
+    "check:fix": "npm run lint:fix && npm run fmt:fix"
   },
   "keywords": [
     "duckcoding",
@@ -44,15 +59,23 @@
     "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@tauri-apps/cli": "^2.9.3",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
     "autoprefixer": "^10.4.16",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
     "postcss": "^8.4.32",
+    "prettier": "^3.6.2",
     "tailwindcss": "^3.4.18",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.3.3",
+    "typescript-eslint": "^8.46.3",
     "vite": "^7.2.2"
   },
   "engines": {

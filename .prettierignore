@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+coverage
+src-tauri/target
+src-tauri/.cargo
+.idea
+.vscode
+*.log
