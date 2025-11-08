@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -36,6 +37,7 @@ import {
   RefreshCw,
   LayoutDashboard,
   Loader2,
+  Minimize2,
   AlertCircle,
   Save,
   ExternalLink,
@@ -46,6 +48,7 @@ import {
   BarChart3,
   GripVertical,
   Trash2,
+  Power,
 } from 'lucide-react';
 import {
   checkInstallations,
@@ -63,12 +66,14 @@ import {
   generateApiKeyForTool,
   getUsageStats,
   getUserQuota,
+  applyCloseAction,
   type ToolStatus,
   type NodeEnvironment,
   type ActiveConfig,
   type GlobalConfig,
   type UsageStatsResult,
   type UserQuotaResult,
+  type CloseAction,
 } from '@/lib/tauri-commands';
 import { useToast } from '@/hooks/use-toast';
 import { Toaster } from '@/components/ui/toaster';
@@ -107,6 +112,28 @@ interface ToolWithUpdate extends ToolStatus {
   mirrorVersion?: string; // 镜像实际可安装的版本
   mirrorIsStale?: boolean; // 镜像是否滞后
 }
+
+const CLOSE_EVENT = 'duckcoding://request-close-action';
+const CLOSE_PREFERENCE_KEY = 'duckcoding.closePreference';
+const SINGLE_INSTANCE_EVENT = 'single-instance';
+
+interface SingleInstancePayload {
+  args: string[];
+  cwd: string;
+}
+
+const isTauriEnvironment = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const globalWindow = window as unknown as Record<string, unknown>;
+  return Boolean(
+    globalWindow.__TAURI_INTERNALS__ ??
+      globalWindow.__TAURI_METADATA__ ??
+      globalWindow.__TAURI_IPC__,
+  );
+};
 
 // 可拖拽的配置项组件
 interface ProfileItemProps {
@@ -272,6 +299,9 @@ function App() {
     targetProfile: string;
     willOverride: boolean;
   }>({ open: false, targetProfile: '', willOverride: false });
+  const [closeDialogOpen, setCloseDialogOpen] = useState(false);
+  const [rememberCloseChoice, setRememberCloseChoice] = useState(false);
+  const [closeActionLoading, setCloseActionLoading] = useState<CloseAction | null>(null);
 
   const logoMap: Record<string, string> = {
     'claude-code': ClaudeLogo,
@@ -622,6 +652,51 @@ function App() {
     }
   }, [globalConfig]);
 
+  const executeCloseAction = useCallback(
+    async (action: CloseAction, remember = false, autoTriggered = false) => {
+      if (!isTauriEnvironment()) {
+        setCloseDialogOpen(false);
+        return;
+      }
+
+      setCloseActionLoading(action);
+      try {
+        await applyCloseAction(action);
+
+        if (typeof window !== 'undefined') {
+          try {
+            if (remember) {
+              window.localStorage.setItem(CLOSE_PREFERENCE_KEY, action);
+            } else if (!autoTriggered) {
+              window.localStorage.removeItem(CLOSE_PREFERENCE_KEY);
+            }
+          } catch (storageError) {
+            console.warn('保存关闭偏好失败:', storageError);
+          }
+        }
+      } catch (error) {
+        console.error('执行窗口操作失败:', error);
+        toast({
+          variant: 'destructive',
+          title: '窗口操作失败',
+          description:
+            error instanceof Error ? error.message : '请稍后重试，或从系统托盘退出/展开窗口',
+        });
+
+        if (!autoTriggered) {
+          setCloseDialogOpen(true);
+        }
+      } finally {
+        setCloseActionLoading(null);
+        if (!autoTriggered) {
+          setCloseDialogOpen(false);
+          setRememberCloseChoice(false);
+        }
+      }
+    },
+    [toast],
+  );
+
   // 当全局配置加载后，自动加载统计数据
   useEffect(() => {
     if (globalConfig?.user_id && globalConfig?.system_token) {
@@ -635,6 +710,87 @@ function App() {
       loadGlobalConfig();
     }
   }, [settingsOpen]);
+
+  useEffect(() => {
+    if (!isTauriEnvironment()) {
+      return;
+    }
+
+    let unlisten: UnlistenFn | null = null;
+    let disposed = false;
+
+    listen(CLOSE_EVENT, () => {
+      if (typeof window !== 'undefined') {
+        try {
+          const savedPreference = window.localStorage.getItem(
+            CLOSE_PREFERENCE_KEY,
+          ) as CloseAction | null;
+
+          if (savedPreference === 'minimize' || savedPreference === 'quit') {
+            executeCloseAction(savedPreference, true, true);
+            return;
+          }
+        } catch (storageError) {
+          console.warn('读取关闭偏好失败:', storageError);
+        }
+      }
+
+      setCloseDialogOpen(true);
+    })
+      .then((fn) => {
+        if (disposed) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch((error) => {
+        console.error('注册关闭事件监听失败:', error);
+      });
+
+    return () => {
+      disposed = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [executeCloseAction]);
+
+  useEffect(() => {
+    if (!isTauriEnvironment()) {
+      return;
+    }
+
+    let unlisten: UnlistenFn | null = null;
+    let disposed = false;
+
+    listen<SingleInstancePayload>(SINGLE_INSTANCE_EVENT, (event) => {
+      const args = event.payload?.args?.slice(1).join(' ') ?? '';
+      toast({
+        title: 'DuckCoding 已在运行',
+        description: args
+          ? `已切换到当前实例（参数：${args}）`
+          : '检测到重复启动，已切换到当前实例。',
+      });
+    })
+      .then((fn) => {
+        if (disposed) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch((error) => {
+        console.error('注册 single-instance 事件监听失败:', error);
+      });
+
+    return () => {
+      disposed = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [toast]);
 
   // 保存全局设置
   const handleSaveSettings = async () => {
@@ -2436,6 +2592,75 @@ function App() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={closeDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCloseDialogOpen(false);
+            setRememberCloseChoice(false);
+          }
+        }}
+      >
+        <DialogContent
+          className="sm:max-w-[420px]"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Power className="h-5 w-5 text-slate-600 dark:text-slate-100" />
+              关闭 DuckCoding？
+            </DialogTitle>
+            <DialogDescription>选择关闭窗口或最小化到系统托盘。</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Button
+              variant="secondary"
+              className="w-full justify-between"
+              disabled={Boolean(closeActionLoading)}
+              onClick={() => executeCloseAction('minimize', rememberCloseChoice)}
+            >
+              <span className="flex items-center gap-2">
+                {closeActionLoading === 'minimize' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Minimize2 className="h-4 w-4" />
+                )}
+                最小化到系统托盘
+              </span>
+              <span className="text-xs text-slate-500">推荐</span>
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full justify-between"
+              disabled={Boolean(closeActionLoading)}
+              onClick={() => executeCloseAction('quit', rememberCloseChoice)}
+            >
+              <span className="flex items-center gap-2">
+                {closeActionLoading === 'quit' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Power className="h-4 w-4" />
+                )}
+                直接退出程序
+              </span>
+              <span className="text-xs opacity-80">退出</span>
+            </Button>
+            <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+              <input
+                type="checkbox"
+                checked={rememberCloseChoice}
+                onChange={(event) => setRememberCloseChoice(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              记住我的选择
+            </label>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              若取消勾选「记住我的选择」，下次点击关闭时会再次询问。
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
 

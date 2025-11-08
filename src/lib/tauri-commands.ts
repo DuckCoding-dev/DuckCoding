@@ -74,6 +74,8 @@ export interface NodeEnvironment {
   npm_version: string | null;
 }
 
+export type CloseAction = 'minimize' | 'quit';
+
 export async function checkInstallations(): Promise<ToolStatus[]> {
   return await invoke<ToolStatus[]>('check_installations');
 }
@@ -155,4 +157,8 @@ export async function getUsageStats(): Promise<UsageStatsResult> {
 
 export async function getUserQuota(): Promise<UserQuotaResult> {
   return await invoke<UserQuotaResult>('get_user_quota');
+}
+
+export async function applyCloseAction(action: CloseAction): Promise<void> {
+  return await invoke<void>('handle_close_action', { action });
 }

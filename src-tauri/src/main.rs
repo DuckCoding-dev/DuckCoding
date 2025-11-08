@@ -10,7 +10,7 @@ use std::process::Command;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager, Runtime,
+    AppHandle, Emitter, Manager, Runtime, WebviewWindow,
 };
 
 // 导入服务层
@@ -19,6 +19,15 @@ use duckcoding::{ConfigService, InstallMethod, InstallerService, Tool, VersionSe
 // Windows特定：隐藏命令行窗口
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+
+const CLOSE_CONFIRM_EVENT: &str = "duckcoding://request-close-action";
+const SINGLE_INSTANCE_EVENT: &str = "single-instance";
+
+#[derive(Clone, Serialize)]
+struct SingleInstancePayload {
+    args: Vec<String>,
+    cwd: String,
+}
 
 // 辅助函数：获取扩展的PATH环境变量
 fn get_extended_path() -> String {
@@ -895,6 +904,21 @@ async fn get_user_quota() -> Result<UserQuotaResult, String> {
     })
 }
 
+#[tauri::command]
+fn handle_close_action(window: WebviewWindow, action: String) -> Result<(), String> {
+    match action.as_str() {
+        "minimize" => {
+            hide_window_to_tray(&window);
+            Ok(())
+        }
+        "quit" => {
+            window.app_handle().exit(0);
+            Ok(())
+        }
+        other => Err(format!("未知的关闭操作: {}", other)),
+    }
+}
+
 // 辅助函数：检测当前配置匹配哪个profile
 fn detect_profile_name(
     tool: &str,
@@ -1272,6 +1296,88 @@ fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     Ok(menu)
 }
 
+fn focus_main_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        println!("Focusing existing main window");
+        restore_window_state(&window);
+    } else {
+        println!("Main window not found when trying to focus");
+    }
+}
+
+fn restore_window_state<R: Runtime>(window: &WebviewWindow<R>) {
+    println!(
+        "Restoring window state, is_visible={:?}, is_minimized={:?}",
+        window.is_visible(),
+        window.is_minimized()
+    );
+
+    #[cfg(target_os = "macos")]
+    #[allow(deprecated)]
+    {
+        use cocoa::appkit::NSApplication;
+        use cocoa::base::nil;
+        use cocoa::foundation::NSAutoreleasePool;
+
+        unsafe {
+            let _pool = NSAutoreleasePool::new(nil);
+            let app_macos = NSApplication::sharedApplication(nil);
+            app_macos.setActivationPolicy_(
+                cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular,
+            );
+        }
+        println!("macOS Dock icon restored");
+    }
+
+    if let Err(e) = window.show() {
+        println!("Error showing window: {:?}", e);
+    }
+    if let Err(e) = window.unminimize() {
+        println!("Error unminimizing window: {:?}", e);
+    }
+    if let Err(e) = window.set_focus() {
+        println!("Error setting focus: {:?}", e);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[allow(deprecated)]
+    {
+        use cocoa::appkit::NSApplication;
+        use cocoa::base::nil;
+        use objc::runtime::YES;
+
+        unsafe {
+            let ns_app = NSApplication::sharedApplication(nil);
+            ns_app.activateIgnoringOtherApps_(YES);
+        }
+        println!("macOS app activated");
+    }
+}
+
+fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
+    println!("Hiding window to system tray");
+    if let Err(e) = window.hide() {
+        println!("Failed to hide window: {:?}", e);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[allow(deprecated)]
+    {
+        use cocoa::appkit::NSApplication;
+        use cocoa::base::nil;
+        use cocoa::foundation::NSAutoreleasePool;
+
+        unsafe {
+            let _pool = NSAutoreleasePool::new(nil);
+            let app_macos = NSApplication::sharedApplication(nil);
+            app_macos.setActivationPolicy_(
+                cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyAccessory,
+            );
+        }
+        println!("macOS Dock icon hidden");
+    }
+}
+
 fn main() {
     let builder = tauri::Builder::default()
         .setup(|app| {
@@ -1283,9 +1389,9 @@ fn main() {
                     // 开发模式：resource_dir 是 src-tauri/target/debug
                     // 需要回到项目根目录（上三级）
                     let project_root = resource_dir
-                        .parent()  // target
-                        .and_then(|p| p.parent())  // src-tauri
-                        .and_then(|p| p.parent())  // 项目根目录
+                        .parent() // target
+                        .and_then(|p| p.parent()) // src-tauri
+                        .and_then(|p| p.parent()) // 项目根目录
                         .unwrap_or(&resource_dir);
 
                     println!("Development mode, setting dir to: {:?}", project_root);
@@ -1294,7 +1400,10 @@ fn main() {
                     // 生产模式：跨平台支持
                     let parent_dir = if cfg!(target_os = "macos") {
                         // macOS: .app/Contents/Resources/
-                        resource_dir.parent().and_then(|p| p.parent()).unwrap_or(&resource_dir)
+                        resource_dir
+                            .parent()
+                            .and_then(|p| p.parent())
+                            .unwrap_or(&resource_dir)
                     } else if cfg!(target_os = "windows") {
                         // Windows: 通常在应用程序目录
                         resource_dir.parent().unwrap_or(&resource_dir)
@@ -1322,40 +1431,7 @@ fn main() {
                     match event.id.as_ref() {
                         "show" => {
                             println!("Show window requested from tray menu");
-                            if let Some(window) = app.get_webview_window("main") {
-                                println!("Window is_visible: {:?}", window.is_visible());
-                                println!("Window is_minimized: {:?}", window.is_minimized());
-
-                                // 显示并激活窗口
-                                if let Err(e) = window.show() {
-                                    println!("Error showing window: {:?}", e);
-                                }
-                                if let Err(e) = window.unminimize() {
-                                    println!("Error unminimizing window: {:?}", e);
-                                }
-                                if let Err(e) = window.set_focus() {
-                                    println!("Error setting focus: {:?}", e);
-                                }
-
-                                // macOS: 强制激活应用到前台
-                                #[cfg(target_os = "macos")]
-                                #[allow(deprecated)]
-                                {
-                                    use cocoa::appkit::NSApplication;
-                                    use cocoa::base::nil;
-                                    use objc::runtime::YES;
-
-                                    unsafe {
-                                        let ns_app = NSApplication::sharedApplication(nil);
-                                        ns_app.activateIgnoringOtherApps_(YES);
-                                    }
-                                    println!("macOS app activated");
-                                }
-
-                                println!("After show - is_visible: {:?}", window.is_visible());
-                            } else {
-                                println!("Window not found!");
-                            }
+                            focus_main_window(app);
                         }
                         "quit" => {
                             println!("Quit requested from tray menu");
@@ -1373,57 +1449,7 @@ fn main() {
                             ..
                         } => {
                             println!("Tray icon LEFT click detected");
-                            // 单击左键显示主窗口
-                            if let Some(window) = app_handle2.get_webview_window("main") {
-                                println!("Window found, is_visible: {:?}", window.is_visible());
-                                println!("Window is_minimized: {:?}", window.is_minimized());
-
-                                // macOS: 恢复 Dock 图标
-                                #[cfg(target_os = "macos")]
-                                #[allow(deprecated)]
-                                {
-                                    use cocoa::appkit::NSApplication;
-                                    use cocoa::base::nil;
-                                    use cocoa::foundation::NSAutoreleasePool;
-
-                                    unsafe {
-                                        let _pool = NSAutoreleasePool::new(nil);
-                                        let app_macos = NSApplication::sharedApplication(nil);
-                                        app_macos.setActivationPolicy_(cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyRegular);
-                                    }
-                                    println!("macOS Dock icon restored");
-                                }
-
-                                // 显示并激活窗口
-                                if let Err(e) = window.show() {
-                                    println!("Error showing window: {:?}", e);
-                                }
-                                if let Err(e) = window.unminimize() {
-                                    println!("Error unminimizing window: {:?}", e);
-                                }
-                                if let Err(e) = window.set_focus() {
-                                    println!("Error setting focus: {:?}", e);
-                                }
-
-                                // macOS: 强制激活应用到前台
-                                #[cfg(target_os = "macos")]
-                                #[allow(deprecated)]
-                                {
-                                    use cocoa::appkit::NSApplication;
-                                    use cocoa::base::nil;
-                                    use objc::runtime::YES;
-
-                                    unsafe {
-                                        let ns_app = NSApplication::sharedApplication(nil);
-                                        ns_app.activateIgnoringOtherApps_(YES);
-                                    }
-                                    println!("macOS app activated");
-                                }
-
-                                println!("After show - is_visible: {:?}", window.is_visible());
-                            } else {
-                                println!("Window not found from tray click!");
-                            }
+                            focus_main_window(&app_handle2);
                         }
                         _ => {
                             // 不打印太多日志
@@ -1438,27 +1464,15 @@ fn main() {
 
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        println!("Window close requested - hiding to tray");
+                        println!("Window close requested - prompting for action");
                         // 阻止默认关闭行为
                         api.prevent_close();
-                        // 隐藏窗口到托盘
-                        let _ = window_clone.hide();
-                        println!("Window hidden");
-
-                        // macOS: 隐藏 Dock 图标
-                        #[cfg(target_os = "macos")]
-                        #[allow(deprecated)]
-                        {
-                            use cocoa::appkit::NSApplication;
-                            use cocoa::base::nil;
-                            use cocoa::foundation::NSAutoreleasePool;
-
-                            unsafe {
-                                let _pool = NSAutoreleasePool::new(nil);
-                                let app_macos = NSApplication::sharedApplication(nil);
-                                app_macos.setActivationPolicy_(cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyAccessory);
-                            }
-                            println!("macOS Dock icon hidden");
+                        if let Err(err) = window_clone.emit(CLOSE_CONFIRM_EVENT, ()) {
+                            println!(
+                                "Failed to emit close confirmation event, fallback to hiding: {:?}",
+                                err
+                            );
+                            hide_window_to_tray(&window_clone);
                         }
                     }
                 });
@@ -1467,6 +1481,24 @@ fn main() {
             Ok(())
         })
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            println!(
+                "Secondary instance detected, args: {:?}, cwd: {}",
+                argv, cwd
+            );
+
+            if let Err(err) = app.emit(
+                SINGLE_INSTANCE_EVENT,
+                SingleInstancePayload {
+                    args: argv.clone(),
+                    cwd: cwd.clone(),
+                },
+            ) {
+                println!("Failed to emit single-instance event: {:?}", err);
+            }
+
+            focus_main_window(app);
+        }))
         .invoke_handler(tauri::generate_handler![
             check_installations,
             check_node_environment,
@@ -1483,13 +1515,20 @@ fn main() {
             get_global_config,
             generate_api_key_for_tool,
             get_usage_stats,
-            get_user_quota
+            get_user_quota,
+            handle_close_action
         ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件
-    builder.build(tauri::generate_context!())
+    builder
+        .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = app_handle;
+                let _ = event;
+            }
             #[cfg(target_os = "macos")]
             #[allow(deprecated)]
             {
