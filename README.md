@@ -141,7 +141,7 @@ DuckCoding 要求每个工具使用对应的专用分组令牌：
 
 ### 桌面应用
 
-- **前端**: React 18 + TypeScript + Tailwind CSS
+- **前端**: React 19 + TypeScript + Tailwind CSS
 - **桌面框架**: Tauri 2.0
 - **后端**: Rust（完整服务层架构）
   - InstallerService - 工具安装和版本管理
