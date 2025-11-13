@@ -1,0 +1,571 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://schema.duckcoding.com/codex-config.json",
+  "description": "Codex CLI 的 config.toml 配置结构（翻译自官方文档），用于前端渲染与校验。",
+  "type": "object",
+  "additionalProperties": true,
+  "$defs": {
+    "featureFlags": {
+      "type": "object",
+      "description": "可选实验特性的布尔开关表。",
+      "additionalProperties": false,
+      "properties": {
+        "unified_exec": {
+          "type": "boolean",
+          "description": "启用统一的 PTY exec 工具。"
+        },
+        "streamable_shell": {
+          "type": "boolean",
+          "description": "启用可流式的 exec/write-stdin 工具。"
+        },
+        "rmcp_client": {
+          "type": "boolean",
+          "description": "允许 streamable HTTP MCP 使用 OAuth。"
+        },
+        "apply_patch_freeform": {
+          "type": "boolean",
+          "description": "暴露自由格式的 apply_patch 工具。"
+        },
+        "view_image_tool": {
+          "type": "boolean",
+          "description": "允许模型使用 view_image 工具。"
+        },
+        "web_search_request": {
+          "type": "boolean",
+          "description": "允许模型请求 Web 搜索。"
+        },
+        "experimental_sandbox_command_assessment": {
+          "type": "boolean",
+          "description": "启用模型对 sandbox 风险的评估。"
+        },
+        "ghost_commit": {
+          "type": "boolean",
+          "description": "每轮创建一次 ghost commit。"
+        },
+        "enable_experimental_windows_sandbox": {
+          "type": "boolean",
+          "description": "启用 Windows 受限令牌 sandbox。"
+        }
+      }
+    },
+    "sandboxWorkspaceWrite": {
+      "type": "object",
+      "description": "workspace-write sandbox 的额外参数。",
+      "additionalProperties": false,
+      "properties": {
+        "writable_roots": {
+          "type": "array",
+          "description": "额外可写根目录列表。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "network_access": {
+          "type": "boolean",
+          "description": "是否允许在 sandbox 中访问网络。"
+        },
+        "exclude_tmpdir_env_var": {
+          "type": "boolean",
+          "description": "排除 $TMPDIR，使其不再可写。"
+        },
+        "exclude_slash_tmp": {
+          "type": "boolean",
+          "description": "排除 /tmp，使其不再可写。"
+        }
+      }
+    },
+    "toolToggles": {
+      "type": "object",
+      "description": "工具开关（web_search/view_image 等）。",
+      "additionalProperties": false,
+      "properties": {
+        "web_search": {
+          "type": "boolean",
+          "description": "允许 Codex 主动发起内置 Web 搜索。"
+        },
+        "view_image": {
+          "type": "boolean",
+          "description": "允许发送截图/图片作为上下文。"
+        }
+      }
+    },
+    "shellEnvPolicy": {
+      "type": "object",
+      "description": "子进程环境变量继承/过滤策略。",
+      "additionalProperties": false,
+      "properties": {
+        "inherit": {
+          "type": "string",
+          "enum": ["all", "core", "none"],
+          "description": "环境基础模板：all=完整继承、core=仅核心变量、none=空环境。"
+        },
+        "ignore_default_excludes": {
+          "type": "boolean",
+          "description": "为 true 时跳过 KEY/SECRET/TOKEN 的默认过滤。"
+        },
+        "exclude": {
+          "type": "array",
+          "description": "需额外排除的变量通配符（不区分大小写）。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "include_only": {
+          "type": "array",
+          "description": "仅保留匹配这些模式的变量。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "set": {
+          "type": "object",
+          "description": "强制覆盖/新增的变量键值。",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "experimental_use_profile": {
+          "type": "boolean",
+          "description": "是否通过用户 shell profile 启动子进程（默认 false，实验选项）。"
+        }
+      }
+    },
+    "mcpServer": {
+      "type": "object",
+      "description": "单个 MCP 服务器的配置。",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "STDIO 服务器启动命令。"
+        },
+        "args": {
+          "type": "array",
+          "description": "命令参数。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cwd": {
+          "type": "string",
+          "description": "启动命令使用的工作目录。"
+        },
+        "env": {
+          "type": "object",
+          "description": "传递给服务器的额外环境变量。",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "env_vars": {
+          "type": "array",
+          "description": "允许透传的额外环境变量名。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "url": {
+          "type": "string",
+          "description": "streamable HTTP 服务器的 URL。"
+        },
+        "bearer_token_env_var": {
+          "type": "string",
+          "description": "携带 Bearer Token 的环境变量名。"
+        },
+        "http_headers": {
+          "type": "object",
+          "description": "固定 HTTP 头。",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "env_http_headers": {
+          "type": "object",
+          "description": "从环境变量注入的 HTTP 头。",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "是否启用该服务器。"
+        },
+        "startup_timeout_sec": {
+          "type": "number",
+          "description": "启动超时时间（秒）。"
+        },
+        "tool_timeout_sec": {
+          "type": "number",
+          "description": "单个工具调用超时（秒）。"
+        },
+        "enabled_tools": {
+          "type": "array",
+          "description": "仅允许的工具列表（白名单）。",
+          "items": {
+            "type": "string"
+          }
+        },
+        "disabled_tools": {
+          "type": "array",
+          "description": "需要隐藏的工具列表（黑名单）。",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "historySettings": {
+      "type": "object",
+      "description": "历史记录持久化配置，对应 [history] 表。",
+      "additionalProperties": false,
+      "properties": {
+        "persistence": {
+          "type": "string",
+          "enum": ["save-all", "none"],
+          "description": "历史保存策略：save-all 表示全部记录，none 表示禁用持久化。"
+        },
+        "file_opener": {
+          "type": "string",
+          "enum": ["vscode", "vscode-insiders", "windsurf", "cursor", "none"],
+          "description": "用于点击引用时打开文件的 URI scheme。"
+        },
+        "max_bytes": {
+          "type": "number",
+          "minimum": 0,
+          "description": "历史文件允许的最大字节数（0 表示使用内置默认限制）。"
+        }
+      }
+    },
+    "tuiSettings": {
+      "type": "object",
+      "description": "终端 UI 相关设置，对应 [tui] 表。",
+      "additionalProperties": false,
+      "properties": {
+        "notifications": {
+          "description": "桌面通知策略，可为布尔值或事件列表。",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "hide_agent_reasoning": {
+          "type": "boolean",
+          "description": "是否隐藏内部 reasoning 输出。"
+        },
+        "show_raw_agent_reasoning": {
+          "type": "boolean",
+          "description": "是否展示原始 reasoning 内容。"
+        },
+        "disable_paste_burst": {
+          "type": "boolean",
+          "description": "禁用 TUI 内的大段粘贴保护。"
+        },
+        "windows_wsl_setup_acknowledged": {
+          "type": "boolean",
+          "description": "标记 Windows/WSL 引导提示已确认。"
+        },
+        "notify": {
+          "type": "array",
+          "description": "外部通知程序命令（argv 数组），为空表示禁用。",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "profileConfig": {
+      "type": "object",
+      "description": "profile 块允许覆盖的常见字段。",
+      "additionalProperties": true,
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "该 profile 使用的模型名称。"
+        },
+        "model_provider": {
+          "type": "string",
+          "description": "该 profile 对应的模型提供方。",
+          "x-key-source": "model_providers"
+        },
+        "approval_policy": {
+          "type": "string",
+          "enum": ["untrusted", "on-failure", "on-request", "never"],
+          "description": "该 profile 的审批策略。"
+        },
+        "sandbox_mode": {
+          "type": "string",
+          "enum": ["read-only", "workspace-write", "danger-full-access"],
+          "description": "该 profile 的 sandbox 模式。"
+        }
+      }
+    },
+    "noticeSettings": {
+      "type": "object",
+      "description": "控制 CLI 提示/告警的可选开关。",
+      "additionalProperties": false,
+      "properties": {
+        "hide_full_access_warning": {
+          "type": "boolean",
+          "description": "隐藏 danger-full-access 模式下的风险警告。"
+        }
+      }
+    },
+    "projectEntry": {
+      "type": "object",
+      "description": "单个项目路径的信任级别设置。",
+      "additionalProperties": false,
+      "properties": {
+        "trust_level": {
+          "type": "string",
+          "enum": ["trusted"],
+          "description": "信任级别，当前仅支持 trusted。"
+        }
+      }
+    },
+    "otelConfig": {
+      "type": "object",
+      "description": "OpenTelemetry 日志与导出配置。",
+      "additionalProperties": true,
+      "properties": {
+        "log_user_prompt": {
+          "type": "boolean",
+          "description": "是否在 OTEL 中包含用户提示内容。"
+        },
+        "environment": {
+          "type": "string",
+          "description": "OTEL environment 标签，例如 dev/staging。"
+        },
+        "exporter": {
+          "description": "OTEL 导出方式，字符串形式或对象形式（otlp-http/otlp-grpc）。",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": ["none", "otlp-http", "otlp-grpc"]
+            },
+            {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "otlp-http": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "otlp-grpc": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "properties": {
+    "model": {
+      "type": "string",
+      "description": "默认使用的模型名称（如 gpt-5、o3 等）。"
+    },
+    "review_model": {
+      "type": "string",
+      "description": "供 /review 功能使用的模型，不设置时沿用 model。"
+    },
+    "model_provider": {
+      "type": "string",
+      "description": "模型提供方 ID（来自 model_providers 表）。",
+      "x-key-source": "model_providers"
+    },
+    "model_context_window": {
+      "type": "number",
+      "description": "模型上下文窗口大小（token）。"
+    },
+    "model_max_output_tokens": {
+      "type": "number",
+      "description": "模型最大输出 token 数。"
+    },
+    "model_auto_compact_token_limit": {
+      "type": "number",
+      "description": "自动触发对话压缩的 token 阈值，0 表示禁用。"
+    },
+    "model_reasoning_effort": {
+      "type": "string",
+      "enum": ["minimal", "low", "medium", "high"],
+      "description": "Responses API 的 reasoning effort 级别。"
+    },
+    "model_reasoning_summary": {
+      "type": "string",
+      "enum": ["auto", "concise", "detailed", "none"],
+      "description": "是否生成 reasoning summary 以及其粒度。"
+    },
+    "model_verbosity": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "Responses API 中文本输出的详略程度。"
+    },
+    "model_supports_reasoning_summaries": {
+      "type": "boolean",
+      "description": "强制认为当前模型支持 reasoning summaries。"
+    },
+    "model_reasoning_summary_format": {
+      "type": "string",
+      "enum": ["none", "experimental"],
+      "description": "强制指定 reasoning summary 格式。"
+    },
+    "developer_instructions": {
+      "type": "string",
+      "description": "附加在 AGENTS.md 之后的开发者提示。"
+    },
+    "instructions": {
+      "type": "string",
+      "description": "兼容旧版的基础指令覆盖内容。"
+    },
+    "compact_prompt": {
+      "type": "string",
+      "description": "历史压缩提示词的内联覆盖。"
+    },
+    "experimental_instructions_file": {
+      "type": "string",
+      "description": "自定义基础指令文件路径。"
+    },
+    "experimental_compact_prompt_file": {
+      "type": "string",
+      "description": "自定义 compact prompt 文件路径。"
+    },
+    "approval_policy": {
+      "type": "string",
+      "enum": ["untrusted", "on-failure", "on-request", "never"],
+      "description": "命令执行前需要审批的策略。"
+    },
+    "sandbox_mode": {
+      "type": "string",
+      "enum": ["read-only", "workspace-write", "danger-full-access"],
+      "description": "命令执行所使用的 sandbox 模式。"
+    },
+    "sandbox_workspace_write": {
+      "$ref": "#/$defs/sandboxWorkspaceWrite"
+    },
+    "features": {
+      "$ref": "#/$defs/featureFlags"
+    },
+    "tools": {
+      "$ref": "#/$defs/toolToggles"
+    },
+    "shell_environment_policy": {
+      "$ref": "#/$defs/shellEnvPolicy"
+    },
+    "history": {
+      "$ref": "#/$defs/historySettings"
+    },
+    "hide_full_access_warning": {
+      "type": "boolean",
+      "description": "已废弃，请改用 [notice].hide_full_access_warning。"
+    },
+    "notice": {
+      "$ref": "#/$defs/noticeSettings"
+    },
+    "cli_auth_credentials_store": {
+      "type": "string",
+      "enum": ["file", "keyring", "auto"],
+      "description": "CLI 凭据存储位置。"
+    },
+    "chatgpt_base_url": {
+      "type": "string",
+      "description": "ChatGPT 登录流程使用的后端 base URL。"
+    },
+    "forced_chatgpt_workspace_id": {
+      "type": "string",
+      "description": "强制使用指定 ChatGPT workspace ID。"
+    },
+    "forced_login_method": {
+      "type": "string",
+      "enum": ["chatgpt", "api"],
+      "description": "强制登录方式，覆盖自动判断。"
+    },
+    "project_doc_max_bytes": {
+      "type": "number",
+      "description": "AGENTS.md 读取的最大字节数。"
+    },
+    "project_doc_fallback_filenames": {
+      "type": "array",
+      "description": "缺失 AGENTS.md 时的回退文件名列表。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "experimental_use_unified_exec_tool": {
+      "type": "boolean",
+      "description": "旧版实验开关：启用统一 exec 工具。"
+    },
+    "experimental_use_rmcp_client": {
+      "type": "boolean",
+      "description": "旧版实验开关：启用 Rust MCP 客户端。"
+    },
+    "experimental_use_freeform_apply_patch": {
+      "type": "boolean",
+      "description": "旧版实验开关：启用自由格式 apply_patch。"
+    },
+    "experimental_sandbox_command_assessment": {
+      "type": "boolean",
+      "description": "旧版实验开关：模型评估 sandbox 风险。"
+    },
+    "mcp_servers": {
+      "type": "object",
+      "description": "MCP 服务器配置列表，键为自定义 server 名。",
+      "additionalProperties": {
+        "$ref": "#/$defs/mcpServer"
+      }
+    },
+    "mcp_oauth_credentials_store": {
+      "type": "string",
+      "enum": ["auto", "file", "keyring"],
+      "description": "MCP OAuth 凭据保存位置。"
+    },
+    "notify": {
+      "type": "array",
+      "description": "Legacy 位置的外部通知命令（建议改用 [tui].notify）。",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tui": {
+      "$ref": "#/$defs/tuiSettings"
+    },
+    "profiles": {
+      "type": "object",
+      "description": "命名 profile 集合，可在 CLI 中通过 --profile 选择。",
+      "additionalProperties": {
+        "$ref": "#/$defs/profileConfig"
+      }
+    },
+    "profile": {
+      "type": "string",
+      "description": "当前激活的 profile 名称。",
+      "x-key-source": "profiles"
+    },
+    "model_providers": {
+      "type": "object",
+      "description": "自定义或覆盖模型提供方的配置表。",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "projects": {
+      "type": "object",
+      "description": "项目路径与信任级别映射。",
+      "additionalProperties": {
+        "$ref": "#/$defs/projectEntry"
+      }
+    },
+    "otel": {
+      "$ref": "#/$defs/otelConfig"
+    }
+  }
+}

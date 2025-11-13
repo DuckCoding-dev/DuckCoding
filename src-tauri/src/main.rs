@@ -14,7 +14,10 @@ use tauri::{
 };
 
 // 导入服务层
-use duckcoding::{ConfigService, InstallMethod, InstallerService, Tool, VersionService};
+use duckcoding::{
+    services::config::{CodexSettingsPayload, GeminiEnvPayload, GeminiSettingsPayload},
+    ConfigService, InstallMethod, InstallerService, Tool, VersionService,
+};
 // Use the shared GlobalConfig from the library crate (models::config)
 use duckcoding::GlobalConfig;
 
@@ -938,6 +941,51 @@ fn handle_close_action(window: WebviewWindow, action: String) -> Result<(), Stri
     }
 }
 
+#[tauri::command]
+fn get_claude_settings() -> Result<Value, String> {
+    ConfigService::read_claude_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_claude_settings(settings: Value) -> Result<(), String> {
+    ConfigService::save_claude_settings(&settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_claude_schema() -> Result<Value, String> {
+    ConfigService::get_claude_schema().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_codex_settings() -> Result<CodexSettingsPayload, String> {
+    ConfigService::read_codex_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_codex_settings(settings: Value, auth_token: Option<String>) -> Result<(), String> {
+    ConfigService::save_codex_settings(&settings, auth_token).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_codex_schema() -> Result<Value, String> {
+    ConfigService::get_codex_schema().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_gemini_settings() -> Result<GeminiSettingsPayload, String> {
+    ConfigService::read_gemini_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_gemini_settings(settings: Value, env: GeminiEnvPayload) -> Result<(), String> {
+    ConfigService::save_gemini_settings(&settings, &env).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_gemini_schema() -> Result<Value, String> {
+    ConfigService::get_gemini_schema().map_err(|e| e.to_string())
+}
+
 // 辅助函数：检测当前配置匹配哪个profile
 fn detect_profile_name(
     tool: &str,
@@ -1007,16 +1055,22 @@ fn detect_profile_name(
                     "claude-code" => {
                         if let Ok(content) = fs::read_to_string(entry.path()) {
                             if let Ok(config) = serde_json::from_str::<Value>(&content) {
-                                let backup_api_key = config
+                                let env_api_key = config
                                     .get("env")
                                     .and_then(|env| env.get("ANTHROPIC_AUTH_TOKEN"))
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
-                                let backup_base_url = config
+                                    .and_then(|v| v.as_str());
+                                let env_base_url = config
                                     .get("env")
                                     .and_then(|env| env.get("ANTHROPIC_BASE_URL"))
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                                    .and_then(|v| v.as_str());
+
+                                let flat_api_key =
+                                    config.get("ANTHROPIC_AUTH_TOKEN").and_then(|v| v.as_str());
+                                let flat_base_url =
+                                    config.get("ANTHROPIC_BASE_URL").and_then(|v| v.as_str());
+
+                                let backup_api_key = env_api_key.or(flat_api_key).unwrap_or("");
+                                let backup_base_url = env_base_url.or(flat_base_url).unwrap_or("");
 
                                 backup_api_key == active_api_key
                                     && backup_base_url == active_base_url
@@ -1563,11 +1617,20 @@ fn main() {
             generate_api_key_for_tool,
             get_usage_stats,
             get_user_quota,
+            handle_close_action,
             // expose current proxy for debugging/testing
             get_current_proxy,
-            handle_close_action,
             apply_proxy_now,
-            test_proxy_request
+            test_proxy_request,
+            get_claude_settings,
+            save_claude_settings,
+            get_claude_schema,
+            get_codex_settings,
+            save_codex_settings,
+            get_codex_schema,
+            get_gemini_settings,
+            save_gemini_settings,
+            get_gemini_schema
         ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件

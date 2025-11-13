@@ -1,0 +1,565 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://json.schemastore.org/claude-code-settings.json",
+  "$defs": {
+    "hookCommand": {
+      "type": "object",
+      "description": "钩子命令配置。",
+      "additionalProperties": false,
+      "required": ["type", "command"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "钩子实现的类型。",
+          "const": "command"
+        },
+        "command": {
+          "type": "string",
+          "description": "要执行的 shell 命令。",
+          "minLength": 1
+        },
+        "timeout": {
+          "type": "number",
+          "description": "该命令的可选超时时间（秒）。",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "hookMatcher": {
+      "type": "object",
+      "description": "包含多个钩子的匹配器配置。",
+      "additionalProperties": false,
+      "required": ["hooks"],
+      "properties": {
+        "matcher": {
+          "type": "string",
+          "description": "匹配工具名称的可选模式（区分大小写，仅用于 PreToolUse/PostToolUse）。"
+        },
+        "hooks": {
+          "type": "array",
+          "description": "需要执行的钩子数组",
+          "items": {
+            "$ref": "#/$defs/hookCommand"
+          }
+        }
+      }
+    },
+    "permissionRule": {
+      "type": "string",
+      "description": "工具权限规则。",
+      "pattern": "^((Bash|BashOutput|Edit|ExitPlanMode|Glob|Grep|KillShell|NotebookEdit|Read|SlashCommand|Task|TodoWrite|WebFetch|WebSearch|Write)(\\((?=.*[^)*?])[^)]+\\))?|mcp__.*)$",
+      "examples": [
+        "Bash(git commit:*)",
+        "Bash(npm run lint:*)",
+        "Edit(/src/**/*.ts)",
+        "mcp__github__search_repositories",
+        "Read(*.env)",
+        "Read(//Users/alice/secrets/**)",
+        "Read(~/Documents/*.pdf)",
+        "WebFetch",
+        "WebFetch(domain:github.com)",
+        "Read(//tmp/**/*)"
+      ]
+    }
+  },
+  "description": "Claude Code CLI 的配置文件。",
+  "allowTrailingCommas": true,
+  "additionalProperties": true,
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "settings.json 所使用的 schema。"
+    },
+    "apiKeyHelper": {
+      "type": "string",
+      "description": "生成认证值的自定义脚本路径。",
+      "minLength": 1,
+      "examples": ["/bin/generate_temp_api_key.sh"]
+    },
+    "cleanupPeriodDays": {
+      "type": "integer",
+      "description": "按最后活动时间本地保留聊天记录的天数。",
+      "default": 30,
+      "minimum": 0,
+      "examples": [20, 30, 60]
+    },
+    "env": {
+      "type": "object",
+      "description": "会应用到每个会话的环境变量。",
+      "additionalProperties": false,
+      "properties": {
+        "ANTHROPIC_API_KEY": {
+          "type": "string",
+          "description": "发送到模型请求的 X-Api-Key 头（适用于 Claude SDK，会被带入 Authorization）。"
+        },
+        "ANTHROPIC_AUTH_TOKEN": {
+          "type": "string",
+          "description": "自定义 Authorization 头内容，最终会被自动加上 Bearer 前缀。",
+          "x-secret": true
+        },
+        "ANTHROPIC_BASE_URL": {
+          "type": "string",
+          "description": "模型请求的 URL 地址。"
+        },
+        "ANTHROPIC_CUSTOM_HEADERS": {
+          "type": "string",
+          "description": "为模型请求追加的自定义 HTTP 头，采用 Name: Value 格式。"
+        },
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": {
+          "type": "string",
+          "description": "指定默认的 Haiku 级模型，详见模型配置文档。"
+        },
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": {
+          "type": "string",
+          "description": "指定默认的 Opus 级模型，详见模型配置文档。"
+        },
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": {
+          "type": "string",
+          "description": "指定默认的 Sonnet 级模型，详见模型配置文档。"
+        },
+        "ANTHROPIC_MODEL": {
+          "type": "string",
+          "description": "要使用的模型配置名称（参考模型配置文档）。"
+        },
+        "ANTHROPIC_SMALL_FAST_MODEL": {
+          "type": "string",
+          "description": "[已弃用] 设置后台任务使用的 Haiku 级模型名称。"
+        },
+        "ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION": {
+          "type": "string",
+          "description": "使用 Bedrock 时覆盖 Haiku 级模型的 AWS 区域。"
+        },
+        "AWS_BEARER_TOKEN_BEDROCK": {
+          "type": "string",
+          "description": "Amazon Bedrock API Key（参考官方 Bedrock API Keys 教程）。"
+        },
+        "BASH_DEFAULT_TIMEOUT_MS": {
+          "type": "string",
+          "description": "Bash 命令默认超时时间（毫秒）。"
+        },
+        "BASH_MAX_OUTPUT_LENGTH": {
+          "type": "string",
+          "description": "Bash 输出在被截断前允许的最大字符数。"
+        },
+        "BASH_MAX_TIMEOUT_MS": {
+          "type": "string",
+          "description": "模型可为长时间运行的 Bash 命令设置的最大超时时间（毫秒）。"
+        },
+        "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": {
+          "type": "string",
+          "description": "设置后每条 Bash 命令执行完成都会返回初始工作目录。"
+        },
+        "CLAUDE_CODE_API_KEY_HELPER_TTL_MS": {
+          "type": "string",
+          "description": "使用 apiKeyHelper 时刷新凭据的时间间隔（毫秒）。"
+        },
+        "CLAUDE_CODE_CLIENT_CERT": {
+          "type": "string",
+          "description": "mTLS 认证所使用的客户端证书文件路径。"
+        },
+        "CLAUDE_CODE_CLIENT_KEY": {
+          "type": "string",
+          "description": "mTLS 认证所使用的客户端私钥文件路径。"
+        },
+        "CLAUDE_CODE_CLIENT_KEY_PASSPHRASE": {
+          "type": "string",
+          "description": "加密的客户端私钥对应的可选口令。"
+        },
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": {
+          "type": "string",
+          "description": "一次性关闭自动更新、/bug、错误上报与遥测等非核心网络请求。"
+        },
+        "CLAUDE_CODE_DISABLE_TERMINAL_TITLE": {
+          "type": "string",
+          "description": "设为 1 后禁用根据对话上下文自动更新终端标题。"
+        },
+        "CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL": {
+          "type": "string",
+          "description": "跳过 IDE 扩展的自动安装。"
+        },
+        "CLAUDE_CODE_MAX_OUTPUT_TOKENS": {
+          "type": "string",
+          "description": "为多数请求设置最大输出 tokens 数。"
+        },
+        "CLAUDE_CODE_SKIP_BEDROCK_AUTH": {
+          "type": "string",
+          "description": "跳过 AWS Bedrock 的认证流程（例如使用 LLM 网关时）。"
+        },
+        "CLAUDE_CODE_SKIP_VERTEX_AUTH": {
+          "type": "string",
+          "description": "跳过 Google Vertex 的认证流程（例如使用 LLM 网关时）。"
+        },
+        "CLAUDE_CODE_SUBAGENT_MODEL": {
+          "type": "string",
+          "description": "子代理所使用的模型标识，详见模型配置文档。"
+        },
+        "CLAUDE_CODE_USE_BEDROCK": {
+          "type": "string",
+          "description": "启用 Amazon Bedrock 作为模型提供方。"
+        },
+        "CLAUDE_CODE_USE_VERTEX": {
+          "type": "string",
+          "description": "启用 Google Vertex AI 作为模型提供方。"
+        },
+        "DISABLE_AUTOUPDATER": {
+          "type": "string",
+          "description": "设为 1 可禁用自动更新。"
+        },
+        "DISABLE_BUG_COMMAND": {
+          "type": "string",
+          "description": "设为 1 可禁用 /bug 命令。"
+        },
+        "DISABLE_COST_WARNINGS": {
+          "type": "string",
+          "description": "设为 1 可关闭费用提醒。"
+        },
+        "DISABLE_ERROR_REPORTING": {
+          "type": "string",
+          "description": "设为 1 可退出 Sentry 错误上报。"
+        },
+        "DISABLE_NON_ESSENTIAL_MODEL_CALLS": {
+          "type": "string",
+          "description": "设为 1 可关闭风味文案等非关键模型调用。"
+        },
+        "DISABLE_PROMPT_CACHING": {
+          "type": "string",
+          "description": "设为 1 可禁用全部模型的 Prompt Caching（全局优先生效）。"
+        },
+        "DISABLE_PROMPT_CACHING_HAIKU": {
+          "type": "string",
+          "description": "设为 1 可禁用 Haiku 模型的 Prompt Caching。"
+        },
+        "DISABLE_PROMPT_CACHING_OPUS": {
+          "type": "string",
+          "description": "设为 1 可禁用 Opus 模型的 Prompt Caching。"
+        },
+        "DISABLE_PROMPT_CACHING_SONNET": {
+          "type": "string",
+          "description": "设为 1 可禁用 Sonnet 模型的 Prompt Caching。"
+        },
+        "DISABLE_TELEMETRY": {
+          "type": "string",
+          "description": "设为 1 可退出 Statsig 遥测（不会传输代码、路径等用户数据）。"
+        },
+        "HTTP_PROXY": {
+          "type": "string",
+          "description": "指定 HTTP 代理地址，用于网络请求。"
+        },
+        "HTTPS_PROXY": {
+          "type": "string",
+          "description": "指定 HTTPS 代理地址，用于网络请求。"
+        },
+        "MAX_MCP_OUTPUT_TOKENS": {
+          "type": "string",
+          "description": "MCP 工具响应允许的最大 tokens 数（默认 25000，超过 10000 会警告）。"
+        },
+        "MAX_THINKING_TOKENS": {
+          "type": "string",
+          "description": "启用扩展思考并设置思考阶段的 token 预算（影响 Prompt Caching）。"
+        },
+        "MCP_TIMEOUT": {
+          "type": "string",
+          "description": "MCP 服务器启动超时时间（毫秒）。"
+        },
+        "MCP_TOOL_TIMEOUT": {
+          "type": "string",
+          "description": "MCP 工具执行超时时间（毫秒）。"
+        },
+        "NO_PROXY": {
+          "type": "string",
+          "description": "无需通过代理的域名或 IP 列表，多个条目用逗号分隔。"
+        },
+        "SLASH_COMMAND_TOOL_CHAR_BUDGET": {
+          "type": "string",
+          "description": "SlashCommand 工具展示的元数据最大字符数（默认 15000）。"
+        },
+        "USE_BUILTIN_RIPGREP": {
+          "type": "string",
+          "description": "设为 0 可改用系统自带的 rg 而非内置版本。"
+        },
+        "VERTEX_REGION_CLAUDE_3_5_HAIKU": {
+          "type": "string",
+          "description": "使用 Vertex AI 时覆盖 Claude 3.5 Haiku 的区域。"
+        },
+        "VERTEX_REGION_CLAUDE_3_7_SONNET": {
+          "type": "string",
+          "description": "使用 Vertex AI 时覆盖 Claude 3.7 Sonnet 的区域。"
+        },
+        "VERTEX_REGION_CLAUDE_4_0_OPUS": {
+          "type": "string",
+          "description": "使用 Vertex AI 时覆盖 Claude 4.0 Opus 的区域。"
+        },
+        "VERTEX_REGION_CLAUDE_4_0_SONNET": {
+          "type": "string",
+          "description": "使用 Vertex AI 时覆盖 Claude 4.0 Sonnet 的区域。"
+        },
+        "VERTEX_REGION_CLAUDE_4_1_OPUS": {
+          "type": "string",
+          "description": "使用 Vertex AI 时覆盖 Claude 4.1 Opus 的区域。"
+        }
+      },
+      "patternProperties": {
+        "^[A-Z_][A-Z0-9_]*$": {
+          "type": "string",
+          "description": "环境变量的取值。"
+        }
+      },
+      "default": {},
+      "examples": [
+        {
+          "ANTHROPIC_MODEL": "claude-opus-4-1",
+          "ANTHROPIC_SMALL_FAST_MODEL": "claude-3-5-haiku-latest"
+        }
+      ]
+    },
+    "includeCoAuthoredBy": {
+      "type": "boolean",
+      "description": "在 Git 提交和 PR 中包含“co-authored-by Claude”署名。",
+      "default": true
+    },
+    "model": {
+      "type": "string",
+      "description": "已弃用：请改用 env.ANTHROPIC_MODEL 和 env.ANTHROPIC_SMALL_FAST_MODEL，可填写 \"sonnet\"、\"opus\" 或官方文档中的具体模型 ID。"
+    },
+    "permissions": {
+      "type": "object",
+      "description": "工具权限配置。",
+      "additionalProperties": false,
+      "examples": [
+        {
+          "allow": ["Bash(git add:*)"],
+          "ask": ["Bash(gh pr create:*)", "Bash(git commit:*)"],
+          "deny": ["Read(*.env)", "Bash(rm:*)", "Bash(curl:*)"],
+          "defaultMode": "default"
+        }
+      ],
+      "properties": {
+        "allow": {
+          "type": "array",
+          "description": "被允许的工具权限规则列表。",
+          "items": {
+            "$ref": "#/$defs/permissionRule"
+          },
+          "uniqueItems": true
+        },
+        "ask": {
+          "type": "array",
+          "description": "需要确认的工具权限规则列表。",
+          "items": {
+            "$ref": "#/$defs/permissionRule"
+          },
+          "uniqueItems": true
+        },
+        "deny": {
+          "type": "array",
+          "description": "被拒绝的工具权限规则列表。",
+          "items": {
+            "$ref": "#/$defs/permissionRule"
+          },
+          "uniqueItems": true
+        },
+        "defaultMode": {
+          "type": "string",
+          "description": "执行工具时的默认权限模式。",
+          "enum": ["acceptEdits", "bypassPermissions", "default", "plan"]
+        },
+        "disableBypassPermissionsMode": {
+          "type": "string",
+          "description": "禁用绕过权限模式。",
+          "const": "disable"
+        },
+        "additionalDirectories": {
+          "type": "array",
+          "description": "Claude 可访问的额外目录路径。",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "examples": [["//Users/alice/Documents", "~/projects"]]
+        }
+      }
+    },
+    "enableAllProjectMcpServers": {
+      "type": "boolean",
+      "description": "是否自动批准项目中的所有 MCP 服务器。",
+      "examples": [true]
+    },
+    "enabledMcpjsonServers": {
+      "type": "array",
+      "description": "来自 .mcp.json、允许启用的 MCP 服务器列表。",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "examples": [["memory", "github"]]
+    },
+    "disabledMcpjsonServers": {
+      "type": "array",
+      "description": "来自 .mcp.json、被拒绝的 MCP 服务器列表。",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "examples": [["filesystem"]]
+    },
+    "hooks": {
+      "type": "object",
+      "description": "在 Claude Code 生命周期关键节点触发的钩子配置。",
+      "additionalProperties": false,
+      "examples": [
+        {
+          "PostToolUse": [
+            {
+              "matcher": "Edit|Write",
+              "hooks": [
+                {
+                  "type": "command",
+                  "command": "prettier --write",
+                  "timeout": 5
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "properties": {
+        "PreToolUse": {
+          "type": "array",
+          "description": "工具调用前运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "PostToolUse": {
+          "type": "array",
+          "description": "工具执行完成后运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "Notification": {
+          "type": "array",
+          "description": "在收到通知时触发的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "UserPromptSubmit": {
+          "type": "array",
+          "description": "用户提交提示时运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "Stop": {
+          "type": "array",
+          "description": "主代理完成响应时运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "SubagentStop": {
+          "type": "array",
+          "description": "子代理完成响应时运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "PreCompact": {
+          "type": "array",
+          "description": "在压缩上下文之前运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "SessionStart": {
+          "type": "array",
+          "description": "会话开始时运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        },
+        "SessionEnd": {
+          "type": "array",
+          "description": "会话结束时运行的钩子。",
+          "items": {
+            "$ref": "#/$defs/hookMatcher"
+          }
+        }
+      }
+    },
+    "forceLoginMethod": {
+      "type": "string",
+      "description": "强制使用特定登录方式并跳过登录方式选择。",
+      "enum": ["claudeai", "console"],
+      "examples": ["claudeai"]
+    },
+    "disableAllHooks": {
+      "type": "boolean",
+      "description": "禁用全部钩子。"
+    },
+    "spinnerTipsEnabled": {
+      "type": "boolean",
+      "description": "是否在加载动画中展示提示。"
+    },
+    "alwaysThinkingEnabled": {
+      "type": "boolean",
+      "description": "是否始终启用扩展思考（默认 false）。"
+    },
+    "statusLine": {
+      "type": "object",
+      "description": "自定义状态行配置。",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "command"
+        },
+        "command": {
+          "type": "string",
+          "description": "用于生成状态行的 shell 命令。",
+          "minLength": 1
+        },
+        "padding": {
+          "type": "number",
+          "description": "状态行的可选填充量。"
+        }
+      },
+      "required": ["type", "command"],
+      "examples": [
+        {
+          "type": "command",
+          "command": "~/.claude/statusline.sh"
+        }
+      ]
+    },
+    "outputStyle": {
+      "type": "string",
+      "description": "输出样式（区分大小写，可为 default、Explanatory、Learning 或自定义）。",
+      "enum": ["default", "Explanatory", "Learning"],
+      "minLength": 1,
+      "examples": ["default", "Explanatory", "Learning"]
+    },
+    "forceLoginOrgUUID": {
+      "type": "string",
+      "format": "uuid",
+      "description": "强制使用特定组织 UUID 登录。",
+      "minLength": 1,
+      "examples": ["xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"]
+    },
+    "awsAuthRefresh": {
+      "type": "string",
+      "description": "刷新 AWS 凭据的命令。",
+      "minLength": 1,
+      "examples": ["aws sso login --profile myprofile"]
+    },
+    "awsCredentialExport": {
+      "type": "string",
+      "description": "以 JSON 形式导出 AWS 凭据的命令。",
+      "minLength": 1,
+      "examples": ["/bin/generate_aws_grant.sh"]
+    }
+  }
+}

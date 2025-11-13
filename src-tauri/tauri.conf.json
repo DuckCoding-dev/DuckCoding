@@ -26,7 +26,10 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": [],
+    "resources": [
+      "resources/claude_code_settings.schema.json",
+      "resources/codex_config.schema.json"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

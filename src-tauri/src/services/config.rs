@@ -1,8 +1,115 @@
 use crate::models::Tool;
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use once_cell::sync::OnceCell;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
+use toml;
+use toml_edit::{DocumentMut, Item, Table};
+
+#[derive(Serialize, Deserialize)]
+pub struct CodexSettingsPayload {
+    pub config: Value,
+    #[serde(rename = "authToken")]
+    pub auth_token: Option<String>,
+}
+
+fn merge_toml_tables(target: &mut Table, source: &Table) {
+    let keys_to_remove: Vec<String> = target
+        .iter()
+        .map(|(key, _)| key.to_string())
+        .filter(|key| !source.contains_key(key))
+        .collect();
+    for key in keys_to_remove {
+        target.remove(&key);
+    }
+
+    for (key, item) in source.iter() {
+        match item {
+            Item::Table(source_table) => {
+                let needs_new_table = match target.get(key) {
+                    Some(existing) => !existing.is_table(),
+                    None => true,
+                };
+
+                if needs_new_table {
+                    let mut new_table = Table::new();
+                    new_table.set_implicit(source_table.is_implicit());
+                    target.insert(key, Item::Table(new_table));
+                }
+
+                if let Some(target_item) = target.get_mut(key) {
+                    if let Some(target_table) = target_item.as_table_mut() {
+                        target_table.set_implicit(source_table.is_implicit());
+                        merge_toml_tables(target_table, source_table);
+                        continue;
+                    }
+                }
+
+                target.insert(key, item.clone());
+            }
+            Item::Value(source_value) => {
+                let mut updated = false;
+                if let Some(existing_item) = target.get_mut(key) {
+                    if let Some(existing_value) = existing_item.as_value_mut() {
+                        let prefix = existing_value.decor().prefix().cloned();
+                        let suffix = existing_value.decor().suffix().cloned();
+                        *existing_value = source_value.clone();
+                        let decor = existing_value.decor_mut();
+                        decor.clear();
+                        if let Some(pref) = prefix {
+                            decor.set_prefix(pref);
+                        }
+                        if let Some(suf) = suffix {
+                            decor.set_suffix(suf);
+                        }
+                        updated = true;
+                    }
+                }
+
+                if !updated {
+                    target.insert(key, Item::Value(source_value.clone()));
+                }
+            }
+            _ => {
+                target.insert(key, item.clone());
+            }
+        }
+    }
+}
+
+fn set_table_value(table: &mut Table, key: &str, value: Item) {
+    match value {
+        Item::Value(new_value) => {
+            if let Some(item) = table.get_mut(key) {
+                if let Some(existing) = item.as_value_mut() {
+                    *existing = new_value;
+                    return;
+                }
+            }
+            table.insert(key, Item::Value(new_value));
+        }
+        other => {
+            table.insert(key, other);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GeminiEnvPayload {
+    pub api_key: String,
+    pub base_url: String,
+    pub model: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GeminiSettingsPayload {
+    pub settings: Value,
+    pub env: GeminiEnvPayload,
+}
 /// 配置服务
 pub struct ConfigService;
 
@@ -94,10 +201,11 @@ impl ConfigService {
             let content = fs::read_to_string(&config_path)?;
             content
                 .parse::<toml_edit::DocumentMut>()
-                .unwrap_or_else(|_| toml_edit::DocumentMut::new())
+                .map_err(|err| anyhow!("解析 Codex config.toml 失败: {}", err))?
         } else {
             toml_edit::DocumentMut::new()
         };
+        let root_table = doc.as_table_mut();
 
         // 判断 provider 类型
         let is_duckcoding = base_url.contains("duckcoding");
@@ -108,26 +216,22 @@ impl ConfigService {
         };
 
         // 只更新必要字段（保留用户自定义配置和注释）
-        if !doc.contains_key("model") {
-            doc["model"] = toml_edit::value("gpt-5-codex");
+        if !root_table.contains_key("model") {
+            set_table_value(root_table, "model", toml_edit::value("gpt-5-codex"));
         }
-        if !doc.contains_key("model_reasoning_effort") {
-            doc["model_reasoning_effort"] = toml_edit::value("high");
+        if !root_table.contains_key("model_reasoning_effort") {
+            set_table_value(
+                root_table,
+                "model_reasoning_effort",
+                toml_edit::value("high"),
+            );
         }
-        if !doc.contains_key("network_access") {
-            doc["network_access"] = toml_edit::value("enabled");
-        }
-        if !doc.contains_key("disable_response_storage") {
-            doc["disable_response_storage"] = toml_edit::value(true);
+        if !root_table.contains_key("network_access") {
+            set_table_value(root_table, "network_access", toml_edit::value("enabled"));
         }
 
         // 更新 model_provider
-        doc["model_provider"] = toml_edit::value(provider_key);
-
-        // 增量更新 model_providers
-        if !doc.contains_key("model_providers") {
-            doc["model_providers"] = toml_edit::table();
-        }
+        set_table_value(root_table, "model_provider", toml_edit::value(provider_key));
 
         let normalized_base = base_url.trim_end_matches('/');
         let base_url_with_v1 = if normalized_base.ends_with("/v1") {
@@ -136,22 +240,41 @@ impl ConfigService {
             format!("{}/v1", normalized_base)
         };
 
-        // 增量更新 model_providers[provider_key]（保留注释和格式）
-        if !doc["model_providers"].is_table() {
-            doc["model_providers"] = toml_edit::table();
+        // 增量更新 model_providers 表
+        if !root_table
+            .get("model_providers")
+            .map(|item| item.is_table())
+            .unwrap_or(false)
+        {
+            let mut table = toml_edit::Table::new();
+            table.set_implicit(false);
+            root_table.insert("model_providers", toml_edit::Item::Table(table));
         }
 
-        // 如果 provider 不存在，创建新的 table（非 inline）
-        if doc["model_providers"][provider_key].is_none() {
-            doc["model_providers"][provider_key] = toml_edit::table();
+        let providers_table = root_table
+            .get_mut("model_providers")
+            .and_then(|item| item.as_table_mut())
+            .ok_or_else(|| anyhow!("解析 codex 配置失败：model_providers 不是表结构"))?;
+
+        if !providers_table.contains_key(provider_key) {
+            let mut table = toml_edit::Table::new();
+            table.set_implicit(false);
+            providers_table.insert(provider_key, toml_edit::Item::Table(table));
         }
 
-        // 逐项更新字段（保留其他字段和注释）
-        if let Some(provider_table) = doc["model_providers"][provider_key].as_table_mut() {
+        if let Some(provider_table) = providers_table
+            .get_mut(provider_key)
+            .and_then(|item| item.as_table_mut())
+        {
             provider_table.insert("name", toml_edit::value(provider_key));
             provider_table.insert("base_url", toml_edit::value(base_url_with_v1));
             provider_table.insert("wire_api", toml_edit::value("responses"));
             provider_table.insert("requires_openai_auth", toml_edit::value(true));
+        } else {
+            anyhow::bail!(
+                "解析 codex 配置失败：无法写入 model_providers.{}",
+                provider_key
+            );
         }
 
         // 写入 config.toml（保留注释和格式）
@@ -784,6 +907,308 @@ impl ConfigService {
             _ => anyhow::bail!("未知工具: {}", tool.id),
         }
 
+        Ok(())
+    }
+
+    /// 读取 Claude Code 完整配置
+    pub fn read_claude_settings() -> Result<Value> {
+        let tool = Tool::claude_code();
+        let config_path = tool.config_dir.join(&tool.config_file);
+
+        if !config_path.exists() {
+            return Ok(Value::Object(Map::new()));
+        }
+
+        let content = fs::read_to_string(&config_path).context("读取 Claude Code 配置失败")?;
+        if content.trim().is_empty() {
+            return Ok(Value::Object(Map::new()));
+        }
+
+        let settings: Value = serde_json::from_str(&content)
+            .map_err(|err| anyhow!("解析 Claude Code 配置失败: {}", err))?;
+
+        Ok(settings)
+    }
+
+    /// 保存 Claude Code 完整配置
+    pub fn save_claude_settings(settings: &Value) -> Result<()> {
+        if !settings.is_object() {
+            anyhow::bail!("Claude Code 配置必须是 JSON 对象");
+        }
+
+        let tool = Tool::claude_code();
+        let config_dir = &tool.config_dir;
+        let config_path = config_dir.join(&tool.config_file);
+
+        fs::create_dir_all(config_dir).context("创建 Claude Code 配置目录失败")?;
+        let json = serde_json::to_string_pretty(settings)?;
+        fs::write(&config_path, json).context("写入 Claude Code 配置失败")?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = fs::metadata(&config_path)?;
+            let mut perms = metadata.permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(&config_path, perms)?;
+        }
+
+        Ok(())
+    }
+
+    /// 获取内置的 Claude Code JSON Schema
+    pub fn get_claude_schema() -> Result<Value> {
+        static CLAUDE_SCHEMA: OnceCell<Value> = OnceCell::new();
+
+        let schema = CLAUDE_SCHEMA.get_or_try_init(|| {
+            let raw = include_str!("../../resources/claude_code_settings.schema.json");
+            serde_json::from_str(raw).context("解析 Claude Code Schema 失败")
+        })?;
+
+        Ok(schema.clone())
+    }
+
+    /// 读取 Codex config.toml 和 auth.json
+    pub fn read_codex_settings() -> Result<CodexSettingsPayload> {
+        let tool = Tool::codex();
+        let config_path = tool.config_dir.join(&tool.config_file);
+        let auth_path = tool.config_dir.join("auth.json");
+
+        let config_value = if config_path.exists() {
+            let content =
+                fs::read_to_string(&config_path).context("读取 Codex config.toml 失败")?;
+            let toml_value: toml::Value = toml::from_str(&content)
+                .map_err(|err| anyhow!("解析 Codex config.toml 失败: {}", err))?;
+            serde_json::to_value(toml_value).context("转换 Codex config.toml 为 JSON 失败")?
+        } else {
+            Value::Object(Map::new())
+        };
+
+        let auth_token = if auth_path.exists() {
+            let content = fs::read_to_string(&auth_path).context("读取 Codex auth.json 失败")?;
+            let auth: Value = serde_json::from_str(&content)
+                .map_err(|err| anyhow!("解析 Codex auth.json 失败: {}", err))?;
+            auth.get("OPENAI_API_KEY")
+                .and_then(|s| s.as_str().map(|s| s.to_string()))
+        } else {
+            None
+        };
+
+        Ok(CodexSettingsPayload {
+            config: config_value,
+            auth_token,
+        })
+    }
+
+    /// 保存 Codex 配置和 auth.json
+    pub fn save_codex_settings(config: &Value, auth_token: Option<String>) -> Result<()> {
+        if !config.is_object() {
+            anyhow::bail!("Codex 配置必须是对象结构");
+        }
+
+        let tool = Tool::codex();
+        let config_path = tool.config_dir.join(&tool.config_file);
+        let auth_path = tool.config_dir.join("auth.json");
+        fs::create_dir_all(&tool.config_dir).context("创建 Codex 配置目录失败")?;
+
+        let mut existing_doc = if config_path.exists() {
+            let content =
+                fs::read_to_string(&config_path).context("读取 Codex config.toml 失败")?;
+            content
+                .parse::<DocumentMut>()
+                .map_err(|err| anyhow!("解析 Codex config.toml 失败: {}", err))?
+        } else {
+            DocumentMut::new()
+        };
+
+        let new_toml_string = toml::to_string(config).context("序列化 Codex config 失败")?;
+        let new_doc = new_toml_string
+            .parse::<DocumentMut>()
+            .map_err(|err| anyhow!("解析待写入 Codex 配置失败: {}", err))?;
+
+        merge_toml_tables(existing_doc.as_table_mut(), new_doc.as_table());
+
+        fs::write(&config_path, existing_doc.to_string()).context("写入 Codex config.toml 失败")?;
+
+        if let Some(token) = auth_token {
+            let mut auth_data = if auth_path.exists() {
+                let content = fs::read_to_string(&auth_path).unwrap_or_default();
+                serde_json::from_str::<Value>(&content).unwrap_or(Value::Object(Map::new()))
+            } else {
+                Value::Object(Map::new())
+            };
+
+            if let Value::Object(ref mut obj) = auth_data {
+                obj.insert("OPENAI_API_KEY".to_string(), Value::String(token));
+            }
+
+            fs::write(&auth_path, serde_json::to_string_pretty(&auth_data)?)
+                .context("写入 Codex auth.json 失败")?;
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let metadata = fs::metadata(&auth_path)?;
+                let mut perms = metadata.permissions();
+                perms.set_mode(0o600);
+                fs::set_permissions(&auth_path, perms)?;
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = fs::metadata(&config_path)?;
+            let mut perms = metadata.permissions();
+            perms.set_mode(0o600);
+            fs::set_permissions(&config_path, perms)?;
+        }
+
+        Ok(())
+    }
+
+    /// 获取 Codex config schema
+    pub fn get_codex_schema() -> Result<Value> {
+        static CODEX_SCHEMA: OnceCell<Value> = OnceCell::new();
+        let schema = CODEX_SCHEMA.get_or_try_init(|| {
+            let raw = include_str!("../../resources/codex_config.schema.json");
+            serde_json::from_str(raw).context("解析 Codex Schema 失败")
+        })?;
+
+        Ok(schema.clone())
+    }
+
+    /// 读取 Gemini CLI 配置与 .env
+    pub fn read_gemini_settings() -> Result<GeminiSettingsPayload> {
+        let tool = Tool::gemini_cli();
+        let settings_path = tool.config_dir.join(&tool.config_file);
+        let env_path = tool.config_dir.join(".env");
+
+        let settings = if settings_path.exists() {
+            let content = fs::read_to_string(&settings_path).context("读取 Gemini CLI 配置失败")?;
+            if content.trim().is_empty() {
+                Value::Object(Map::new())
+            } else {
+                serde_json::from_str(&content)
+                    .map_err(|err| anyhow!("解析 Gemini CLI 配置失败: {}", err))?
+            }
+        } else {
+            Value::Object(Map::new())
+        };
+
+        let env = Self::read_gemini_env(&env_path)?;
+
+        Ok(GeminiSettingsPayload { settings, env })
+    }
+
+    /// 保存 Gemini CLI 配置与 .env
+    pub fn save_gemini_settings(settings: &Value, env: &GeminiEnvPayload) -> Result<()> {
+        if !settings.is_object() {
+            anyhow::bail!("Gemini CLI 配置必须是 JSON 对象");
+        }
+
+        let tool = Tool::gemini_cli();
+        let config_dir = &tool.config_dir;
+        let settings_path = config_dir.join(&tool.config_file);
+        let env_path = config_dir.join(".env");
+        fs::create_dir_all(config_dir).context("创建 Gemini CLI 配置目录失败")?;
+
+        let json = serde_json::to_string_pretty(settings)?;
+        fs::write(&settings_path, json).context("写入 Gemini CLI 配置失败")?;
+
+        let mut env_pairs = Self::read_env_pairs(&env_path)?;
+        env_pairs.insert("GEMINI_API_KEY".to_string(), env.api_key.clone());
+        env_pairs.insert("GOOGLE_GEMINI_BASE_URL".to_string(), env.base_url.clone());
+        env_pairs.insert(
+            "GEMINI_MODEL".to_string(),
+            if env.model.trim().is_empty() {
+                "gemini-2.5-pro".to_string()
+            } else {
+                env.model.clone()
+            },
+        );
+        Self::write_env_pairs(&env_path, &env_pairs).context("写入 Gemini CLI .env 失败")?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            for path in [&settings_path, &env_path] {
+                if path.exists() {
+                    let metadata = fs::metadata(path)?;
+                    let mut perms = metadata.permissions();
+                    perms.set_mode(0o600);
+                    fs::set_permissions(path, perms)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// 获取 Gemini CLI JSON Schema
+    pub fn get_gemini_schema() -> Result<Value> {
+        static GEMINI_SCHEMA: OnceCell<Value> = OnceCell::new();
+        let schema = GEMINI_SCHEMA.get_or_try_init(|| {
+            let raw = include_str!("../../resources/gemini_cli_settings.schema.json");
+            serde_json::from_str(raw).context("解析 Gemini CLI Schema 失败")
+        })?;
+
+        Ok(schema.clone())
+    }
+
+    fn read_gemini_env(path: &Path) -> Result<GeminiEnvPayload> {
+        if !path.exists() {
+            return Ok(GeminiEnvPayload {
+                model: "gemini-2.5-pro".to_string(),
+                ..GeminiEnvPayload::default()
+            });
+        }
+
+        let env_pairs = Self::read_env_pairs(path)?;
+        Ok(GeminiEnvPayload {
+            api_key: env_pairs.get("GEMINI_API_KEY").cloned().unwrap_or_default(),
+            base_url: env_pairs
+                .get("GOOGLE_GEMINI_BASE_URL")
+                .cloned()
+                .unwrap_or_default(),
+            model: env_pairs
+                .get("GEMINI_MODEL")
+                .cloned()
+                .unwrap_or_else(|| "gemini-2.5-pro".to_string()),
+        })
+    }
+
+    fn read_env_pairs(path: &Path) -> Result<HashMap<String, String>> {
+        let mut pairs = HashMap::new();
+        if path.exists() {
+            let content = fs::read_to_string(path)?;
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with('#') {
+                    continue;
+                }
+                if let Some((key, value)) = trimmed.split_once('=') {
+                    pairs.insert(key.trim().to_string(), value.trim().to_string());
+                }
+            }
+        }
+        Ok(pairs)
+    }
+
+    fn write_env_pairs(path: &Path, pairs: &HashMap<String, String>) -> Result<()> {
+        let mut items: Vec<_> = pairs.iter().collect();
+        items.sort_by(|a, b| a.0.cmp(b.0));
+        let mut content = String::new();
+        for (idx, (key, value)) in items.iter().enumerate() {
+            if idx > 0 {
+                content.push('\n');
+            }
+            content.push_str(key);
+            content.push('=');
+            content.push_str(value);
+        }
+        content.push('\n');
+        fs::write(path, content)?;
         Ok(())
     }
 }
