@@ -52,6 +52,27 @@ impl TransparentProxyService {
             }
         }
 
+        // 验证配置有效性 - 允许空配置，但会在运行时检查
+        if config.target_api_key.is_empty() {
+            println!("⚠️ 警告：透明代理启动时缺少API Key配置，将在运行时拦截请求");
+        }
+
+        if config.target_base_url.is_empty() {
+            println!("⚠️ 警告：透明代理启动时缺少Base URL配置，将在运行时拦截请求");
+        }
+
+        println!("✅ 透明代理配置加载完成");
+        if !config.target_api_key.is_empty() {
+            println!("   目标 API Key: {}***", &config.target_api_key[..4.min(config.target_api_key.len())]);
+        } else {
+            println!("   目标 API Key: [未配置]");
+        }
+        if !config.target_base_url.is_empty() {
+            println!("   目标 Base URL: {}", config.target_base_url);
+        } else {
+            println!("   目标 Base URL: [未配置]");
+        }
+
         // 保存配置
         {
             let mut cfg = self.config.write().await;
@@ -67,6 +88,7 @@ impl TransparentProxyService {
         println!("🚀 透明代理启动成功: http://{}", addr);
 
         let config_clone = Arc::clone(&self.config);
+        let port = self.port; // 保存端口信息
 
         // 启动服务器
         let handle = tokio::spawn(async move {
@@ -78,7 +100,7 @@ impl TransparentProxyService {
                             let io = TokioIo::new(stream);
                             let service = service_fn(move |req| {
                                 let config = Arc::clone(&config);
-                                async move { handle_request(req, config).await }
+                                async move { handle_request(req, config, port).await }
                             });
 
                             if let Err(err) = http1::Builder::new()
@@ -145,8 +167,9 @@ impl TransparentProxyService {
 async fn handle_request(
     req: Request<Incoming>,
     config: Arc<RwLock<Option<ProxyConfig>>>,
+    own_port: u16,
 ) -> Result<Response<BoxBody>, Infallible> {
-    match handle_request_inner(req, config).await {
+    match handle_request_inner(req, config, own_port).await {
         Ok(res) => Ok(res),
         Err(e) => {
             eprintln!("❌ 请求处理失败: {:?}", e);
@@ -161,13 +184,41 @@ async fn handle_request(
 async fn handle_request_inner(
     req: Request<Incoming>,
     config: Arc<RwLock<Option<ProxyConfig>>>,
+    own_port: u16,
 ) -> Result<Response<BoxBody>> {
     // 获取配置
     let proxy_config = {
         let cfg = config.read().await;
-        cfg.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("代理未配置"))?
-            .clone()
+        match cfg.as_ref() {
+            Some(config) => {
+                // 检查配置是否有效
+                if config.target_api_key.is_empty() || config.target_base_url.is_empty() {
+                    return Ok(Response::builder()
+                        .status(StatusCode::BAD_GATEWAY)
+                        .header("content-type", "application/json")
+                        .body(box_body(http_body_util::Full::new(Bytes::from(r#"{
+  "error": "CONFIGURATION_MISSING",
+  "message": "透明代理配置不完整",
+  "details": "检测到透明代理功能已开启，但缺少有效的API配置。请先在DuckCoding中选择一个有效的配置文件，然后再启动透明代理。",
+  "suggestion": "请检查以下配置：\n1. 确保已选择有效的ClaudeCode配置文件\n2. 配置文件包含有效的API Key和Base URL\n3. 重新启动透明代理服务"
+}"#))))
+                        .unwrap());
+                }
+                config.clone()
+            }
+            None => {
+                return Ok(Response::builder()
+                    .status(StatusCode::BAD_GATEWAY)
+                    .header("content-type", "application/json")
+                    .body(box_body(http_body_util::Full::new(Bytes::from(r#"{
+  "error": "PROXY_NOT_CONFIGURED",
+  "message": "透明代理未配置",
+  "details": "透明代理服务正在运行，但没有找到有效的转发配置。这可能是因为：\n1. 透明代理启动时没有备份原始配置\n2. 配置文件已损坏或丢失",
+  "suggestion": "请重新启动透明代理服务以重新配置，或者在设置中禁用透明代理功能"
+}"#))))
+                    .unwrap());
+            }
+        }
     };
 
     // 验证本地 API Key
@@ -201,6 +252,30 @@ async fn handle_request_inner(
     // 确保 base_url 不包含尾部斜杠
     let base = proxy_config.target_base_url.trim_end_matches('/');
     let target_url = format!("{}{}{}", base, path, query);
+
+    // 回环检测 - 只检测自己的端口
+    let own_proxy_url1 = format!("http://127.0.0.1:{}", own_port);
+    let own_proxy_url2 = format!("https://127.0.0.1:{}", own_port);
+    let own_proxy_url3 = format!("http://localhost:{}", own_port);
+    let own_proxy_url4 = format!("https://localhost:{}", own_port);
+
+    if target_url.starts_with(&own_proxy_url1) ||
+       target_url.starts_with(&own_proxy_url2) ||
+       target_url.starts_with(&own_proxy_url3) ||
+       target_url.starts_with(&own_proxy_url4) {
+        eprintln!("❌ 检测到透明代理回环: {}", target_url);
+        eprintln!("   代理端口: {}", own_port);
+        return Ok(Response::builder()
+            .status(StatusCode::BAD_GATEWAY)
+            .header("content-type", "application/json")
+            .body(box_body(http_body_util::Full::new(Bytes::from(r#"{
+  "error": "PROXY_LOOP_DETECTED",
+  "message": "透明代理配置错误导致回环",
+  "details": "检测到透明代理正在将请求转发给自己，这通常是因为：\n1. 透明代理的真实配置未正确设置\n2. ClaudeCode配置文件中的Base URL仍指向本地代理\n3. 配置更新过程中出现同步问题",
+  "suggestion": "请尝试以下解决方案：\n1. 在DuckCoding中重新选择一个有效的配置文件\n2. 确保选择的配置文件包含有效的API Key和Base URL\n3. 如果问题持续，请禁用透明代理功能并重新启用"
+}"#))))
+            .unwrap());
+    }
 
     println!("🔄 代理请求: {} {} -> {}", req.method(), path, target_url);
     println!("   Base URL: {}", base);

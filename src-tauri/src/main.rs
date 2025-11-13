@@ -560,11 +560,11 @@ async fn switch_profile(
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("");
 
-                                // 检查是否指向本地代理（说明透明代理正在运行）
-                                let is_proxy_running = new_base_url.contains("127.0.0.1");
+                                // 检查透明代理功能是否启用
+                                let transparent_proxy_enabled = global_config.transparent_proxy_enabled;
 
-                                if !is_proxy_running && !new_api_key.is_empty() && !new_base_url.is_empty() {
-                                    // 保存新的真实配置到全局配置
+                                if !new_api_key.is_empty() && !new_base_url.is_empty() {
+                                    // 总是保存新的真实配置到全局配置（不管代理是否在运行）
                                     TransparentProxyConfigService::update_real_config(
                                         &tool_obj,
                                         &mut global_config,
@@ -578,9 +578,10 @@ async fn switch_profile(
                                         .await
                                         .map_err(|e| format!("保存全局配置失败: {}", e))?;
 
-                                    // 如果代理服务正在运行，更新代理配置
-                                    let service = state.service.lock().await;
-                                    if service.is_running().await {
+                                    // 如果透明代理功能启用且代理服务正在运行，更新代理配置
+                                    if transparent_proxy_enabled {
+                                        let service = state.service.lock().await;
+                                        if service.is_running().await {
                                         let local_api_key = global_config
                                             .transparent_proxy_api_key
                                             .clone()
@@ -598,29 +599,33 @@ async fn switch_profile(
                                             .map_err(|e| format!("更新代理配置失败: {}", e))?;
 
                                         println!("✅ 透明代理配置已自动更新");
-                                    }
+                                        drop(service); // 释放锁
+                                        } // 闭合 if service.is_running()
+                                    } // 闭合 if transparent_proxy_enabled
 
-                                    // 恢复 ClaudeCode 配置指向本地代理
-                                    let local_proxy_port = global_config.transparent_proxy_port;
-                                    let local_proxy_key = global_config.transparent_proxy_api_key.unwrap_or_default();
+                                    // 只有在透明代理功能启用时才恢复 ClaudeCode 配置指向本地代理
+                                    if transparent_proxy_enabled {
+                                        let local_proxy_port = global_config.transparent_proxy_port;
+                                        let local_proxy_key = global_config.transparent_proxy_api_key.unwrap_or_default();
 
-                                    let mut settings_mut = settings.clone();
-                                    if let Some(env_mut) = settings_mut.get_mut("env").and_then(|v| v.as_object_mut()) {
-                                        env_mut.insert(
-                                            "ANTHROPIC_AUTH_TOKEN".to_string(),
-                                            Value::String(local_proxy_key),
-                                        );
-                                        env_mut.insert(
-                                            "ANTHROPIC_BASE_URL".to_string(),
-                                            Value::String(format!("http://127.0.0.1:{}", local_proxy_port)),
-                                        );
+                                        let mut settings_mut = settings.clone();
+                                        if let Some(env_mut) = settings_mut.get_mut("env").and_then(|v| v.as_object_mut()) {
+                                            env_mut.insert(
+                                                "ANTHROPIC_AUTH_TOKEN".to_string(),
+                                                Value::String(local_proxy_key),
+                                            );
+                                            env_mut.insert(
+                                                "ANTHROPIC_BASE_URL".to_string(),
+                                                Value::String(format!("http://127.0.0.1:{}", local_proxy_port)),
+                                            );
 
-                                        let json = serde_json::to_string_pretty(&settings_mut)
-                                            .map_err(|e| format!("序列化配置失败: {}", e))?;
-                                        fs::write(&config_path, json)
-                                            .map_err(|e| format!("写入配置失败: {}", e))?;
+                                            let json = serde_json::to_string_pretty(&settings_mut)
+                                                .map_err(|e| format!("序列化配置失败: {}", e))?;
+                                            fs::write(&config_path, json)
+                                                .map_err(|e| format!("写入配置失败: {}", e))?;
 
-                                        println!("✅ ClaudeCode 配置已恢复指向本地代理");
+                                            println!("✅ ClaudeCode 配置已恢复指向本地代理");
+                                        }
                                     }
                                 }
                             }

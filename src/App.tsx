@@ -39,6 +39,7 @@ import {
   Loader2,
   Minimize2,
   AlertCircle,
+  AlertTriangle,
   Save,
   ExternalLink,
   Info,
@@ -952,6 +953,14 @@ function App() {
       // 重新加载状态
       const status = await getTransparentProxyStatus();
       setTransparentProxyStatus(status);
+
+      // 刷新当前生效配置（确保UI显示正确更新）
+      try {
+        const activeConfig = await getActiveConfig('claude-code');
+        setActiveConfigs(prev => ({ ...prev, 'claude-code': activeConfig }));
+      } catch (error) {
+        console.error('Failed to reload active config after stopping proxy:', error);
+      }
     } catch (error) {
       console.error('Failed to stop transparent proxy:', error);
       toast({
@@ -1319,13 +1328,22 @@ function App() {
         console.error('Failed to reload active config', error);
       }
 
-      // 如果是 ClaudeCode 且透明代理已启用，刷新配置
-      if (toolId === 'claude-code' && isProxyEnabled) {
-        await loadGlobalConfig();
-        toast({
-          title: '切换成功',
-          description: '✅ 配置已切换\n✅ 透明代理已自动更新\n无需重启终端',
-        });
+      // 如果是 ClaudeCode，总是刷新配置确保UI显示正确
+      if (toolId === 'claude-code') {
+        if (isProxyEnabled) {
+          await loadGlobalConfig();
+          toast({
+            title: '切换成功',
+            description: '✅ 配置已切换\n✅ 透明代理已自动更新\n无需重启终端',
+          });
+        } else {
+          // 未开启代理时也要刷新全局配置，确保透明代理状态正确
+          await loadGlobalConfig();
+          toast({
+            title: '切换成功',
+            description: '配置切换成功！\n请重启相关 CLI 工具以使新配置生效。',
+          });
+        }
       } else {
         toast({
           title: '切换成功',
@@ -1441,7 +1459,15 @@ function App() {
   const effectiveTransparentEnabled = Boolean(globalConfig?.transparent_proxy_enabled);
   const shouldShowRecommendation = !effectiveTransparentEnabled && globalConfig !== null;
   const shouldShowRecommendationOnlyForClaudeCode = shouldShowRecommendation && selectedSwitchTab === 'claude-code';
-  const shouldShowRestartForAllTools = true; // 重启提示在所有工具和所有状态下都显示
+  const shouldShowRestartForAllTools = !effectiveTransparentEnabled; // 重启提示在透明代理未启用时显示
+
+  // 调试日志 - 检查透明代理配置状态
+  console.log('[DEBUG] 透明代理配置状态:', {
+    transparent_proxy_real_api_key: globalConfig?.transparent_proxy_real_api_key ? '存在' : '不存在',
+    transparent_proxy_real_base_url: globalConfig?.transparent_proxy_real_base_url ? '存在' : '不存在',
+    effectiveTransparentEnabled,
+    transparentProxyStatus: transparentProxyStatus?.running ? '运行中' : '未运行',
+  });
 
   
   
@@ -2335,36 +2361,103 @@ function App() {
                                   <div className="flex items-center gap-2 mb-3">
                                     <Key className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                                     <h4 className="font-semibold text-blue-900 dark:text-blue-100">
-                                      当前生效配置
+                                      {/* 透明代理开启时且是ClaudeCode时显示特殊名称 */}
+                                      {tool.id === 'claude-code' && effectiveTransparentEnabled
+                                        ? '透明代理配置'
+                                        : '当前生效配置'
+                                      }
                                     </h4>
                                   </div>
                                   <div className="space-y-2 text-sm">
-                                    {activeConfig.profile_name && (
-                                      <div className="flex items-start gap-2">
-                                        <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
-                                          配置名称:
-                                        </span>
-                                        <span className="font-semibold text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">
-                                          {activeConfig.profile_name}
-                                        </span>
-                                      </div>
+                                    {/* 透明代理开启时且是ClaudeCode时显示真实API配置 */}
+                                    {tool.id === 'claude-code' && effectiveTransparentEnabled ? (
+                                      <>
+                                        {/* 检查是否缺少透明代理配置 */}
+                                        {!globalConfig?.transparent_proxy_real_api_key || !globalConfig?.transparent_proxy_real_base_url ? (
+                                          <div className="mb-4 p-3 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950 dark:to-orange-950 rounded-lg border border-red-200 dark:border-red-800">
+                                            <div className="flex items-start gap-2">
+                                              <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                                              <div className="space-y-1">
+                                                <h5 className="font-semibold text-red-900 dark:text-red-100">
+                                                  ⚠️ 透明代理配置缺失
+                                                </h5>
+                                                <p className="text-sm text-red-800 dark:text-red-200">
+                                                  检测到透明代理功能已开启，但缺少真实的API配置。请先选择一个有效的配置文件，然后再启动透明代理。
+                                                </p>
+                                                <p className="text-xs text-red-700 dark:text-red-300 mt-2">
+                                                  可能导致请求回环或连接问题
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        ) : null}
+
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
+                                            配置名称:
+                                          </span>
+                                          <span className="font-semibold text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">
+                                            透明代理配置
+                                          </span>
+                                        </div>
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
+                                            API Key:
+                                          </span>
+                                          <span className={`font-mono px-2 py-0.5 rounded ${
+                                            globalConfig?.transparent_proxy_real_api_key
+                                              ? 'text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50'
+                                              : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950'
+                                          }`}>
+                                            {globalConfig?.transparent_proxy_real_api_key
+                                              ? maskApiKey(globalConfig.transparent_proxy_real_api_key)
+                                              : '⚠️ 未配置'
+                                            }
+                                          </span>
+                                        </div>
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
+                                            Base URL:
+                                          </span>
+                                          <span className={`font-mono px-2 py-0.5 rounded break-all ${
+                                            globalConfig?.transparent_proxy_real_base_url
+                                              ? 'text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50'
+                                              : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950'
+                                          }`}>
+                                            {globalConfig?.transparent_proxy_real_base_url || '⚠️ 未配置'}
+                                          </span>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        {activeConfig.profile_name && (
+                                          <div className="flex items-start gap-2">
+                                            <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
+                                              配置名称:
+                                            </span>
+                                            <span className="font-semibold text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">
+                                              {activeConfig.profile_name}
+                                            </span>
+                                          </div>
+                                        )}
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
+                                            API Key:
+                                          </span>
+                                          <span className="font-mono text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">
+                                            {maskApiKey(activeConfig.api_key)}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-start gap-2">
+                                          <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
+                                            Base URL:
+                                          </span>
+                                          <span className="font-mono text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded break-all">
+                                            {activeConfig.base_url}
+                                          </span>
+                                        </div>
+                                      </>
                                     )}
-                                    <div className="flex items-start gap-2">
-                                      <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
-                                        API Key:
-                                      </span>
-                                      <span className="font-mono text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded">
-                                        {maskApiKey(activeConfig.api_key)}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-start gap-2">
-                                      <span className="text-blue-700 dark:text-blue-300 font-medium min-w-20">
-                                        Base URL:
-                                      </span>
-                                      <span className="font-mono text-blue-900 dark:text-blue-100 bg-white/50 dark:bg-slate-900/50 px-2 py-0.5 rounded break-all">
-                                        {activeConfig.base_url}
-                                      </span>
-                                    </div>
                                   </div>
                                 </div>
                               )}
