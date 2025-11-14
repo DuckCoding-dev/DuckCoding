@@ -173,8 +173,20 @@ export interface TestProxyResult {
   error?: string | null;
 }
 
-export async function testProxyRequest(): Promise<TestProxyResult> {
-  return await invoke<TestProxyResult>('test_proxy_request');
+export interface ProxyTestConfig {
+  enabled: boolean;
+  proxy_type: string;
+  host: string;
+  port: string;
+  username?: string;
+  password?: string;
+}
+
+export async function testProxyRequest(
+  testUrl: string,
+  proxyConfig: ProxyTestConfig,
+): Promise<TestProxyResult> {
+  return await invoke<TestProxyResult>('test_proxy_request', { testUrl, proxyConfig });
 }
 
 export async function generateApiKeyForTool(tool: string): Promise<GenerateApiKeyResult> {

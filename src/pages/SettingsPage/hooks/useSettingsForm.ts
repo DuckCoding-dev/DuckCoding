@@ -2,7 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getGlobalConfig,
   saveGlobalConfig,
+  testProxyRequest,
   type GlobalConfig,
+  type TestProxyResult,
+  type ProxyTestConfig,
 } from '@/lib/tauri-commands';
 
 export function useSettingsForm() {
@@ -17,6 +20,7 @@ export function useSettingsForm() {
   const [proxyPort, setProxyPort] = useState('');
   const [proxyUsername, setProxyUsername] = useState('');
   const [proxyPassword, setProxyPassword] = useState('');
+  const [proxyTestUrl, setProxyTestUrl] = useState('https://duckcoding.com/');
 
   // 实验性功能 - 透明代理
   const [transparentProxyEnabled, setTransparentProxyEnabled] = useState(false);
@@ -27,6 +31,7 @@ export function useSettingsForm() {
   // 状态
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [testingProxy, setTestingProxy] = useState(false);
 
   // 加载全局配置
   const loadGlobalConfig = useCallback(async () => {
@@ -125,6 +130,86 @@ export function useSettingsForm() {
     setTransparentProxyApiKey(result);
   }, []);
 
+  // 测试代理连接
+  const testProxy = useCallback(async (): Promise<{
+    success: boolean;
+    message: string;
+    details?: string;
+  }> => {
+    // 验证代理配置
+    if (!proxyEnabled) {
+      return {
+        success: false,
+        message: '请先启用代理',
+      };
+    }
+
+    const proxyPortNumber = proxyPort ? parseInt(proxyPort) : 0;
+    if (!proxyHost.trim() || proxyPortNumber <= 0) {
+      return {
+        success: false,
+        message: '请填写完整的代理地址和端口',
+      };
+    }
+
+    // 验证测试URL
+    if (!proxyTestUrl.trim()) {
+      return {
+        success: false,
+        message: '请输入测试URL',
+      };
+    }
+
+    // 简单的URL格式验证
+    try {
+      new URL(proxyTestUrl);
+    } catch {
+      return {
+        success: false,
+        message: '测试URL格式不正确',
+      };
+    }
+
+    setTestingProxy(true);
+    try {
+      // 构建代理配置（使用当前表单输入，不需要先保存）
+      const proxyConfig: ProxyTestConfig = {
+        enabled: proxyEnabled,
+        proxy_type: proxyType,
+        host: proxyHost.trim(),
+        port: proxyPort,
+        username: proxyUsername.trim() || undefined,
+        password: proxyPassword || undefined,
+      };
+
+      // 测试代理请求
+      const result: TestProxyResult = await testProxyRequest(proxyTestUrl, proxyConfig);
+
+      if (result.success) {
+        return {
+          success: true,
+          message: '代理连接成功！',
+          details: `测试URL: ${result.url || '未知'}\n响应状态: ${result.status}`,
+        };
+      } else {
+        return {
+          success: false,
+          message: '代理连接失败',
+          details: result.error || '未知错误',
+        };
+      }
+    } catch (error) {
+      console.error('Failed to test proxy:', error);
+      return {
+        success: false,
+        message: '测试失败',
+        details: String(error),
+      };
+    } finally {
+      setTestingProxy(false);
+    }
+  }, [proxyEnabled, proxyType, proxyHost, proxyPort, proxyUsername, proxyPassword, proxyTestUrl]);
+
   return {
     // Basic settings
     userId,
@@ -145,6 +230,8 @@ export function useSettingsForm() {
     setProxyUsername,
     proxyPassword,
     setProxyPassword,
+    proxyTestUrl,
+    setProxyTestUrl,
 
     // Transparent proxy settings
     transparentProxyEnabled,
@@ -159,10 +246,12 @@ export function useSettingsForm() {
     // State
     globalConfig,
     savingSettings,
+    testingProxy,
 
     // Actions
     loadGlobalConfig,
     saveSettings,
     generateProxyKey,
+    testProxy,
   };
 }
