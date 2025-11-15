@@ -19,6 +19,8 @@ pub struct GlobalConfig {
     pub proxy_username: Option<String>,
     #[serde(default)]
     pub proxy_password: Option<String>,
+    #[serde(default)]
+    pub proxy_bypass_urls: Vec<String>, // 代理过滤URL列表
     // 透明代理功能 (实验性)
     #[serde(default)]
     pub transparent_proxy_enabled: bool,

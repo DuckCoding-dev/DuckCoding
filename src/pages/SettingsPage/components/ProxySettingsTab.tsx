@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Info, Loader2, AlertCircle } from 'lucide-react';
+import { Info, Loader2, AlertCircle, Plus, X } from 'lucide-react';
 
 interface ProxySettingsTabProps {
   proxyEnabled: boolean;
@@ -28,6 +28,8 @@ interface ProxySettingsTabProps {
   setProxyTestUrl: (value: string) => void;
   testingProxy: boolean;
   onTestProxy: () => void;
+  proxyBypassUrls: string[];
+  setProxyBypassUrls: (urls: string[]) => void;
 }
 
 export function ProxySettingsTab({
@@ -47,7 +49,29 @@ export function ProxySettingsTab({
   setProxyTestUrl,
   testingProxy,
   onTestProxy,
+  proxyBypassUrls,
+  setProxyBypassUrls,
 }: ProxySettingsTabProps) {
+
+  // 添加新的过滤规则
+  const addBypassRule = () => {
+    const newUrls = [...proxyBypassUrls, ''];
+    setProxyBypassUrls(newUrls);
+  };
+
+  // 删除过滤规则
+  const removeBypassRule = (index: number) => {
+    const newUrls = proxyBypassUrls.filter((_, i) => i !== index);
+    setProxyBypassUrls(newUrls);
+  };
+
+  // 更新过滤规则
+  const updateBypassRule = (index: number, value: string) => {
+    const newUrls = [...proxyBypassUrls];
+    newUrls[index] = value;
+    setProxyBypassUrls(newUrls);
+  };
+
   return (
     <div className="space-y-4 rounded-lg border p-6">
       <div className="flex items-center gap-2">
@@ -126,6 +150,57 @@ export function ProxySettingsTab({
                   value={proxyPassword}
                   onChange={(e) => setProxyPassword(e.target.value)}
                 />
+              </div>
+            </div>
+
+            {/* 代理过滤列表 */}
+            <div className="pt-4 border-t space-y-3">
+              <div className="space-y-2">
+                <Label>代理过滤列表</Label>
+                <p className="text-xs text-muted-foreground">
+                  这些URL/IP将不使用代理，例如本地地址、内网地址等
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {proxyBypassUrls.map((url, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      value={url}
+                      onChange={(e) => updateBypassRule(index, e.target.value)}
+                      placeholder="例如: 127.0.0.1, localhost, 192.168.*"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => removeBypassRule(index)}
+                      className="h-9 w-9"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addBypassRule}
+                  className="w-full"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  添加过滤规则
+                </Button>
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                <p>支持格式示例：</p>
+                <ul className="list-disc list-inside mt-1 space-y-1">
+                  <li>域名: localhost, 127.0.0.1</li>
+                  <li>IP段: 192.168.*, 10.*</li>
+                  <li>通配符: *.local, *.lan</li>
+                </ul>
               </div>
             </div>
 

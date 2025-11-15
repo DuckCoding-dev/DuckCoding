@@ -43,6 +43,7 @@ export interface GlobalConfig {
   proxy_port?: string;
   proxy_username?: string;
   proxy_password?: string;
+  proxy_bypass_urls?: string[]; // 代理过滤URL列表
   // 透明代理功能 (实验性)
   transparent_proxy_enabled?: boolean;
   transparent_proxy_port?: number;

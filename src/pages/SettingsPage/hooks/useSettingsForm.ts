@@ -25,6 +25,14 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
   const [proxyUsername, setProxyUsername] = useState('');
   const [proxyPassword, setProxyPassword] = useState('');
   const [proxyTestUrl, setProxyTestUrl] = useState('https://duckcoding.com/');
+  const [proxyBypassUrls, setProxyBypassUrls] = useState<string[]>([
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "::1",
+    "*.local",
+    "*.lan"
+  ]);
 
   // 实验性功能 - 透明代理
   const [transparentProxyEnabled, setTransparentProxyEnabled] = useState(false);
@@ -51,6 +59,14 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
       setProxyPort(initialConfig.proxy_port || '');
       setProxyUsername(initialConfig.proxy_username || '');
       setProxyPassword(initialConfig.proxy_password || '');
+      setProxyBypassUrls(initialConfig.proxy_bypass_urls || [
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "*.local",
+        "*.lan"
+      ]);
       setTransparentProxyEnabled(initialConfig.transparent_proxy_enabled || false);
       setTransparentProxyPort(initialConfig.transparent_proxy_port || 8787);
       setTransparentProxyApiKey(initialConfig.transparent_proxy_api_key || '');
@@ -87,6 +103,7 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
         proxy_port: proxyPort,
         proxy_username: proxyUsername.trim(),
         proxy_password: proxyPassword,
+        proxy_bypass_urls: proxyBypassUrls.map(url => url.trim()).filter(url => url.length > 0),
         transparent_proxy_enabled: transparentProxyEnabled,
         transparent_proxy_port: transparentProxyPort,
         transparent_proxy_api_key: transparentProxyApiKey.trim(),
@@ -111,6 +128,7 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     proxyPort,
     proxyUsername,
     proxyPassword,
+    proxyBypassUrls,
     transparentProxyEnabled,
     transparentProxyPort,
     transparentProxyApiKey,
@@ -231,6 +249,8 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     setProxyPassword,
     proxyTestUrl,
     setProxyTestUrl,
+    proxyBypassUrls,
+    setProxyBypassUrls,
 
     // Transparent proxy settings
     transparentProxyEnabled,
