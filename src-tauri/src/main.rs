@@ -750,6 +750,9 @@ async fn save_global_config(config: GlobalConfig) -> Result<(), String> {
             .map_err(|e| format!("Failed to set file permissions: {}", e))?;
     }
 
+    // 立即应用代理配置到环境变量
+    duckcoding::ProxyService::apply_proxy_from_config(&config);
+
     Ok(())
 }
 
@@ -1645,8 +1648,9 @@ async fn start_transparent_proxy(
 
     // 启动代理服务
     let service = state.service.lock().await;
+    let allow_public = config.transparent_proxy_allow_public;
     service
-        .start(proxy_config)
+        .start(proxy_config, allow_public)
         .await
         .map_err(|e| format!("启动透明代理服务失败: {}", e))?;
 
@@ -2005,6 +2009,16 @@ fn apply_proxy_now() -> Result<Option<String>, String> {
     Ok(duckcoding::ProxyService::get_current_proxy())
 }
 
+#[derive(serde::Deserialize)]
+struct ProxyTestConfig {
+    enabled: bool,
+    proxy_type: String,
+    host: String,
+    port: String,
+    username: Option<String>,
+    password: Option<String>,
+}
+
 #[derive(serde::Serialize)]
 struct TestProxyResult {
     success: bool,
@@ -2014,12 +2028,66 @@ struct TestProxyResult {
 }
 
 #[tauri::command]
-async fn test_proxy_request() -> Result<TestProxyResult, String> {
-    // build client (will pick up proxy if set)
-    let client = build_reqwest_client().map_err(|e| format!("failed to build client: {}", e))?;
-    let url = "https://httpbin.org/get";
+async fn test_proxy_request(
+    test_url: String,
+    proxy_config: ProxyTestConfig,
+) -> Result<TestProxyResult, String> {
+    // 根据代理配置构建客户端
+    let client = if proxy_config.enabled {
+        // 构建代理 URL
+        let auth = if let (Some(username), Some(password)) =
+            (&proxy_config.username, &proxy_config.password)
+        {
+            if !username.is_empty() && !password.is_empty() {
+                format!("{}:{}@", username, password)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
 
-    match client.get(url).send().await {
+        let scheme = match proxy_config.proxy_type.as_str() {
+            "socks5" => "socks5",
+            "https" => "https",
+            _ => "http",
+        };
+
+        let proxy_url = format!(
+            "{}://{}{}:{}",
+            scheme, auth, proxy_config.host, proxy_config.port
+        );
+
+        println!(
+            "Testing with proxy: {}",
+            proxy_url.replace(&auth, "***:***@")
+        ); // 隐藏密码
+
+        // 构建带代理的客户端
+        match reqwest::Proxy::all(&proxy_url) {
+            Ok(proxy) => reqwest::Client::builder()
+                .proxy(proxy)
+                .timeout(std::time::Duration::from_secs(10))
+                .build()
+                .map_err(|e| format!("Failed to build client with proxy: {}", e))?,
+            Err(e) => {
+                return Ok(TestProxyResult {
+                    success: false,
+                    status: 0,
+                    url: None,
+                    error: Some(format!("Invalid proxy URL: {}", e)),
+                });
+            }
+        }
+    } else {
+        // 不使用代理的客户端
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| format!("Failed to build client: {}", e))?
+    };
+
+    match client.get(&test_url).send().await {
         Ok(resp) => {
             let status = resp.status().as_u16();
             let url_ret = resp.url().as_str().to_string();

@@ -43,7 +43,7 @@ impl TransparentProxyService {
     }
 
     /// 启动代理服务
-    pub async fn start(&self, config: ProxyConfig) -> Result<()> {
+    pub async fn start(&self, config: ProxyConfig, allow_public: bool) -> Result<()> {
         // 检查是否已经在运行
         {
             let handle = self.server_handle.read().await;
@@ -82,8 +82,22 @@ impl TransparentProxyService {
             *cfg = Some(config);
         }
 
-        // 绑定到本地回环地址
-        let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
+        // 绑定到指定地址
+        let addr = if allow_public {
+            SocketAddr::from(([0, 0, 0, 0], self.port))
+        } else {
+            SocketAddr::from(([127, 0, 0, 1], self.port))
+        };
+
+        println!(
+            "🌐 绑定模式: {}",
+            if allow_public {
+                "允许局域网访问 (0.0.0.0)"
+            } else {
+                "仅本地访问 (127.0.0.1)"
+            }
+        );
+
         let listener = TcpListener::bind(addr).await.context("绑定代理端口失败")?;
 
         println!("🚀 透明代理启动成功: http://{}", addr);

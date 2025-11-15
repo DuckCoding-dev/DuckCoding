@@ -1,6 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 
 export interface ToolStatus {
+  mirrorIsStale: boolean;
+  mirrorVersion: string | null;
+  latestVersion: string | null;
+  hasUpdate: boolean;
   id: string;
   name: string;
   installed: boolean;
@@ -43,6 +47,7 @@ export interface GlobalConfig {
   transparent_proxy_enabled?: boolean;
   transparent_proxy_port?: number;
   transparent_proxy_api_key?: string;
+  transparent_proxy_allow_public?: boolean;
   // 保存真实的 API 配置
   transparent_proxy_real_api_key?: string;
   transparent_proxy_real_base_url?: string;
@@ -196,8 +201,20 @@ export interface TestProxyResult {
   error?: string | null;
 }
 
-export async function testProxyRequest(): Promise<TestProxyResult> {
-  return await invoke<TestProxyResult>('test_proxy_request');
+export interface ProxyTestConfig {
+  enabled: boolean;
+  proxy_type: string;
+  host: string;
+  port: string;
+  username?: string;
+  password?: string;
+}
+
+export async function testProxyRequest(
+  testUrl: string,
+  proxyConfig: ProxyTestConfig,
+): Promise<TestProxyResult> {
+  return await invoke<TestProxyResult>('test_proxy_request', { testUrl, proxyConfig });
 }
 
 export async function generateApiKeyForTool(tool: string): Promise<GenerateApiKeyResult> {

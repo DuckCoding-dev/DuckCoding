@@ -31,6 +31,9 @@ pub struct GlobalConfig {
     pub transparent_proxy_real_api_key: Option<String>,
     #[serde(default)]
     pub transparent_proxy_real_base_url: Option<String>,
+    // 允许局域网访问透明代理（默认仅本地访问）
+    #[serde(default)]
+    pub transparent_proxy_allow_public: bool,
 }
 
 fn default_transparent_proxy_port() -> u16 {
