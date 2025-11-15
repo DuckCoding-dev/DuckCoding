@@ -1,14 +1,14 @@
 {
-  "version": "1.2.3",
+  "version": "1.2.4",
   "update": {
-    "windows_msi": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.3/DuckCoding-Windows-x64.msi",
-    "windows_exe": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.3/DuckCoding-Windows-x64-setup.exe",
-    "macos_dmg": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.3/DuckCoding-macOS-Universal.dmg",
-    "linux_deb": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.3/DuckCoding-Linux-x64.deb",
-    "linux_rpm": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.3/DuckCoding-Linux-x64.rpm",
-    "linux_appimage": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.3/DuckCoding-Linux-x64.AppImage"
+    "windows_msi": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.4/DuckCoding-Windows-x64.msi",
+    "windows_exe": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.4/DuckCoding-Windows-x64-setup.exe",
+    "macos_dmg": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.4/DuckCoding-macOS-Universal.dmg",
+    "linux_deb": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.4/DuckCoding-Linux-x64.deb",
+    "linux_rpm": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.4/DuckCoding-Linux-x64.rpm",
+    "linux_appimage": "https://github.com/DuckCoding-dev/DuckCoding/releases/download/v1.2.4/DuckCoding-Linux-x64.AppImage"
   },
-  "release_notes": "Release v1.2.3 - UI 拆分、透明代理和高级配置管理增强。",
+  "release_notes": "Release v1.2.4 - 新增桌面端更新提醒，并修复 Socks5 环境下的 Claude Code 版本检测。",
   "required": false,
   "updated_at": "2025-11-15T00:00:00.000Z"
 }

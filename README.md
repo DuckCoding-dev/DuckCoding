@@ -193,10 +193,8 @@ DuckCoding 要求每个工具使用对应的专用分组令牌：
 
 ## 🙌 致谢贡献者
 
-感谢所有为 DuckCoding 做出贡献的朋友：
-
-- [@jsrcode](https://github.com/jsrcode) — 透明代理、UI 拆分与安装流程等多项改进
-- [@DuckCoding-dev](https://github.com/DuckCoding-dev) — 核心维护与产品设计
+感谢所有为 DuckCoding 做出贡献的朋友！  
+完整贡献者列表请查看 [GitHub Contributors](https://github.com/DuckCoding-dev/DuckCoding/graphs/contributors)。
 
 ## 📄 许可证
 

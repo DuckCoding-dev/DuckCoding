@@ -8,6 +8,8 @@ import { UpdateCheckBanner } from './components/UpdateCheckBanner';
 import { useDashboard } from './hooks/useDashboard';
 import { getToolDisplayName } from '@/utils/constants';
 import { useToast } from '@/hooks/use-toast';
+import { AppUpdateBanner } from '@/components/AppUpdateBanner';
+import { useAppUpdate } from '@/hooks/useAppUpdate';
 import type { ToolStatus } from '@/lib/tauri-commands';
 
 interface DashboardPageProps {
@@ -18,6 +20,7 @@ interface DashboardPageProps {
 export function DashboardPage({ tools: toolsProp, loading: loadingProp }: DashboardPageProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(loadingProp);
+  const [dismissedUpdate, setDismissedUpdate] = useState(false);
 
   // 使用仪表板 Hook
   const {
@@ -29,6 +32,7 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
     handleUpdate,
     updateTools,
   } = useDashboard(toolsProp);
+  const { info: appUpdateInfo } = useAppUpdate();
 
   // 同步外部 tools 数据
   useEffect(() => {
@@ -95,6 +99,10 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
         </div>
       ) : (
         <>
+          {appUpdateInfo && !dismissedUpdate && (
+            <AppUpdateBanner info={appUpdateInfo} onDismiss={() => setDismissedUpdate(true)} />
+          )}
+
           {/* 更新检查提示 */}
           {updateCheckMessage && <UpdateCheckBanner message={updateCheckMessage} />}
 
