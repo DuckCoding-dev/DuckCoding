@@ -43,6 +43,7 @@ function App() {
   const [usageStats, setUsageStats] = useState<UsageStatsResult | null>(null);
   const [userQuota, setUserQuota] = useState<UserQuotaResult | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [statsLoadFailed, setStatsLoadFailed] = useState(false); // 新增：记录加载失败状态
 
   // 更新检查状态
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -82,15 +83,25 @@ function App() {
 
     try {
       setStatsLoading(true);
+      setStatsLoadFailed(false);
       const [quota, stats] = await Promise.all([getUserQuota(), getUsageStats()]);
       setUserQuota(quota);
       setUsageStats(stats);
+      setStatsLoadFailed(false);
     } catch (error) {
       console.error('Failed to load statistics:', error);
+      setStatsLoadFailed(true);
+
+      toast({
+        title: '加载统计数据失败',
+        description: error instanceof Error ? error.message : '请检查网络连接后重试',
+        variant: 'destructive',
+        duration: 5000,
+      });
     } finally {
       setStatsLoading(false);
     }
-  }, [globalConfig]);
+  }, [globalConfig?.user_id, globalConfig?.system_token, toast]);
 
   // 检查应用更新
   const checkAppUpdates = useCallback(async () => {
@@ -153,12 +164,11 @@ function App() {
 
   // 智能预加载：只要有凭证就立即预加载统计数据
   useEffect(() => {
-    // 条件：配置已加载 + 有凭证 + 还没有统计数据 + 不在加载中
-    if (globalConfig?.user_id && globalConfig?.system_token && !usageStats && !statsLoading) {
-      // 后台预加载统计数据，无论用户在哪个页面
+    // 条件：配置已加载 + 有凭证 + 还没有统计数据 + 不在加载中 + 没有失败过
+    if (globalConfig?.user_id && globalConfig?.system_token && !usageStats && !statsLoading && !statsLoadFailed) {
       loadStatistics();
     }
-  }, [globalConfig, usageStats, statsLoading, loadStatistics]);
+  }, [globalConfig?.user_id, globalConfig?.system_token, usageStats, statsLoading, statsLoadFailed, loadStatistics]);
 
   // 使用关闭动作 Hook
   const {

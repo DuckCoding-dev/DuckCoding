@@ -727,11 +727,7 @@ fn get_global_config_path() -> Result<PathBuf, String> {
 // Tauri命令：保存全局配置
 #[tauri::command]
 async fn save_global_config(config: GlobalConfig) -> Result<(), String> {
-    println!("save_global_config called with user_id: {}", config.user_id);
-
     let config_path = get_global_config_path()?;
-
-    println!("Config path: {:?}", config_path);
 
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
@@ -931,12 +927,16 @@ async fn get_usage_stats() -> Result<UsageStatsResult, String> {
 
     let response = client
         .get(&url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("Accept", "application/json, text/plain, */*")
+        .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+        .header("Referer", "https://duckcoding.com/")
+        .header("Origin", "https://duckcoding.com")
         .header(
             "Authorization",
             format!("Bearer {}", global_config.system_token),
         )
         .header("New-Api-User", &global_config.user_id)
-        .header("Content-Type", "application/json")
         .send()
         .await
         .map_err(|e| format!("获取用量统计失败: {}", e))?;
@@ -947,6 +947,25 @@ async fn get_usage_stats() -> Result<UsageStatsResult, String> {
         return Ok(UsageStatsResult {
             success: false,
             message: format!("获取用量统计失败 ({}): {}", status, error_text),
+            data: vec![],
+        });
+    }
+
+    // 检查 Content-Type 是否为 JSON
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string()) // 克隆字符串，避免借用冲突
+        .unwrap_or_default();
+
+    if !content_type.contains("application/json") {
+        return Ok(UsageStatsResult {
+            success: false,
+            message: format!(
+                "服务器返回了非JSON格式的响应 (Content-Type: {})",
+                content_type
+            ),
             data: vec![],
         });
     }
@@ -988,12 +1007,16 @@ async fn get_user_quota() -> Result<UserQuotaResult, String> {
 
     let response = client
         .get(url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("Accept", "application/json, text/plain, */*")
+        .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+        .header("Referer", "https://duckcoding.com/")
+        .header("Origin", "https://duckcoding.com")
         .header(
             "Authorization",
             format!("Bearer {}", global_config.system_token),
         )
         .header("New-Api-User", &global_config.user_id)
-        .header("Content-Type", "application/json")
         .send()
         .await
         .map_err(|e| format!("获取用户信息失败: {}", e))?;
@@ -1001,7 +1024,23 @@ async fn get_user_quota() -> Result<UserQuotaResult, String> {
     if !response.status().is_success() {
         let status = response.status();
         let error_text = response.text().await.unwrap_or_default();
+        println!("❌ [get_user_quota] HTTP Error: {}", error_text);
         return Err(format!("获取用户信息失败 ({}): {}", status, error_text));
+    }
+
+    // 检查 Content-Type 是否为 JSON
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string()) // 克隆字符串，避免借用冲突
+        .unwrap_or_default();
+
+    if !content_type.contains("application/json") {
+        return Err(format!(
+            "服务器返回了非JSON格式的响应 (Content-Type: {})",
+            content_type
+        ));
     }
 
     let api_response: UserApiResponse = response
