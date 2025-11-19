@@ -1,6 +1,7 @@
 use crate::commands::types::{InstallResult, NodeEnvironment, ToolStatus, UpdateResult};
 use ::duckcoding::models::{InstallMethod, Tool};
 use ::duckcoding::services::{InstallerService, VersionService};
+use ::duckcoding::utils::config::apply_proxy_if_configured;
 use std::process::Command;
 
 #[cfg(target_os = "windows")]
@@ -29,32 +30,6 @@ fn get_extended_path() -> String {
             current_path, home
         )
     }
-}
-
-// 辅助函数：从全局配置应用代理（需要从main.rs复用）
-async fn apply_proxy_if_configured() {
-    // 获取全局配置路径
-    let config_path = match get_global_config_path() {
-        Ok(path) => path,
-        Err(_) => return,
-    };
-
-    // 读取配置文件
-    if let Ok(content) = tokio::fs::read_to_string(&config_path).await {
-        if let Ok(config) = serde_json::from_str::<::duckcoding::models::GlobalConfig>(&content) {
-            ::duckcoding::services::ProxyService::apply_proxy_from_config(&config);
-        }
-    }
-}
-
-fn get_global_config_path() -> Result<std::path::PathBuf, String> {
-    let config_dir = dirs::data_local_dir()
-        .ok_or_else(|| "无法获取应用数据目录".to_string())?
-        .join("DuckCoding");
-
-    std::fs::create_dir_all(&config_dir).map_err(|e| format!("创建配置目录失败: {}", e))?;
-
-    Ok(config_dir.join("global_config.json"))
 }
 
 /// 检查所有工具的安装状态
@@ -149,7 +124,7 @@ pub async fn install_tool(
     force: Option<bool>,
 ) -> Result<InstallResult, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured().await;
+    apply_proxy_if_configured();
 
     let force = force.unwrap_or(false);
     #[cfg(debug_assertions)]
@@ -200,7 +175,7 @@ pub async fn install_tool(
 #[tauri::command]
 pub async fn check_update(tool: String) -> Result<UpdateResult, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured().await;
+    apply_proxy_if_configured();
 
     #[cfg(debug_assertions)]
     println!("Checking updates for {} (using VersionService)", tool);
@@ -240,7 +215,7 @@ pub async fn check_update(tool: String) -> Result<UpdateResult, String> {
 #[tauri::command]
 pub async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured().await;
+    apply_proxy_if_configured();
 
     #[cfg(debug_assertions)]
     println!("Checking updates for all tools (batch mode)");
@@ -269,7 +244,7 @@ pub async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
 #[tauri::command]
 pub async fn update_tool(tool: String, force: Option<bool>) -> Result<UpdateResult, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured().await;
+    apply_proxy_if_configured();
 
     let force = force.unwrap_or(false);
     #[cfg(debug_assertions)]

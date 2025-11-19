@@ -1,10 +1,9 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use duckcoding::utils::config::apply_proxy_if_configured;
 use serde::Serialize;
 use std::env;
-use std::fs;
-use std::path::PathBuf;
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -15,8 +14,6 @@ use tauri::{
 mod commands;
 use commands::*;
 
-// Use the shared GlobalConfig from the library crate (models::config)
-use duckcoding::GlobalConfig;
 // 导入透明代理服务
 use duckcoding::TransparentProxyService;
 use std::sync::Arc;
@@ -29,17 +26,6 @@ const SINGLE_INSTANCE_EVENT: &str = "single-instance";
 struct SingleInstancePayload {
     args: Vec<String>,
     cwd: String,
-}
-
-// 全局配置辅助函数
-fn get_global_config_path() -> Result<PathBuf, String> {
-    let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
-    let config_dir = home_dir.join(".duckcoding");
-    if !config_dir.exists() {
-        fs::create_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
-    }
-    Ok(config_dir.join("config.json"))
 }
 
 fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -148,17 +134,7 @@ fn main() {
         .manage(transparent_proxy_state)
         .setup(|app| {
             // 尝试在应用启动时加载全局配置并应用代理设置,确保子进程继承代理 env
-            if let Ok(config_path) = get_global_config_path() {
-                if config_path.exists() {
-                    if let Ok(content) = std::fs::read_to_string(&config_path) {
-                        if let Ok(cfg) = serde_json::from_str::<GlobalConfig>(&content) {
-                            // 应用代理到环境变量(进程级)
-                            duckcoding::ProxyService::apply_proxy_from_config(&cfg);
-                            println!("Applied proxy from config at startup");
-                        }
-                    }
-                }
-            }
+            apply_proxy_if_configured();
 
             // 设置工作目录到项目根目录(跨平台支持)
             if let Ok(resource_dir) = app.path().resource_dir() {

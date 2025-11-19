@@ -2,13 +2,15 @@
 
 use serde_json::Value;
 use std::fs;
-use std::path::PathBuf;
 
 use super::types::ActiveConfig;
 use ::duckcoding::services::config::{
     CodexSettingsPayload, GeminiEnvPayload, GeminiSettingsPayload,
 };
 use ::duckcoding::services::proxy::{ProxyConfig, TransparentProxyConfigService};
+use ::duckcoding::utils::config::{
+    apply_proxy_if_configured, read_global_config, write_global_config,
+};
 use ::duckcoding::ConfigService;
 use ::duckcoding::GlobalConfig;
 use ::duckcoding::Tool;
@@ -43,23 +45,6 @@ pub struct GenerateApiKeyResult {
 pub use crate::commands::proxy_commands::TransparentProxyState;
 
 // ==================== 辅助函数 ====================
-
-fn get_global_config_path() -> Result<PathBuf, String> {
-    let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
-    let config_dir = home_dir.join(".duckcoding");
-    if !config_dir.exists() {
-        fs::create_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
-    }
-    Ok(config_dir.join("config.json"))
-}
-
-// 辅助函数：从全局配置应用代理
-async fn apply_proxy_if_configured() {
-    if let Ok(Some(config)) = get_global_config().await {
-        ::duckcoding::ProxyService::apply_proxy_from_config(&config);
-    }
-}
 
 fn build_reqwest_client() -> Result<reqwest::Client, String> {
     ::duckcoding::http_client::build_client()
@@ -621,54 +606,18 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
 
 #[tauri::command]
 pub async fn save_global_config(config: GlobalConfig) -> Result<(), String> {
-    let config_path = get_global_config_path()?;
-
-    let json = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialize config: {}", e))?;
-
-    fs::write(&config_path, json).map_err(|e| format!("Failed to write config: {}", e))?;
-
-    println!("Config saved successfully");
-
-    // 设置文件权限为仅所有者可读写（Unix系统）
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let metadata = fs::metadata(&config_path)
-            .map_err(|e| format!("Failed to get file metadata: {}", e))?;
-        let mut perms = metadata.permissions();
-        perms.set_mode(0o600); // -rw-------
-        fs::set_permissions(&config_path, perms)
-            .map_err(|e| format!("Failed to set file permissions: {}", e))?;
-    }
-
-    // 立即应用代理配置到环境变量
-    ::duckcoding::ProxyService::apply_proxy_from_config(&config);
-
-    Ok(())
+    write_global_config(&config)
 }
 
 #[tauri::command]
 pub async fn get_global_config() -> Result<Option<GlobalConfig>, String> {
-    let config_path = get_global_config_path()?;
-
-    if !config_path.exists() {
-        return Ok(None);
-    }
-
-    let content =
-        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config: {}", e))?;
-
-    let config: GlobalConfig =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
-
-    Ok(Some(config))
+    read_global_config()
 }
 
 #[tauri::command]
 pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyResult, String> {
     // 应用代理配置（如果已配置）
-    apply_proxy_if_configured().await;
+    apply_proxy_if_configured();
 
     // 读取全局配置
     let global_config = get_global_config()

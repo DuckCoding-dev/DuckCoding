@@ -2,7 +2,7 @@
 //
 // 包含用量统计、用户额度查询等功能
 
-use ::duckcoding::GlobalConfig;
+use ::duckcoding::utils::config::{apply_proxy_if_configured, read_global_config};
 use serde::Serialize;
 
 /// 用量统计数据结构
@@ -58,44 +58,15 @@ pub struct UserQuotaResult {
     request_count: i64,
 }
 
-fn get_global_config_path() -> Result<std::path::PathBuf, String> {
-    let home_dir = dirs::home_dir().ok_or("Failed to get home directory")?;
-    let config_dir = home_dir.join(".duckcoding");
-    if !config_dir.exists() {
-        std::fs::create_dir_all(&config_dir)
-            .map_err(|e| format!("Failed to create config directory: {}", e))?;
-    }
-    Ok(config_dir.join("config.json"))
-}
-
-async fn get_global_config() -> Result<Option<GlobalConfig>, String> {
-    let config_path = get_global_config_path()?;
-    if !config_path.exists() {
-        return Ok(None);
-    }
-    let content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config: {}", e))?;
-    let config: GlobalConfig =
-        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
-    Ok(Some(config))
-}
-
-async fn apply_proxy_if_configured() {
-    if let Ok(Some(config)) = get_global_config().await {
-        ::duckcoding::ProxyService::apply_proxy_from_config(&config);
-    }
-}
-
 fn build_reqwest_client() -> Result<reqwest::Client, String> {
     ::duckcoding::http_client::build_client()
 }
 
 #[tauri::command]
 pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
-    apply_proxy_if_configured().await;
-    let global_config = get_global_config()
-        .await?
-        .ok_or("请先配置用户ID和系统访问令牌")?;
+    apply_proxy_if_configured();
+    let global_config =
+        read_global_config()?.ok_or_else(|| "请先配置用户ID和系统访问令牌".to_string())?;
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -172,10 +143,9 @@ pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
 
 #[tauri::command]
 pub async fn get_user_quota() -> Result<UserQuotaResult, String> {
-    apply_proxy_if_configured().await;
-    let global_config = get_global_config()
-        .await?
-        .ok_or("请先配置用户ID和系统访问令牌")?;
+    apply_proxy_if_configured();
+    let global_config =
+        read_global_config()?.ok_or_else(|| "请先配置用户ID和系统访问令牌".to_string())?;
     let client = build_reqwest_client().map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
     let url = "https://duckcoding.com/api/user/self";
     let response = client
