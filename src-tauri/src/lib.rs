@@ -1,5 +1,7 @@
 // lib.rs - 暴露服务层给 CLI 和 GUI 使用
 
+pub mod core;           // 🆕 核心基础设施层
+pub mod ui;             // 🆕 UI 管理层
 pub mod http_client;
 pub mod models;
 pub mod services;
@@ -26,3 +28,27 @@ pub use models::update::PlatformInfo as UpdatePlatformInfo;
 
 // 重新导出常用类型
 pub use anyhow::{Context, Result};
+
+// 🆕 导出核心模块
+pub use core::{
+    AppError, AppResult, ErrorContext,
+    LogConfig, LogLevel, init_logger, set_log_level,
+    Timer, LogContext,
+};
+
+
+// 🆕 导出 UI 管理层
+pub use ui::{
+    // 窗口管理
+    focus_main_window,
+    restore_window_state,
+    hide_window_to_tray,
+    // 托盘管理
+    create_tray_menu,
+    // 事件管理
+    CLOSE_CONFIRM_EVENT,
+    SINGLE_INSTANCE_EVENT,
+    SingleInstancePayload,
+    emit_close_confirm,
+    emit_single_instance,
+};

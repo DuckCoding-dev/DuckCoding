@@ -489,7 +489,7 @@ impl UpdateService {
                             }
                         }
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         // 如果直接启动失败，尝试用资源管理器打开文件
                         println!("直接启动 EXE 失败，尝试用资源管理器打开文件");
                         match tokio::process::Command::new("explorer")

@@ -1,0 +1,20 @@
+// 配置相关命令模块
+// TODO: 从 main.rs 迁移以下命令:
+// - configure_api
+// - list_profiles
+// - switch_profile
+// - delete_profile
+// - get_active_config
+// - get_claude_settings
+// - save_claude_settings
+// - get_claude_schema
+// - get_codex_settings
+// - save_codex_settings
+// - get_codex_schema
+// - get_gemini_settings
+// - save_gemini_settings
+// - get_gemini_schema
+// - save_global_config
+// - get_global_config
+
+// 占位符：暂时保留在 main.rs，在 Phase 5 迁移
