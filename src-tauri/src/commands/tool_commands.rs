@@ -27,10 +27,6 @@ pub async fn check_installations() -> Result<Vec<ToolStatus>, String> {
             name: tool.name.clone(),
             installed,
             version,
-            has_update: false,
-            latest_version: None,
-            mirror_version: None,
-            mirror_is_stale: false,
         });
     }
 

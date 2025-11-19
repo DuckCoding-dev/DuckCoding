@@ -7,14 +7,6 @@ pub struct ToolStatus {
     pub name: String,
     pub installed: bool,
     pub version: Option<String>,
-    #[serde(default)]
-    pub has_update: bool,
-    #[serde(default)]
-    pub latest_version: Option<String>,
-    #[serde(default)]
-    pub mirror_version: Option<String>,
-    #[serde(default)]
-    pub mirror_is_stale: bool,
 }
 
 /// Node 环境信息

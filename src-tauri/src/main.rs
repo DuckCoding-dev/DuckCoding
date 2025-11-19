@@ -130,8 +130,11 @@ fn main() {
         service: Arc::new(TokioMutex::new(transparent_proxy_service)),
     };
 
+    let update_service_state = UpdateServiceState::new();
+
     let builder = tauri::Builder::default()
         .manage(transparent_proxy_state)
+        .manage(update_service_state)
         .setup(|app| {
             // 尝试在应用启动时加载全局配置并应用代理设置,确保子进程继承代理 env
             apply_proxy_if_configured();
