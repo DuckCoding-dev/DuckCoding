@@ -15,7 +15,7 @@ import {
   Loader2,
   RotateCcw,
 } from 'lucide-react';
-import { useUpdate } from '../hooks/useUpdate';
+import { useUpdate } from '@/hooks/useUpdate';
 import { InstallPackageSelector } from './InstallPackageSelector';
 import type { UpdateInfo } from '@/lib/tauri-commands';
 
@@ -136,7 +136,7 @@ export function UpdateTab({ updateInfo: externalUpdateInfo, onUpdateCheck }: Upd
             <div className="pt-2">
               <div className="text-sm text-gray-500 mb-2">支持的包格式</div>
               <div className="flex flex-wrap gap-2">
-                {packageFormatInfo.preferred_formats.map((format, index) => (
+                {packageFormatInfo.preferred_formats.map((format: string, index: number) => (
                   <Badge key={index} variant="secondary" className="text-xs">
                     {format.replace(/_/g, '.').toUpperCase()}
                   </Badge>

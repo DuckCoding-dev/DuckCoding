@@ -117,12 +117,14 @@ export function UpdateDialog({
           name: 'EXE 安装包',
           description: '传统的 Windows 安装程序',
           url: update.windows_exe,
+          recommended: false,
         },
         {
           id: 'windows_portable',
           name: '便携版',
           description: '无需安装，解压即用，适合U盘使用',
           url: update.windows,
+          recommended: false,
         },
       ].filter((pkg) => pkg.url);
     }
@@ -141,6 +143,7 @@ export function UpdateDialog({
           name: 'PKG 安装包',
           description: '系统级安装包',
           url: update.macos,
+          recommended: false,
         },
       ].filter((pkg) => pkg.url);
     }
@@ -162,6 +165,7 @@ export function UpdateDialog({
           name: 'DEB 包',
           description: '适用于 Ubuntu/Debian 及其衍生发行版',
           url: update.linux_deb,
+          recommended: false,
         });
       }
 
@@ -171,6 +175,7 @@ export function UpdateDialog({
           name: 'RPM 包',
           description: '适用于 Fedora/CentOS/RHEL 及其衍生发行版',
           url: update.linux_rpm,
+          recommended: false,
         });
       }
 
@@ -180,6 +185,7 @@ export function UpdateDialog({
           name: '通用版',
           description: 'Linux 通用压缩包',
           url: update.linux,
+          recommended: false,
         });
       }
 
