@@ -37,8 +37,13 @@ pub struct SingleInstancePayload {
 /// - 成功或错误
 ///
 /// # 示例
-/// ```rust
-/// emit_close_confirm(&app)?;
+/// ```rust,no_run
+/// use duckcoding::emit_close_confirm;
+/// # use tauri::{AppHandle, Runtime};
+/// # fn demo<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+/// emit_close_confirm(app)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn emit_close_confirm<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     tracing::debug!("发送关闭确认事件到前端");

@@ -277,7 +277,10 @@ pub type AppResult<T> = Result<T, AppError>;
 /// 创建自定义错误的便捷宏
 ///
 /// # 示例
-/// ```
+/// ```rust
+/// use duckcoding::app_error;
+///
+/// let tool_name = "claude-code";
 /// app_error!("工具 {} 安装失败", tool_name);
 /// ```
 #[macro_export]
@@ -290,8 +293,12 @@ macro_rules! app_error {
 /// 创建并返回错误的便捷宏
 ///
 /// # 示例
-/// ```
-/// bail!("工具 {} 未安装", tool_name);
+/// ```rust
+/// use duckcoding::{bail, AppResult};
+///
+/// fn ensure_installed(tool_name: &str) -> AppResult<()> {
+///     bail!("工具 {} 未安装", tool_name);
+/// }
 /// ```
 #[macro_export]
 macro_rules! bail {
@@ -303,8 +310,13 @@ macro_rules! bail {
 /// 确保条件成立，否则返回错误
 ///
 /// # 示例
-/// ```
-/// ensure!(version.is_some(), "版本信息为空");
+/// ```rust
+/// use duckcoding::{ensure, AppResult};
+///
+/// fn validate_version(version: Option<&str>) -> AppResult<()> {
+///     ensure!(version.is_some(), "版本信息为空");
+///     Ok(())
+/// }
 /// ```
 #[macro_export]
 macro_rules! ensure {

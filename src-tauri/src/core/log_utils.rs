@@ -3,7 +3,9 @@ use std::time::Instant;
 /// 计时器（用于性能分析）
 ///
 /// # 示例
-/// ```
+/// ```rust
+/// use duckcoding::Timer;
+///
 /// let timer = Timer::new("install_tool");
 /// // 执行安装逻辑
 /// drop(timer); // 自动记录耗时
@@ -51,7 +53,9 @@ impl Drop for Timer {
 /// 日志上下文构建器
 ///
 /// # 示例
-/// ```
+/// ```rust
+/// use duckcoding::LogContext;
+///
 /// LogContext::new("install_tool")
 ///     .field("tool", "claude-code")
 ///     .field("version", "1.0.0")

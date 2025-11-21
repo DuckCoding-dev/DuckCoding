@@ -12,8 +12,13 @@ use tauri::{
 /// - 包含 "显示窗口"、分隔符、"退出" 的菜单
 ///
 /// # 示例
-/// ```rust
-/// let tray_menu = create_tray_menu(&app)?;
+/// ```rust,no_run
+/// use duckcoding::create_tray_menu;
+/// # use tauri::{AppHandle, Runtime};
+/// # fn demo<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+/// let tray_menu = create_tray_menu(app)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     tracing::debug!("创建系统托盘菜单");
