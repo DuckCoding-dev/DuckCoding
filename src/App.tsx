@@ -9,6 +9,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { ConfigurationPage } from '@/pages/ConfigurationPage';
 import { ProfileSwitchPage } from '@/pages/ProfileSwitchPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { TransparentProxyPage } from '@/pages/TransparentProxyPage';
 import { useToast } from '@/hooks/use-toast';
 import { useAppEvents } from '@/hooks/useAppEvents';
 import { useCloseAction } from '@/hooks/useCloseAction';
@@ -27,7 +28,14 @@ import {
   type UpdateInfo,
 } from '@/lib/tauri-commands';
 
-type TabType = 'dashboard' | 'install' | 'config' | 'switch' | 'statistics' | 'settings';
+type TabType =
+  | 'dashboard'
+  | 'install'
+  | 'config'
+  | 'switch'
+  | 'statistics'
+  | 'transparent-proxy'
+  | 'settings';
 
 function App() {
   const { toast } = useToast();
@@ -270,6 +278,7 @@ function App() {
             onLoadStatistics={loadStatistics}
           />
         )}
+        {activeTab === 'transparent-proxy' && <TransparentProxyPage />}
         {activeTab === 'settings' && (
           <SettingsPage
             globalConfig={globalConfig}

@@ -6,6 +6,7 @@ import {
   Key,
   ArrowRightLeft,
   BarChart3,
+  Radio,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import DuckLogo from '@/assets/duck-logo.png';
@@ -74,6 +75,15 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
         >
           <BarChart3 className="mr-2 h-4 w-4" />
           用量统计
+        </Button>
+
+        <Button
+          variant={activeTab === 'transparent-proxy' ? 'default' : 'ghost'}
+          className="w-full justify-start transition-all hover:scale-105"
+          onClick={() => onTabChange('transparent-proxy')}
+        >
+          <Radio className="mr-2 h-4 w-4" />
+          透明代理
         </Button>
 
         <Separator className="my-3" />
