@@ -78,6 +78,9 @@ pub struct GlobalConfig {
     // 会话级端点配置开关（默认关闭）
     #[serde(default)]
     pub session_endpoint_config_enabled: bool,
+    // 是否隐藏透明代理推荐提示（默认显示）
+    #[serde(default)]
+    pub hide_transparent_proxy_tip: bool,
 }
 
 fn default_transparent_proxy_port() -> u16 {

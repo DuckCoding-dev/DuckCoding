@@ -56,6 +56,8 @@ export interface GlobalConfig {
   proxy_configs?: Record<string, ToolProxyConfig>;
   // 会话级端点配置开关（默认关闭）
   session_endpoint_config_enabled?: boolean;
+  // 是否隐藏透明代理推荐提示（默认显示）
+  hide_transparent_proxy_tip?: boolean;
 }
 
 export interface GenerateApiKeyResult {
