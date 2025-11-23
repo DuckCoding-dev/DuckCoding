@@ -4,7 +4,9 @@ use crate::models::update::{
 };
 use crate::services::downloader::{DownloadEvent, FileDownloader};
 use anyhow::{anyhow, Context, Result};
-use std::path::{Path, PathBuf};
+#[cfg(target_os = "macos")]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::fs;

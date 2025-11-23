@@ -48,8 +48,8 @@ impl RequestProcessor for CodexHeadersProcessor {
             path
         };
 
-        let query_str = query.map(|q| format!("?{}", q)).unwrap_or_default();
-        let target_url = format!("{}{}{}", base, adjusted_path, query_str);
+        let query_str = query.map(|q| format!("?{q}")).unwrap_or_default();
+        let target_url = format!("{base}{adjusted_path}{query_str}");
 
         // 2. 处理 headers（复制非认证 headers）
         let mut headers = ReqwestHeaderMap::new();
@@ -68,9 +68,9 @@ impl RequestProcessor for CodexHeadersProcessor {
         // 3. 添加真实的 OpenAI API Key（Bearer Token 格式）
         headers.insert(
             "authorization",
-            format!("Bearer {}", api_key)
+            format!("Bearer {api_key}")
                 .parse()
-                .map_err(|e| anyhow::anyhow!("Invalid authorization header: {}", e))?,
+                .map_err(|e| anyhow::anyhow!("Invalid authorization header: {e}"))?,
         );
 
         // TODO: 根据需要添加其他 OpenAI 特定的 headers

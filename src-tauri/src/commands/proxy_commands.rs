@@ -352,7 +352,7 @@ pub async fn start_tool_proxy(
     // 读取全局配置
     let mut config = get_global_config()
         .await
-        .map_err(|e| format!("读取配置失败: {}", e))?
+        .map_err(|e| format!("读取配置失败: {e}"))?
         .ok_or_else(|| "全局配置不存在，请先配置用户信息".to_string())?;
 
     // 确保工具的代理配置存在
@@ -368,19 +368,19 @@ pub async fn start_tool_proxy(
     // 获取工具的代理配置
     let tool_config = config
         .get_proxy_config(&tool_id)
-        .ok_or_else(|| format!("工具 {} 的代理配置不存在", tool_id))?
+        .ok_or_else(|| format!("工具 {tool_id} 的代理配置不存在"))?
         .clone();
 
     // 检查是否启用
     if !tool_config.enabled {
-        return Err(format!("{} 的透明代理未启用，请先在设置中启用", tool_id));
+        return Err(format!("{tool_id} 的透明代理未启用，请先在设置中启用"));
     }
 
     // 保存端口用于后续消息
     let proxy_port = tool_config.port;
 
     // 获取工具定义
-    let tool = Tool::by_id(&tool_id).ok_or_else(|| format!("未知工具: {}", tool_id))?;
+    let tool = Tool::by_id(&tool_id).ok_or_else(|| format!("未知工具: {tool_id}"))?;
 
     // 如果还没有备份过真实配置，先备份
     let updated_config = if tool_config.real_api_key.is_none() {
@@ -395,12 +395,12 @@ pub async fn start_tool_proxy(
             tool_config.port,
             &local_api_key,
         )
-        .map_err(|e| format!("启用透明代理失败: {}", e))?;
+        .map_err(|e| format!("启用透明代理失败: {e}"))?;
 
         // 保存更新后的配置
         save_global_config(config.clone())
             .await
-            .map_err(|e| format!("保存配置失败: {}", e))?;
+            .map_err(|e| format!("保存配置失败: {e}"))?;
 
         config
             .get_proxy_config(&tool_id)
@@ -418,7 +418,7 @@ pub async fn start_tool_proxy(
             tool_config.port,
             &local_api_key,
         )
-        .map_err(|e| format!("更新代理配置失败: {}", e))?;
+        .map_err(|e| format!("更新代理配置失败: {e}"))?;
 
         tool_config
     };
@@ -428,11 +428,10 @@ pub async fn start_tool_proxy(
         .manager
         .start_proxy(&tool_id, updated_config)
         .await
-        .map_err(|e| format!("启动代理失败: {}", e))?;
+        .map_err(|e| format!("启动代理失败: {e}"))?;
 
     Ok(format!(
-        "✅ {} 透明代理已启动\n监听端口: {}\n请求将自动转发",
-        tool_id, proxy_port
+        "✅ {tool_id} 透明代理已启动\n监听端口: {proxy_port}\n请求将自动转发"
     ))
 }
 
@@ -445,7 +444,7 @@ pub async fn stop_tool_proxy(
     // 读取全局配置
     let config = get_global_config()
         .await
-        .map_err(|e| format!("读取配置失败: {}", e))?
+        .map_err(|e| format!("读取配置失败: {e}"))?
         .ok_or_else(|| "全局配置不存在".to_string())?;
 
     // 停止代理
@@ -453,19 +452,19 @@ pub async fn stop_tool_proxy(
         .manager
         .stop_proxy(&tool_id)
         .await
-        .map_err(|e| format!("停止代理失败: {}", e))?;
+        .map_err(|e| format!("停止代理失败: {e}"))?;
 
     // 恢复工具配置
     if let Some(tool_config) = config.get_proxy_config(&tool_id) {
         if tool_config.real_api_key.is_some() {
-            let tool = Tool::by_id(&tool_id).ok_or_else(|| format!("未知工具: {}", tool_id))?;
+            let tool = Tool::by_id(&tool_id).ok_or_else(|| format!("未知工具: {tool_id}"))?;
 
             TransparentProxyConfigService::disable_transparent_proxy(&tool, &config)
-                .map_err(|e| format!("恢复配置失败: {}", e))?;
+                .map_err(|e| format!("恢复配置失败: {e}"))?;
         }
     }
 
-    Ok(format!("✅ {} 透明代理已停止\n配置已恢复", tool_id))
+    Ok(format!("✅ {tool_id} 透明代理已停止\n配置已恢复"))
 }
 
 /// 获取所有工具的透明代理状态

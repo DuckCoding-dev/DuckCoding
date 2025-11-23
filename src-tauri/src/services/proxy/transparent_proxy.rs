@@ -190,8 +190,7 @@ async fn handle_request(
             Ok(Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(box_body(http_body_util::Full::new(Bytes::from(format!(
-                    "代理错误: {}",
-                    e
+                    "代理错误: {e}"
                 )))))
                 .unwrap())
         }
@@ -269,7 +268,7 @@ async fn handle_request_inner(
     let query = req
         .uri()
         .query()
-        .map(|q| format!("?{}", q))
+        .map(|q| format!("?{q}"))
         .unwrap_or_default();
 
     // 确保 base_url 不包含尾部斜杠
@@ -284,13 +283,13 @@ async fn handle_request_inner(
         path
     };
 
-    let target_url = format!("{}{}{}", base, adjusted_path, query);
+    let target_url = format!("{base}{adjusted_path}{query}");
 
     // 回环检测 - 只检测自己的端口
-    let own_proxy_url1 = format!("http://127.0.0.1:{}", own_port);
-    let own_proxy_url2 = format!("https://127.0.0.1:{}", own_port);
-    let own_proxy_url3 = format!("http://localhost:{}", own_port);
-    let own_proxy_url4 = format!("https://localhost:{}", own_port);
+    let own_proxy_url1 = format!("http://127.0.0.1:{own_port}");
+    let own_proxy_url2 = format!("https://127.0.0.1:{own_port}");
+    let own_proxy_url3 = format!("http://localhost:{own_port}");
+    let own_proxy_url4 = format!("https://localhost:{own_port}");
 
     if target_url.starts_with(&own_proxy_url1)
         || target_url.starts_with(&own_proxy_url2)

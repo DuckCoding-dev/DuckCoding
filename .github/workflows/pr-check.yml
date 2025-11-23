@@ -1,0 +1,307 @@
+name: PR Check
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    name: Check (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-22.04
+            os: ubuntu-22.04
+          - name: windows-latest
+            os: windows-latest
+          - name: macos-arm64
+            os: macos-14
+          - name: macos-x64
+            os: macos-13
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Ensure WebView2 runtime (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exists = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients' -ErrorAction SilentlyContinue |
+            Where-Object { (Get-ItemProperty $_.PSPath).name -match 'WebView2 Runtime' }
+          if ($exists) {
+            Write-Host 'WebView2 Runtime already installed.'
+            return
+          }
+          Write-Host 'WebView2 Runtime not found, try winget...'
+          try {
+            winget install --id Microsoft.EdgeWebView2Runtime --exact --accept-package-agreements --accept-source-agreements --silent
+            return
+          } catch {
+            Write-Host 'winget failed, fallback to offline installer...'
+          }
+          $tmp = Join-Path $env:TEMP 'MicrosoftEdgeWebview2Setup.exe'
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile $tmp
+          & $tmp /silent /install
+          $exists = Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients' -ErrorAction SilentlyContinue |
+            Where-Object { (Get-ItemProperty $_.PSPath).name -match 'WebView2 Runtime' }
+          if (-not $exists) { throw 'WebView2 Runtime install failed' }
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+          cache-on-failure: true
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: npm run check
+        id: check
+        shell: bash
+        run: |
+          npm run check 2>&1 | tee check.log
+        continue-on-error: true
+
+      - name: npm run check:fix (diagnostic)
+        id: check_fix
+        if: steps.check.outcome == 'failure'
+        shell: bash
+        run: |
+          npm run check:fix 2>&1 | tee check-fix.log
+        continue-on-error: true
+
+      - name: npm run check (post-fix)
+        id: recheck
+        if: steps.check.outcome == 'failure'
+        shell: bash
+        run: |
+          npm run check 2>&1 | tee check-recheck.log
+        continue-on-error: true
+
+      - name: Collect logs
+        if: always()
+        shell: bash
+        run: |
+          [ -f check.log ] || echo 'log not generated' > check.log
+          [ -f check-fix.log ] || echo 'log not generated' > check-fix.log
+          [ -f check-recheck.log ] || echo 'log not generated' > check-recheck.log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-check-${{ matrix.name }}
+          path: |
+            check.log
+            check-fix.log
+            check-recheck.log
+
+      - name: Update PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          MATRIX_NAME: ${{ matrix.name }}
+          RUN_ID: ${{ github.run_id }}
+          JOB_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHECK_OUTCOME: ${{ steps.check.outcome }}
+          FIX_OUTCOME: ${{ steps.check_fix.outcome }}
+          RECHECK_OUTCOME: ${{ steps.recheck.outcome }}
+          ARTIFACT_NAME: pr-check-${{ matrix.name }}
+        with:
+          script: |
+            const marker = '<!-- duckcoding-pr-check -->';
+            const stateMarker = '<!-- duckcoding-pr-check-state:';
+            const platforms = ['ubuntu-22.04', 'windows-latest', 'macos-arm64', 'macos-x64'];
+
+            const defaultState = () =>
+              Object.fromEntries(
+                platforms.map((p) => [
+                  p,
+                  {
+                    platform: p,
+                    status: 'pending',
+                    check: 'pending',
+                    fix: 'pending',
+                    recheck: 'pending',
+                    artifact: '',
+                    run_url: ''
+                  }
+                ])
+              );
+
+            const newEntry = {
+              platform: process.env.MATRIX_NAME,
+              check: process.env.CHECK_OUTCOME || 'skipped',
+              fix: process.env.FIX_OUTCOME || 'skipped',
+              recheck: process.env.RECHECK_OUTCOME || 'skipped',
+              artifact: process.env.ARTIFACT_NAME,
+              run_url: process.env.JOB_URL
+            };
+
+            if (newEntry.check === 'success') newEntry.status = 'success';
+            else if (newEntry.check === 'failure' && newEntry.recheck === 'success') newEntry.status = 'fix_pass';
+            else if (newEntry.check === 'failure') newEntry.status = 'failed';
+            else newEntry.status = 'pending';
+
+            const statusLabelZh = (entry) => {
+              if (entry.status === 'pending') return '⏳ 运行中...';
+              if (entry.status === 'success') return '✅ 直接通过';
+              if (entry.status === 'fix_pass') return '🟡 自动修复后通过（请本地提交修复）';
+              return '❌ 仍未通过';
+            };
+
+            const statusLabelEn = (entry) => {
+              if (entry.status === 'pending') return '⏳ In progress...';
+              if (entry.status === 'success') return '✅ Passed';
+              if (entry.status === 'fix_pass') return '🟡 Passed after auto-fix (commit locally)';
+              return '❌ Still failing';
+            };
+
+            const detail = (entry) =>
+              entry.status === 'pending'
+                ? '-'
+                : `check=${entry.check} / fix=${entry.fix} / recheck=${entry.recheck}`;
+
+            const linkOrDash = (entry) => (entry.run_url ? `[日志](${entry.run_url})` : '-');
+            const artifactOrDash = (entry) => (entry.status === 'pending' ? '-' : entry.artifact || '-');
+
+            const renderTable = (labelFn, header) => {
+              const h = header || {
+                platform: '平台/Platform',
+                status: '结果/Status',
+                detail: '明细/Detail',
+                artifact: '日志包',
+                link: '运行链接'
+              };
+              const rows = platforms
+                .map((p) => {
+                  const e = state[p] || defaultState()[p];
+                  return `| ${pLabel(p)} | ${labelFn(e)} | ${detail(e)} | ${artifactOrDash(e)} | ${linkOrDash(e)} |`;
+                })
+                .join('\n');
+              return [
+                `| ${h.platform} | ${h.status} | ${h.detail} | ${h.artifact} | ${h.link} |`,
+                '| --- | --- | --- | --- | --- |',
+                rows
+              ].join('\n');
+            };
+
+            const pLabel = (p) => {
+              if (p === 'ubuntu-22.04') return 'ubuntu-22.04';
+              if (p === 'windows-latest') return 'windows-latest';
+              if (p === 'macos-arm64') return 'macos-14 (arm64)';
+              if (p === 'macos-x64') return 'macos-13 (x64)';
+              return p;
+            };
+
+            // Fetch existing comment with marker
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            const existing = comments.find((c) => c.body.includes(marker));
+
+            let state = defaultState();
+            if (existing) {
+              const match = existing.body.match(/<!-- duckcoding-pr-check-state:(.*?)-->/s);
+              if (match) {
+                try {
+                  state = { ...state, ...JSON.parse(match[1]) };
+                } catch {}
+              }
+            }
+            state[newEntry.platform] = newEntry;
+
+            const tableZh = renderTable(statusLabelZh, {
+              platform: '平台',
+              status: '结果',
+              detail: '明细',
+              artifact: '日志包',
+              link: '运行链接'
+            });
+            const tableEn = renderTable(statusLabelEn, {
+              platform: 'Platform',
+              status: 'Status',
+              detail: 'Detail',
+              artifact: 'Artifact',
+              link: 'Run'
+            });
+
+            const body = [
+              '本评论会随各平台任务完成自动更新：',
+              '如首轮 `npm run check` 失败，请在本地执行 `npm run check:fix` → `npm run check` 并提交修复 commit。',
+              '如 fix 仍失败，请在本地排查并确保 `npm run check` 通过后再提交。',
+              '跨平台差异若无法复现，请复制日志交给 AI 获取排查建议。',
+              '',
+              tableZh,
+              '',
+              '---',
+              '',
+              'This comment auto-updates as each platform finishes:',
+              'If the first `npm run check` fails, run locally: `npm run check:fix` → `npm run check` and commit the fix.',
+              'If fix still fails, investigate locally and ensure `npm run check` passes before committing.',
+              'If cross-platform issues can’t be reproduced, copy logs to an AI for hints.',
+              '',
+              tableEn,
+              marker,
+              `${stateMarker}${JSON.stringify(state)} -->`
+            ].join('\n');
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            }
+
+      - name: Fail if initial check failed
+        if: steps.check.outcome == 'failure'
+        run: exit 1

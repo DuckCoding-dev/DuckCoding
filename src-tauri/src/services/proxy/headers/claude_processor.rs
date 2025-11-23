@@ -87,8 +87,8 @@ impl RequestProcessor for ClaudeHeadersProcessor {
 
         // 1. 构建目标 URL（标准拼接）
         let base = final_base_url.trim_end_matches('/');
-        let query_str = query.map(|q| format!("?{}", q)).unwrap_or_default();
-        let target_url = format!("{}{}{}", base, path, query_str);
+        let query_str = query.map(|q| format!("?{q}")).unwrap_or_default();
+        let target_url = format!("{base}{path}{query_str}");
 
         // 2. 处理 headers（复制非认证 headers）
         let mut headers = ReqwestHeaderMap::new();
@@ -107,9 +107,9 @@ impl RequestProcessor for ClaudeHeadersProcessor {
         // 3. 添加真实的 API Key
         headers.insert(
             "authorization",
-            format!("Bearer {}", final_api_key)
+            format!("Bearer {final_api_key}")
                 .parse()
-                .map_err(|e| anyhow::anyhow!("Invalid authorization header: {}", e))?,
+                .map_err(|e| anyhow::anyhow!("Invalid authorization header: {e}"))?,
         );
 
         // 4. 返回处理后的请求

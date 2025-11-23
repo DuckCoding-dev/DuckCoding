@@ -170,13 +170,13 @@ impl TransparentProxyConfigService {
         let api_key = proxy_config
             .real_api_key
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("未找到 {} 的真实 API Key", tool_id))?
+            .ok_or_else(|| anyhow::anyhow!("未找到 {tool_id} 的真实 API Key"))?
             .clone();
 
         let base_url = proxy_config
             .real_base_url
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("未找到 {} 的真实 Base URL", tool_id))?
+            .ok_or_else(|| anyhow::anyhow!("未找到 {tool_id} 的真实 Base URL"))?
             .clone();
 
         Ok((api_key, base_url))
@@ -196,7 +196,7 @@ impl TransparentProxyConfigService {
 
     /// 写入代理配置到工具
     fn write_proxy_config(tool: &Tool, port: u16, api_key: &str) -> Result<()> {
-        let base_url = format!("http://127.0.0.1:{}", port);
+        let base_url = format!("http://127.0.0.1:{port}");
         match tool.id.as_str() {
             "claude-code" => Self::write_claude_config(tool, api_key, &base_url),
             "codex" => Self::write_codex_config(tool, api_key, &base_url),
@@ -334,10 +334,7 @@ impl TransparentProxyConfigService {
             .and_then(|p| p.get("base_url"))
             .and_then(|v| v.as_str())
             .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Codex config.toml 中未找到 model_providers.{}.base_url",
-                    provider
-                )
+                anyhow::anyhow!("Codex config.toml 中未找到 model_providers.{provider}.base_url")
             })?
             .to_string();
 
@@ -438,7 +435,7 @@ impl TransparentProxyConfigService {
         let base_url_with_v1 = if normalized_base.ends_with("/v1") {
             normalized_base.to_string()
         } else {
-            format!("{}/v1", normalized_base)
+            format!("{normalized_base}/v1")
         };
 
         // 确保 model_providers 表存在
@@ -539,7 +536,7 @@ impl TransparentProxyConfigService {
         // 写入 .env
         let mut env_content = String::new();
         for (key, value) in &env_vars {
-            env_content.push_str(&format!("{}={}\n", key, value));
+            env_content.push_str(&format!("{key}={value}\n"));
         }
 
         fs::write(&env_path, env_content)?;
@@ -559,7 +556,7 @@ impl TransparentProxyConfigService {
         let backup_path = tool.backup_path(profile_name);
 
         if !backup_path.exists() {
-            anyhow::bail!("备份配置文件不存在: {:?}", backup_path);
+            anyhow::bail!("备份配置文件不存在: {backup_path:?}");
         }
 
         let content = fs::read_to_string(&backup_path).context("读取备份配置失败")?;

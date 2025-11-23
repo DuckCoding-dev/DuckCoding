@@ -132,15 +132,15 @@ pub async fn trigger_check_update(
         .service
         .check_for_updates()
         .await
-        .map_err(|e| format!("Failed to check for updates: {}", e))?;
+        .map_err(|e| format!("Failed to check for updates: {e}"))?;
 
     // 发送事件到前端
     if update_info.has_update {
         app.emit("update-available", &update_info)
-            .map_err(|e| format!("Failed to emit update-available event: {}", e))?;
+            .map_err(|e| format!("Failed to emit update-available event: {e}"))?;
     } else {
         app.emit("update-not-found", &update_info)
-            .map_err(|e| format!("Failed to emit update-not-found event: {}", e))?;
+            .map_err(|e| format!("Failed to emit update-not-found event: {e}"))?;
     }
 
     Ok(())

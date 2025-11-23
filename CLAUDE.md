@@ -53,6 +53,14 @@ last-updated: 2025-11-23
 - [ ] Rust/前端测试已运行（或说明尚未覆盖的原因）。
 - [ ] 重要变更附测试或验证截图，方便 Reviewer。
 
+## CI / PR 检查
+
+- `.github/workflows/pr-check.yml` 在 pull_request / workflow_dispatch 下运行，矩阵覆盖 ubuntu-22.04、windows-latest、macos-14 (arm64)、macos-13 (x64)，策略 `fail-fast: false`。
+- 每个平台执行 `npm ci` → `npm run check`；若首次检查失败，会继续跑 `npm run check:fix` 与复验 `npm run check` 以判断是否可自动修复，但只要初次检查失败，该平台作业仍标红以阻止合并。
+- PR 事件下只保留一条自动评论，双语表格固定展示四个平台；未跑完的平台显示“运行中...”，跑完后实时更新结果、check/fix/recheck 状态、run 链接与日志包名（artifact `pr-check-<platform>.zip`，含 `npm run check` / `check:fix` / `recheck` 输出）。文案提示：如首检失败请本地 `npm run check:fix` → `npm run check` 并提交修复；若 fix 仍失败则需本地排查；跨平台差异无法复现可复制日志给 AI 获取排查建议。
+- Linux 装 `libwebkit2gtk-4.1-dev`、`libjavascriptcoregtk-4.1-dev`、`patchelf` 等 Tauri v2 依赖；Windows 确保 WebView2 Runtime（先查注册表，winget 安装失败则回退微软官方静默安装包）；Node 20.19.0，Rust stable（含 clippy / rustfmt），启用 npm 与 cargo 缓存。
+- CI 未通过不得合并；缺少 dist 时会在 `npm run check` 内自动触发 `npm run build` 以满足 Clippy 输入。
+
 ## 架构记忆（2025-11-21）
 
 - `src-tauri/src/main.rs` 仅保留应用启动与托盘事件注册，所有 Tauri Commands 拆分到 `src-tauri/src/commands/*`，服务实现位于 `services/*`，核心设施放在 `core/*`（HTTP、日志、错误）。

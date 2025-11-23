@@ -11,7 +11,7 @@ pub async fn get_session_list(
 ) -> Result<SessionListResponse, String> {
     SESSION_MANAGER
         .get_session_list(&tool_id, page, page_size)
-        .map_err(|e| format!("Failed to get session list: {}", e))
+        .map_err(|e| format!("Failed to get session list: {e}"))
 }
 
 /// 删除单个会话
@@ -19,7 +19,7 @@ pub async fn get_session_list(
 pub async fn delete_session(session_id: String) -> Result<(), String> {
     SESSION_MANAGER
         .delete_session(&session_id)
-        .map_err(|e| format!("Failed to delete session: {}", e))
+        .map_err(|e| format!("Failed to delete session: {e}"))
 }
 
 /// 清空指定工具的所有会话
@@ -27,7 +27,7 @@ pub async fn delete_session(session_id: String) -> Result<(), String> {
 pub async fn clear_all_sessions(tool_id: String) -> Result<(), String> {
     SESSION_MANAGER
         .clear_sessions(&tool_id)
-        .map_err(|e| format!("Failed to clear sessions: {}", e))
+        .map_err(|e| format!("Failed to clear sessions: {e}"))
 }
 
 /// 更新会话配置
@@ -47,7 +47,7 @@ pub async fn update_session_config(
             &url,
             &api_key,
         )
-        .map_err(|e| format!("Failed to update session config: {}", e))
+        .map_err(|e| format!("Failed to update session config: {e}"))
 }
 
 /// 更新会话备注
@@ -55,5 +55,5 @@ pub async fn update_session_config(
 pub async fn update_session_note(session_id: String, note: Option<String>) -> Result<(), String> {
     SESSION_MANAGER
         .update_session_note(&session_id, note.as_deref())
-        .map_err(|e| format!("Failed to update session note: {}", e))
+        .map_err(|e| format!("Failed to update session note: {e}"))
 }

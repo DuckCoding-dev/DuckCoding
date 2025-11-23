@@ -54,7 +54,7 @@ fn mask_api_key(key: &str) -> String {
     }
     let prefix = &key[..4];
     let suffix = &key[key.len() - 4..];
-    format!("{}...{}", prefix, suffix)
+    format!("{prefix}...{suffix}")
 }
 
 fn detect_profile_name(
@@ -153,7 +153,7 @@ fn detect_profile_name(
                     }
                     "codex" => {
                         // 需要同时检查 config.toml 和 auth.json
-                        let auth_backup = config_dir.join(format!("auth.{}.json", profile));
+                        let auth_backup = config_dir.join(format!("auth.{profile}.json"));
 
                         let mut api_key_matches = false;
                         if let Ok(auth_content) = fs::read_to_string(&auth_backup) {
@@ -255,7 +255,7 @@ pub async fn configure_api(
     tracing::debug!(tool = %tool, "配置API（使用ConfigService）");
 
     // 获取工具定义
-    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
+    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
 
     // 获取 base_url，根据工具类型使用不同的默认值
     let base_url_str = base_url.unwrap_or_else(|| match tool.as_str() {
@@ -276,7 +276,7 @@ pub async fn list_profiles(tool: String) -> Result<Vec<String>, String> {
     tracing::debug!(tool = %tool, "列出配置文件（使用ConfigService）");
 
     // 获取工具定义
-    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
+    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
 
     // 使用 ConfigService 列出配置
     ConfigService::list_profiles(&tool_obj).map_err(|e| e.to_string())
@@ -297,7 +297,7 @@ pub async fn switch_profile(
     );
 
     // 获取工具定义
-    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
+    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
 
     // 读取全局配置，检查是否在代理模式
     let global_config_opt = get_global_config().await.map_err(|e| e.to_string())?;
@@ -324,12 +324,12 @@ pub async fn switch_profile(
             "claude-code" => {
                 let backup_path = tool_obj.backup_path(&profile);
                 if !backup_path.exists() {
-                    return Err(format!("配置文件不存在: {:?}", backup_path));
+                    return Err(format!("配置文件不存在: {backup_path:?}"));
                 }
                 let content = fs::read_to_string(&backup_path)
-                    .map_err(|e| format!("读取备份配置失败: {}", e))?;
-                let backup_data: Value = serde_json::from_str(&content)
-                    .map_err(|e| format!("解析备份配置失败: {}", e))?;
+                    .map_err(|e| format!("读取备份配置失败: {e}"))?;
+                let backup_data: Value =
+                    serde_json::from_str(&content).map_err(|e| format!("解析备份配置失败: {e}"))?;
 
                 // 兼容新旧格式
                 let api_key = backup_data
@@ -360,17 +360,17 @@ pub async fn switch_profile(
             }
             "codex" => {
                 // 读取备份的 auth.json
-                let backup_auth = tool_obj.config_dir.join(format!("auth.{}.json", profile));
-                let backup_config = tool_obj.config_dir.join(format!("config.{}.toml", profile));
+                let backup_auth = tool_obj.config_dir.join(format!("auth.{profile}.json"));
+                let backup_config = tool_obj.config_dir.join(format!("config.{profile}.toml"));
 
                 if !backup_auth.exists() {
-                    return Err(format!("配置文件不存在: {:?}", backup_auth));
+                    return Err(format!("配置文件不存在: {backup_auth:?}"));
                 }
 
                 let auth_content = fs::read_to_string(&backup_auth)
-                    .map_err(|e| format!("读取备份 auth.json 失败: {}", e))?;
+                    .map_err(|e| format!("读取备份 auth.json 失败: {e}"))?;
                 let auth_data: Value = serde_json::from_str(&auth_content)
-                    .map_err(|e| format!("解析备份 auth.json 失败: {}", e))?;
+                    .map_err(|e| format!("解析备份 auth.json 失败: {e}"))?;
                 let api_key = auth_data
                     .get("OPENAI_API_KEY")
                     .and_then(|v| v.as_str())
@@ -380,9 +380,9 @@ pub async fn switch_profile(
                 // 读取备份的 config.toml
                 let base_url = if backup_config.exists() {
                     let config_content = fs::read_to_string(&backup_config)
-                        .map_err(|e| format!("读取备份 config.toml 失败: {}", e))?;
+                        .map_err(|e| format!("读取备份 config.toml 失败: {e}"))?;
                     let config: toml::Value = toml::from_str(&config_content)
-                        .map_err(|e| format!("解析备份 config.toml 失败: {}", e))?;
+                        .map_err(|e| format!("解析备份 config.toml 失败: {e}"))?;
                     let provider = config
                         .get("model_provider")
                         .and_then(|v| v.as_str())
@@ -395,19 +395,19 @@ pub async fn switch_profile(
                         .unwrap_or("")
                         .to_string()
                 } else {
-                    return Err(format!("配置文件不存在: {:?}", backup_config));
+                    return Err(format!("配置文件不存在: {backup_config:?}"));
                 };
 
                 (api_key, base_url)
             }
             "gemini-cli" => {
-                let backup_env = tool_obj.config_dir.join(format!(".env.{}", profile));
+                let backup_env = tool_obj.config_dir.join(format!(".env.{profile}"));
                 if !backup_env.exists() {
-                    return Err(format!("配置文件不存在: {:?}", backup_env));
+                    return Err(format!("配置文件不存在: {backup_env:?}"));
                 }
 
                 let content = fs::read_to_string(&backup_env)
-                    .map_err(|e| format!("读取备份 .env 失败: {}", e))?;
+                    .map_err(|e| format!("读取备份 .env 失败: {e}"))?;
                 let mut api_key = String::new();
                 let mut base_url = String::new();
 
@@ -428,7 +428,7 @@ pub async fn switch_profile(
 
                 (api_key, base_url)
             }
-            _ => return Err(format!("未知工具: {}", tool)),
+            _ => return Err(format!("未知工具: {tool}")),
         };
 
         if !new_api_key.is_empty() && !new_base_url.is_empty() {
@@ -439,7 +439,7 @@ pub async fn switch_profile(
                 &new_api_key,
                 &new_base_url,
             )
-            .map_err(|e| format!("更新真实配置失败: {}", e))?;
+            .map_err(|e| format!("更新真实配置失败: {e}"))?;
 
             // 同时保存配置名称
             if let Some(proxy_config) = global_config.get_proxy_config_mut(&tool) {
@@ -449,7 +449,7 @@ pub async fn switch_profile(
             // 保存全局配置
             save_global_config(global_config.clone())
                 .await
-                .map_err(|e| format!("保存全局配置失败: {}", e))?;
+                .map_err(|e| format!("保存全局配置失败: {e}"))?;
 
             // 检查代理是否正在运行并更新
             let is_running = manager_state.manager.is_running(&tool).await;
@@ -466,7 +466,7 @@ pub async fn switch_profile(
                         .manager
                         .update_config(&tool, updated_config)
                         .await
-                        .map_err(|e| format!("更新代理配置失败: {}", e))?;
+                        .map_err(|e| format!("更新代理配置失败: {e}"))?;
 
                     tracing::info!(tool = %tool, "透明代理配置已自动更新");
                 }
@@ -490,7 +490,7 @@ pub async fn switch_profile(
                     service
                         .update_config(proxy_config)
                         .await
-                        .map_err(|e| format!("更新代理配置失败: {}", e))?;
+                        .map_err(|e| format!("更新代理配置失败: {e}"))?;
                 }
                 drop(service);
             }
@@ -524,7 +524,7 @@ pub async fn delete_profile(tool: String, profile: String) -> Result<(), String>
     );
 
     // 获取工具定义
-    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {}", tool))?;
+    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("❌ 未知的工具: {tool}"))?;
 
     // 使用 ConfigService 删除配置
     ConfigService::delete_profile(&tool_obj, &profile).map_err(|e| e.to_string())?;
@@ -551,9 +551,9 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             }
 
             let content =
-                fs::read_to_string(&config_path).map_err(|e| format!("❌ 读取配置失败: {}", e))?;
+                fs::read_to_string(&config_path).map_err(|e| format!("❌ 读取配置失败: {e}"))?;
             let config: Value =
-                serde_json::from_str(&content).map_err(|e| format!("❌ 解析配置失败: {}", e))?;
+                serde_json::from_str(&content).map_err(|e| format!("❌ 解析配置失败: {e}"))?;
 
             let raw_api_key = config
                 .get("env")
@@ -597,9 +597,9 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             // 读取 auth.json
             if auth_path.exists() {
                 let content = fs::read_to_string(&auth_path)
-                    .map_err(|e| format!("❌ 读取认证文件失败: {}", e))?;
+                    .map_err(|e| format!("❌ 读取认证文件失败: {e}"))?;
                 let auth: Value = serde_json::from_str(&content)
-                    .map_err(|e| format!("❌ 解析认证文件失败: {}", e))?;
+                    .map_err(|e| format!("❌ 解析认证文件失败: {e}"))?;
 
                 if let Some(key) = auth.get("OPENAI_API_KEY").and_then(|v| v.as_str()) {
                     raw_api_key = key.to_string();
@@ -610,9 +610,9 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             // 读取 config.toml
             if config_path.exists() {
                 let content = fs::read_to_string(&config_path)
-                    .map_err(|e| format!("❌ 读取配置文件失败: {}", e))?;
+                    .map_err(|e| format!("❌ 读取配置文件失败: {e}"))?;
                 let config: toml::Value =
-                    toml::from_str(&content).map_err(|e| format!("❌ 解析TOML失败: {}", e))?;
+                    toml::from_str(&content).map_err(|e| format!("❌ 解析TOML失败: {e}"))?;
 
                 if let toml::Value::Table(table) = config {
                     let selected_provider = table
@@ -671,7 +671,7 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
             }
 
             let content = fs::read_to_string(&env_path)
-                .map_err(|e| format!("❌ 读取环境变量配置失败: {}", e))?;
+                .map_err(|e| format!("❌ 读取环境变量配置失败: {e}"))?;
 
             let mut raw_api_key = String::new();
             let mut api_key = "未配置".to_string();
@@ -708,7 +708,7 @@ pub async fn get_active_config(tool: String) -> Result<ActiveConfig, String> {
                 profile_name,
             })
         }
-        _ => Err(format!("❌ 未知的工具: {}", tool)),
+        _ => Err(format!("❌ 未知的工具: {tool}")),
     }
 }
 
@@ -737,11 +737,11 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
         "claude-code" => ("Claude Code一键创建", "Claude Code专用"),
         "codex" => ("CodeX一键创建", "CodeX专用"),
         "gemini-cli" => ("Gemini CLI一键创建", "Gemini CLI专用"),
-        _ => return Err(format!("Unknown tool: {}", tool)),
+        _ => return Err(format!("Unknown tool: {tool}")),
     };
 
     // 创建token
-    let client = build_reqwest_client().map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
+    let client = build_reqwest_client().map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
     let create_url = "https://duckcoding.com/api/token";
 
     let create_body = serde_json::json!({
@@ -766,14 +766,14 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
         .json(&create_body)
         .send()
         .await
-        .map_err(|e| format!("创建token失败: {}", e))?;
+        .map_err(|e| format!("创建token失败: {e}"))?;
 
     if !create_response.status().is_success() {
         let status = create_response.status();
         let error_text = create_response.text().await.unwrap_or_default();
         return Ok(GenerateApiKeyResult {
             success: false,
-            message: format!("创建token失败 ({}): {}", status, error_text),
+            message: format!("创建token失败 ({status}): {error_text}"),
             api_key: None,
         });
     }
@@ -797,7 +797,7 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
         .header("Content-Type", "application/json")
         .send()
         .await
-        .map_err(|e| format!("搜索token失败: {}", e))?;
+        .map_err(|e| format!("搜索token失败: {e}"))?;
 
     if !search_response.status().is_success() {
         return Ok(GenerateApiKeyResult {
@@ -810,7 +810,7 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
     let api_response: ApiResponse = search_response
         .json()
         .await
-        .map_err(|e| format!("解析响应失败: {}", e))?;
+        .map_err(|e| format!("解析响应失败: {e}"))?;
 
     if !api_response.success {
         return Ok(GenerateApiKeyResult {
@@ -890,20 +890,20 @@ pub fn get_gemini_schema() -> Result<Value, String> {
 /// 读取指定配置文件的详情（不激活）
 #[tauri::command]
 pub async fn get_profile_config(tool: String, profile: String) -> Result<ActiveConfig, String> {
-    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("未知的工具: {}", tool))?;
+    let tool_obj = Tool::by_id(&tool).ok_or_else(|| format!("未知的工具: {tool}"))?;
 
     match tool.as_str() {
         "claude-code" => {
             let backup_path = tool_obj.backup_path(&profile);
             if !backup_path.exists() {
-                return Err(format!("配置文件不存在: {}", profile));
+                return Err(format!("配置文件不存在: {profile}"));
             }
 
             // 读取备份配置文件
             let backup_content =
-                fs::read_to_string(&backup_path).map_err(|e| format!("读取配置文件失败: {}", e))?;
+                fs::read_to_string(&backup_path).map_err(|e| format!("读取配置文件失败: {e}"))?;
             let backup_data: Value = serde_json::from_str(&backup_content)
-                .map_err(|e| format!("解析配置文件失败: {}", e))?;
+                .map_err(|e| format!("解析配置文件失败: {e}"))?;
 
             // 兼容新旧格式读取 API Key
             let api_key = backup_data
@@ -935,6 +935,6 @@ pub async fn get_profile_config(tool: String, profile: String) -> Result<ActiveC
                 profile_name: Some(profile),
             })
         }
-        _ => Err(format!("暂不支持的工具: {}", tool)),
+        _ => Err(format!("暂不支持的工具: {tool}")),
     }
 }

@@ -199,8 +199,7 @@ async fn handle_request(
             Ok(Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(box_body(http_body_util::Full::new(Bytes::from(format!(
-                    "代理错误: {}",
-                    e
+                    "代理错误: {e}"
                 )))))
                 .unwrap())
         }
@@ -224,10 +223,9 @@ async fn handle_request_inner(
                 .body(box_body(http_body_util::Full::new(Bytes::from(format!(
                     r#"{{
   "error": "CONFIGURATION_MISSING",
-  "message": "{} 透明代理配置不完整",
+  "message": "{tool_id} 透明代理配置不完整",
   "details": "请先配置有效的 API Key 和 Base URL"
-}}"#,
-                    tool_id
+}}"#
                 )))))
                 .unwrap());
         }
@@ -309,10 +307,9 @@ async fn handle_request_inner(
                 .body(box_body(http_body_util::Full::new(Bytes::from(format!(
                     r#"{{
   "error": "PROXY_LOOP_DETECTED",
-  "message": "{} 透明代理配置错误导致回环",
+  "message": "{tool_id} 透明代理配置错误导致回环",
   "details": "请检查代理配置，确保 Base URL 不指向本地代理端口"
-}}"#,
-                    tool_id
+}}"#
                 )))))
                 .unwrap());
         }
