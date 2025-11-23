@@ -1,12 +1,23 @@
 // 代理控制条组件
 // 提供代理启动/停止控制按钮和代理详情显示
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Power, AlertCircle, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
+import {
+  Loader2,
+  Power,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Check,
+  Settings2,
+} from 'lucide-react';
 import type { ToolMetadata, ToolId } from '../types/proxy-history';
-import { getActiveConfig, type ToolProxyConfig } from '@/lib/tauri-commands';
+import type { ToolProxyConfig } from '@/lib/tauri-commands';
+import { ProxyConfigDialog } from './ProxyConfigDialog';
+import { ProxySettingsDialog } from './ProxySettingsDialog';
 
 interface ProxyControlBarProps {
   /** 工具元数据 */
@@ -25,6 +36,10 @@ interface ProxyControlBarProps {
   onStart: () => void;
   /** 停止代理回调 */
   onStop: () => void;
+  /** 配置更新回调 */
+  onConfigUpdated?: () => void;
+  /** 保存设置回调 */
+  onSaveSettings?: (updates: Partial<ToolProxyConfig>) => Promise<void>;
 }
 
 /**
@@ -53,8 +68,10 @@ function ProxyDetails({ config, port }: { config: ToolProxyConfig | null; port: 
   };
 
   const proxyUrl = port ? `http://127.0.0.1:${port}` : '未启动';
-  const baseUrl = config?.real_base_url || '跟随主配置';
+  const baseUrl = config?.real_base_url;
+  const isBaseUrlConfigured = !!baseUrl;
   const apiKey = config?.real_api_key;
+  const isApiKeyConfigured = !!apiKey;
   const localApiKey = config?.local_api_key;
 
   return (
@@ -114,15 +131,19 @@ function ProxyDetails({ config, port }: { config: ToolProxyConfig | null; port: 
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">上游 Base URL</span>
           <div className="flex items-center gap-2">
-            <code className="flex-1 px-2 py-1 bg-muted rounded text-xs font-mono truncate">
-              {baseUrl}
+            <code
+              className={`flex-1 px-2 py-1 bg-muted rounded text-xs font-mono truncate ${
+                !isBaseUrlConfigured ? 'text-red-500' : ''
+              }`}
+            >
+              {baseUrl || '未配置'}
             </code>
-            {config?.real_base_url && (
+            {isBaseUrlConfigured && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
-                onClick={() => handleCopy(config.real_base_url!, 'baseUrl')}
+                onClick={() => handleCopy(baseUrl, 'baseUrl')}
                 title="复制"
               >
                 {copiedField === 'baseUrl' ? (
@@ -139,7 +160,11 @@ function ProxyDetails({ config, port }: { config: ToolProxyConfig | null; port: 
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">上游 API Key</span>
           <div className="flex items-center gap-2">
-            <code className="flex-1 px-2 py-1 bg-muted rounded text-xs font-mono truncate">
+            <code
+              className={`flex-1 px-2 py-1 bg-muted rounded text-xs font-mono truncate ${
+                !isApiKeyConfigured ? 'text-red-500' : ''
+              }`}
+            >
               {maskApiKey(apiKey)}
             </code>
             <span title="为了安全不支持复制">
@@ -176,8 +201,31 @@ export function ProxyControlBar({
   config,
   onStart,
   onStop,
+  onConfigUpdated,
+  onSaveSettings,
 }: ProxyControlBarProps) {
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+
+  // 检查上游配置是否缺失
+  const isUpstreamConfigMissing = isRunning && (!config?.real_base_url || !config?.real_api_key);
+
+  // 当前配置名称
+  const currentProfileName = config?.real_profile_name;
+  const isProfileConfigured = !!currentProfileName;
+
+  // 配置更新处理
+  const handleConfigUpdated = () => {
+    onConfigUpdated?.();
+  };
+
+  // 保存设置处理
+  const handleSaveSettings = async (updates: Partial<ToolProxyConfig>) => {
+    if (onSaveSettings) {
+      await onSaveSettings(updates);
+    }
+  };
 
   return (
     <div
@@ -196,13 +244,19 @@ export function ProxyControlBar({
               <Badge variant={isRunning ? 'default' : 'secondary'} className="text-xs">
                 {isRunning ? `运行中 (端口 ${port})` : '已停止'}
               </Badge>
+              <Badge
+                variant="outline"
+                className={`text-xs font-normal ${!isProfileConfigured ? 'text-red-500 border-red-300' : ''}`}
+              >
+                配置：{currentProfileName || '未知'}
+              </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
               {isRunning
                 ? `代理地址：http://127.0.0.1:${port}`
                 : isConfigured
                   ? '点击「启动代理」开始使用'
-                  : '请先在全局设置中配置透明代理'}
+                  : '请点击「代理设置」配置后启动'}
             </p>
           </div>
         </div>
@@ -231,6 +285,34 @@ export function ProxyControlBar({
               ) : (
                 <ChevronDown className="h-4 w-4" />
               )}
+            </Button>
+          )}
+
+          {/* 代理设置按钮 */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setSettingsDialogOpen(true)}
+            className="h-8"
+            title="代理设置"
+          >
+            <Settings2 className="h-3 w-3 mr-1" />
+            代理设置
+          </Button>
+
+          {/* 切换配置按钮（运行时显示） */}
+          {isRunning && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setConfigDialogOpen(true)}
+              className="h-8"
+              title="切换配置"
+            >
+              <Settings2 className="h-3 w-3 mr-1" />
+              切换配置
             </Button>
           )}
 
@@ -280,8 +362,44 @@ export function ProxyControlBar({
         </div>
       </div>
 
+      {/* 配置缺失警告（非折叠，始终显示） */}
+      {isUpstreamConfigMissing && (
+        <div className="mt-4 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-red-800 dark:text-red-300 space-y-1">
+              <p className="font-medium">透明代理配置缺失</p>
+              <p>
+                检测到透明代理功能已开启，但缺少真实的 API
+                配置。请先选择一个有效的配置文件，然后再启动透明代理。
+              </p>
+              <p className="text-red-600 dark:text-red-400">⚠️ 可能导致请求回环或连接问题</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 代理详情（可折叠） */}
       {isRunning && detailsExpanded && <ProxyDetails config={config} port={port} />}
+
+      {/* 配置切换弹窗 */}
+      <ProxyConfigDialog
+        open={configDialogOpen}
+        onOpenChange={setConfigDialogOpen}
+        toolId={tool.id as ToolId}
+        currentProfileName={config?.real_profile_name || null}
+        onConfigUpdated={handleConfigUpdated}
+      />
+
+      {/* 代理设置弹窗 */}
+      <ProxySettingsDialog
+        open={settingsDialogOpen}
+        onOpenChange={setSettingsDialogOpen}
+        toolId={tool.id as ToolId}
+        toolName={tool.name}
+        config={config}
+        onSave={handleSaveSettings}
+      />
     </div>
   );
 }
