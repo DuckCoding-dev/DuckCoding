@@ -118,12 +118,12 @@ impl ProxyInstance {
                             if let Err(err) =
                                 http1::Builder::new().serve_connection(io, service).await
                             {
-                                eprintln!("❌ {} 处理连接失败: {:?}", tool_id_for_error, err);
+                                eprintln!("❌ {tool_id_for_error} 处理连接失败: {err:?}");
                             }
                         });
                     }
                     Err(e) => {
-                        eprintln!("❌ {} 接受连接失败: {:?}", tool_id, e);
+                        eprintln!("❌ {tool_id} 接受连接失败: {e:?}");
                     }
                 }
             }
@@ -186,12 +186,11 @@ async fn handle_request(
     match handle_request_inner(req, config, processor, own_port, tool_id).await {
         Ok(res) => Ok(res),
         Err(e) => {
-            eprintln!("❌ {} 请求处理失败: {:?}", tool_id, e);
+            eprintln!("❌ {tool_id} 请求处理失败: {e:?}");
             Ok(Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(box_body(http_body_util::Full::new(Bytes::from(format!(
-                    "代理错误: {}",
-                    e
+                    "代理错误: {e}"
                 )))))
                 .unwrap())
         }
@@ -215,10 +214,9 @@ async fn handle_request_inner(
                 .body(box_body(http_body_util::Full::new(Bytes::from(format!(
                     r#"{{
   "error": "CONFIGURATION_MISSING",
-  "message": "{} 透明代理配置不完整",
+  "message": "{tool_id} 透明代理配置不完整",
   "details": "请先配置有效的 API Key 和 Base URL"
-}}"#,
-                    tool_id
+}}"#
                 )))))
                 .unwrap());
         }
@@ -300,10 +298,9 @@ async fn handle_request_inner(
                 .body(box_body(http_body_util::Full::new(Bytes::from(format!(
                     r#"{{
   "error": "PROXY_LOOP_DETECTED",
-  "message": "{} 透明代理配置错误导致回环",
+  "message": "{tool_id} 透明代理配置错误导致回环",
   "details": "请检查代理配置，确保 Base URL 不指向本地代理端口"
-}}"#,
-                    tool_id
+}}"#
                 )))))
                 .unwrap());
         }
@@ -350,7 +347,7 @@ async fn handle_request_inner(
     }
 
     if is_sse {
-        println!("📡 {} SSE 流式响应", tool_id);
+        println!("📡 {tool_id} SSE 流式响应");
         use futures_util::StreamExt;
 
         let stream = upstream_res.bytes_stream();

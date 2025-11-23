@@ -73,7 +73,7 @@ pub async fn auto_start_proxies(manager: &ProxyManager) {
             return;
         }
         Err(e) => {
-            eprintln!("❌ 读取配置失败: {}", e);
+            eprintln!("❌ 读取配置失败: {e}");
             return;
         }
     };
@@ -89,7 +89,7 @@ pub async fn auto_start_proxies(manager: &ProxyManager) {
 
         // 检查是否有保护密钥
         if tool_config.local_api_key.is_none() {
-            println!("⚠️ {} 未配置保护密钥，跳过自启动", tool_id);
+            println!("⚠️ {tool_id} 未配置保护密钥，跳过自启动");
             continue;
         }
 
@@ -100,21 +100,18 @@ pub async fn auto_start_proxies(manager: &ProxyManager) {
 
         match manager.start_proxy(tool_id, tool_config.clone()).await {
             Ok(_) => {
-                println!("✅ {} 代理已自动启动", tool_id);
+                println!("✅ {tool_id} 代理已自动启动");
                 started_count += 1;
             }
             Err(e) => {
-                eprintln!("❌ {} 代理自启动失败: {}", tool_id, e);
+                eprintln!("❌ {tool_id} 代理自启动失败: {e}");
                 failed_count += 1;
             }
         }
     }
 
     if started_count > 0 || failed_count > 0 {
-        println!(
-            "📊 自启动完成：成功 {} 个，失败 {} 个",
-            started_count, failed_count
-        );
+        println!("📊 自启动完成：成功 {started_count} 个，失败 {failed_count} 个");
     } else {
         println!("ℹ️ 没有配置自启动的代理");
     }

@@ -42,7 +42,7 @@ impl ProxyManager {
             let instances = self.instances.read().await;
             if let Some(instance) = instances.get(tool_id) {
                 if instance.is_running_async().await {
-                    anyhow::bail!("{} 代理已在运行", tool_id);
+                    anyhow::bail!("{tool_id} 代理已在运行");
                 }
             }
         }
@@ -66,7 +66,7 @@ impl ProxyManager {
         instance
             .start()
             .await
-            .context(format!("启动 {} 代理失败", tool_id))?;
+            .context(format!("启动 {tool_id} 代理失败"))?;
 
         // 存入 HashMap
         {
@@ -92,9 +92,9 @@ impl ProxyManager {
             instance
                 .stop()
                 .await
-                .context(format!("停止 {} 代理失败", tool_id))?;
+                .context(format!("停止 {tool_id} 代理失败"))?;
         } else {
-            println!("⚠️  {} 代理未运行或不存在", tool_id);
+            println!("⚠️  {tool_id} 代理未运行或不存在");
         }
 
         Ok(())
@@ -108,7 +108,7 @@ impl ProxyManager {
         for tool_id in tool_ids {
             if let Some(instance) = instances.remove(&tool_id) {
                 if let Err(e) = instance.stop().await {
-                    eprintln!("⚠️  停止 {} 代理失败: {}", tool_id, e);
+                    eprintln!("⚠️  停止 {tool_id} 代理失败: {e}");
                 }
             }
         }
@@ -155,9 +155,9 @@ impl ProxyManager {
             instance
                 .update_config(config)
                 .await
-                .context(format!("更新 {} 代理配置失败", tool_id))?;
+                .context(format!("更新 {tool_id} 代理配置失败"))?;
         } else {
-            anyhow::bail!("{} 代理未运行", tool_id);
+            anyhow::bail!("{tool_id} 代理未运行");
         }
 
         Ok(())

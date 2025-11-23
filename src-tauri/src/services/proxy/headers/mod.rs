@@ -106,7 +106,7 @@ pub fn create_request_processor(tool_id: &str) -> Box<dyn RequestProcessor> {
         "claude-code" => Box::new(ClaudeHeadersProcessor),
         "codex" => Box::new(CodexHeadersProcessor),
         "gemini-cli" => Box::new(GeminiHeadersProcessor),
-        _ => panic!("Unsupported tool: {}", tool_id),
+        _ => panic!("Unsupported tool: {tool_id}"),
     }
 }
 

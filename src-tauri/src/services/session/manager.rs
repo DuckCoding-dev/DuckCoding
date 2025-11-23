@@ -116,7 +116,7 @@ impl SessionManager {
     pub fn send_event(&self, event: SessionEvent) -> Result<()> {
         self.event_sender
             .send(event)
-            .map_err(|e| std::io::Error::other(format!("Failed to send event: {}", e)))?;
+            .map_err(|e| std::io::Error::other(format!("Failed to send event: {e}")))?;
         Ok(())
     }
 

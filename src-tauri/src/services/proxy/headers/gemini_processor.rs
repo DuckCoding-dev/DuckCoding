@@ -37,8 +37,8 @@ impl RequestProcessor for GeminiHeadersProcessor {
     ) -> Result<ProcessedRequest> {
         // 1. 构建目标 URL（标准拼接）
         let base = base_url.trim_end_matches('/');
-        let query_str = query.map(|q| format!("?{}", q)).unwrap_or_default();
-        let target_url = format!("{}{}{}", base, path, query_str);
+        let query_str = query.map(|q| format!("?{q}")).unwrap_or_default();
+        let target_url = format!("{base}{path}{query_str}");
 
         // 2. 处理 headers（复制非认证 headers）
         let mut headers = ReqwestHeaderMap::new();
@@ -61,7 +61,7 @@ impl RequestProcessor for GeminiHeadersProcessor {
             "x-goog-api-key",
             api_key
                 .parse()
-                .map_err(|e| anyhow::anyhow!("Invalid x-goog-api-key header: {}", e))?,
+                .map_err(|e| anyhow::anyhow!("Invalid x-goog-api-key header: {e}"))?,
         );
 
         // TODO: 根据需要添加其他 Google 特定的 headers
