@@ -1,36 +1,36 @@
 use crate::commands::types::{InstallResult, NodeEnvironment, ToolStatus, UpdateResult};
 use ::duckcoding::models::{InstallMethod, Tool};
-use ::duckcoding::services::{InstallerService, VersionService};
+use ::duckcoding::services::{InstallerService, ToolStatusCache, VersionService};
 use ::duckcoding::utils::config::apply_proxy_if_configured;
 use ::duckcoding::utils::platform::PlatformInfo;
 use std::process::Command;
+use std::sync::Arc;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-/// 检查所有工具的安装状态
+/// 工具状态缓存 State
+pub struct ToolStatusCacheState {
+    pub cache: Arc<ToolStatusCache>,
+}
+
+/// 检查所有工具的安装状态（使用缓存 + 并行检测）
 #[tauri::command]
-pub async fn check_installations() -> Result<Vec<ToolStatus>, String> {
-    let installer = InstallerService::new();
-    let mut result = Vec::new();
+pub async fn check_installations(
+    state: tauri::State<'_, ToolStatusCacheState>,
+) -> Result<Vec<ToolStatus>, String> {
+    Ok(state.cache.get_all_status().await)
+}
 
-    for tool in Tool::all() {
-        let installed = installer.is_installed(&tool).await;
-        let version = if installed {
-            installer.get_installed_version(&tool).await
-        } else {
-            None
-        };
-
-        result.push(ToolStatus {
-            id: tool.id.clone(),
-            name: tool.name.clone(),
-            installed,
-            version,
-        });
-    }
-
-    Ok(result)
+/// 刷新工具状态（清除缓存并重新检测）
+#[tauri::command]
+pub async fn refresh_tool_status(
+    state: tauri::State<'_, ToolStatusCacheState>,
+) -> Result<Vec<ToolStatus>, String> {
+    // 清除缓存
+    state.cache.clear().await;
+    // 重新检测
+    Ok(state.cache.get_all_status().await)
 }
 
 /// 检测 Node.js 和 npm 环境
@@ -92,6 +92,7 @@ pub async fn check_node_environment() -> Result<NodeEnvironment, String> {
 /// 安装指定工具
 #[tauri::command]
 pub async fn install_tool(
+    state: tauri::State<'_, ToolStatusCacheState>,
     tool: String,
     method: String,
     force: Option<bool>,
@@ -120,7 +121,10 @@ pub async fn install_tool(
 
     match installer.install(&tool_obj, &install_method, force).await {
         Ok(_) => {
-            // 安装成功，构造成功消息
+            // 安装成功，清除该工具的缓存
+            state.cache.clear_tool(&tool).await;
+
+            // 构造成功消息
             let message = match method.as_str() {
                 "npm" => format!("✅ {} 安装成功！(通过 npm)", tool_obj.name),
                 "brew" => format!("✅ {} 安装成功！(通过 Homebrew)", tool_obj.name),
@@ -212,7 +216,11 @@ pub async fn check_all_updates() -> Result<Vec<UpdateResult>, String> {
 
 /// 更新指定工具
 #[tauri::command]
-pub async fn update_tool(tool: String, force: Option<bool>) -> Result<UpdateResult, String> {
+pub async fn update_tool(
+    state: tauri::State<'_, ToolStatusCacheState>,
+    tool: String,
+    force: Option<bool>,
+) -> Result<UpdateResult, String> {
     // 应用代理配置（如果已配置）
     apply_proxy_if_configured();
 
@@ -234,7 +242,10 @@ pub async fn update_tool(tool: String, force: Option<bool>) -> Result<UpdateResu
 
     match update_result {
         Ok(Ok(_)) => {
-            // 更新成功，获取新版本
+            // 更新成功，清除该工具的缓存
+            state.cache.clear_tool(&tool).await;
+
+            // 获取新版本
             let new_version = installer.get_installed_version(&tool_obj).await;
 
             Ok(UpdateResult {

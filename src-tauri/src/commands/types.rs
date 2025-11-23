@@ -1,13 +1,7 @@
 // 命令层数据类型定义
 
-/// 工具状态
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
-pub struct ToolStatus {
-    pub id: String,
-    pub name: String,
-    pub installed: bool,
-    pub version: Option<String>,
-}
+// 重新导出 ToolStatus（定义在 models 层）
+pub use duckcoding::models::ToolStatus;
 
 /// Node 环境信息
 #[derive(serde::Serialize, serde::Deserialize)]
