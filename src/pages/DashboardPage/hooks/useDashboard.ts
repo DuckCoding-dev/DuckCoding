@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   checkAllUpdates,
+  checkUpdate,
   type ToolStatus,
   updateTool as updateToolCommand,
 } from '@/lib/tauri-commands';
@@ -9,6 +10,7 @@ export function useDashboard(initialTools: ToolStatus[]) {
   const [tools, setTools] = useState<ToolStatus[]>(initialTools);
   const [updating, setUpdating] = useState<string | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [checkingSingleTool, setCheckingSingleTool] = useState<string | null>(null);
   const [updateCheckMessage, setUpdateCheckMessage] = useState<{
     type: 'success' | 'error';
     text: string;
@@ -16,7 +18,7 @@ export function useDashboard(initialTools: ToolStatus[]) {
 
   const updateMessageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 检查更新
+  // 检查所有工具更新（顶部按钮）
   const checkForUpdates = async () => {
     try {
       setCheckingUpdates(true);
@@ -72,6 +74,36 @@ export function useDashboard(initialTools: ToolStatus[]) {
       }, 5000);
     } finally {
       setCheckingUpdates(false);
+    }
+  };
+
+  // 检查单个工具更新（工具卡片按钮）
+  const checkSingleToolUpdate = async (toolId: string) => {
+    try {
+      setCheckingSingleTool(toolId);
+
+      const updateInfo = await checkUpdate(toolId);
+
+      if (updateInfo.success) {
+        setTools((prevTools) =>
+          prevTools.map((tool) => {
+            if (tool.id === toolId && tool.installed) {
+              return {
+                ...tool,
+                hasUpdate: updateInfo.has_update,
+                latestVersion: updateInfo.latest_version || null,
+                mirrorVersion: updateInfo.mirror_version || null,
+                mirrorIsStale: updateInfo.mirror_is_stale || false,
+              };
+            }
+            return tool;
+          }),
+        );
+      }
+    } catch (error) {
+      console.error('Failed to check update for ' + toolId, error);
+    } finally {
+      setCheckingSingleTool(null);
     }
   };
 
@@ -156,8 +188,10 @@ export function useDashboard(initialTools: ToolStatus[]) {
     tools,
     updating,
     checkingUpdates,
+    checkingSingleTool,
     updateCheckMessage,
     checkForUpdates,
+    checkSingleToolUpdate,
     handleUpdate,
     updateTools,
   };

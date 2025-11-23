@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { RefreshCw, Loader2, Package } from 'lucide-react';
+import { RefreshCw, Loader2, Package, Search } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { DashboardToolCard } from './components/DashboardToolCard';
 import { UpdateCheckBanner } from './components/UpdateCheckBanner';
 import { useDashboard } from './hooks/useDashboard';
 import { getToolDisplayName } from '@/utils/constants';
 import { useToast } from '@/hooks/use-toast';
-import type { ToolStatus } from '@/lib/tauri-commands';
+import { refreshToolStatus, type ToolStatus } from '@/lib/tauri-commands';
 
 interface DashboardPageProps {
   tools: ToolStatus[];
@@ -18,14 +18,17 @@ interface DashboardPageProps {
 export function DashboardPage({ tools: toolsProp, loading: loadingProp }: DashboardPageProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(loadingProp);
+  const [refreshing, setRefreshing] = useState(false);
 
   // 使用仪表板 Hook
   const {
     tools,
     updating,
     checkingUpdates,
+    checkingSingleTool,
     updateCheckMessage,
     checkForUpdates,
+    checkSingleToolUpdate,
     handleUpdate,
     updateTools,
   } = useDashboard(toolsProp);
@@ -39,6 +42,27 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
   // 通知父组件刷新工具列表
   const refreshTools = () => {
     window.dispatchEvent(new CustomEvent('refresh-tools'));
+  };
+
+  // 手动刷新工具状态（清除缓存重新检测）
+  const handleRefreshToolStatus = async () => {
+    setRefreshing(true);
+    try {
+      const newTools = await refreshToolStatus();
+      updateTools(newTools);
+      toast({
+        title: '检测完成',
+        description: '工具安装状态已更新',
+      });
+    } catch (error) {
+      toast({
+        title: '检测失败',
+        description: String(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   // 更新工具处理
@@ -60,6 +84,8 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
         title: '更新成功',
         description: `${getToolDisplayName(toolId)} ${result.message}`,
       });
+      // 更新成功后自动检测工具状态，显示「最新版」标识
+      await checkSingleToolUpdate(toolId);
     } else {
       toast({
         title: '更新失败',
@@ -119,8 +145,27 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
             </Card>
           ) : (
             <>
-              {/* 检查更新按钮 */}
-              <div className="flex justify-end mb-4">
+              {/* 操作按钮 */}
+              <div className="flex justify-end gap-2 mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshToolStatus}
+                  disabled={refreshing}
+                  className="shadow-sm hover:shadow-md transition-all"
+                >
+                  {refreshing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      检测中...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="mr-2 h-4 w-4" />
+                      检测工具状态
+                    </>
+                  )}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -149,9 +194,10 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
                     key={tool.id}
                     tool={tool}
                     updating={updating === tool.id}
-                    checkingUpdates={checkingUpdates}
+                    checking={checkingSingleTool === tool.id}
+                    checkingAll={checkingUpdates}
                     onUpdate={() => onUpdate(tool.id)}
-                    onCheckUpdates={checkForUpdates}
+                    onCheckUpdates={() => checkSingleToolUpdate(tool.id)}
                     onConfigure={() => switchToConfig(tool.id)}
                   />
                 ))}

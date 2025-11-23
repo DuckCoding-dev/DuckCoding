@@ -9,7 +9,8 @@ import type { ToolStatus } from '@/lib/tauri-commands';
 interface DashboardToolCardProps {
   tool: ToolStatus;
   updating: boolean;
-  checkingUpdates: boolean;
+  checking: boolean; // 当前工具是否正在检测更新
+  checkingAll: boolean; // 全局检测更新状态
   onUpdate: () => void;
   onCheckUpdates: () => void;
   onConfigure: () => void;
@@ -18,11 +19,17 @@ interface DashboardToolCardProps {
 export function DashboardToolCard({
   tool,
   updating,
-  checkingUpdates,
+  checking,
+  checkingAll,
   onUpdate,
   onCheckUpdates,
   onConfigure,
 }: DashboardToolCardProps) {
+  // 是否正在检测更新（全局或单工具）
+  const isChecking = checking || checkingAll;
+  // 已检测完成且是最新版（确保只在检测更新后才显示）
+  const isLatest = tool.hasUpdate === false && Boolean(tool.latestVersion);
+
   return (
     <Card className="shadow-sm border">
       <CardContent className="p-5">
@@ -47,6 +54,15 @@ export function DashboardToolCard({
                     有更新
                   </Badge>
                 )}
+                {isLatest && (
+                  <Badge
+                    variant="secondary"
+                    className="gap-1 bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                  >
+                    <CheckCircle2 className="h-3 w-3" />
+                    最新版
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {descriptionMap[tool.id]}
@@ -61,6 +77,16 @@ export function DashboardToolCard({
                   </span>
                 </div>
                 {tool.hasUpdate && tool.latestVersion && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                      最新版本:
+                    </span>
+                    <span className="font-mono text-xs font-semibold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 px-2.5 py-1 rounded-lg shadow-sm">
+                      {formatVersionLabel(tool.latestVersion)}
+                    </span>
+                  </div>
+                )}
+                {isLatest && tool.latestVersion && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
                       最新版本:
@@ -104,11 +130,20 @@ export function DashboardToolCard({
                 variant="outline"
                 size="sm"
                 onClick={onCheckUpdates}
-                disabled={checkingUpdates}
+                disabled={isChecking}
                 className="w-32"
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                检查更新
+                {isChecking ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    检查中...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    检查更新
+                  </>
+                )}
               </Button>
             )}
           </div>
