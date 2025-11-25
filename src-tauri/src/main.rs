@@ -131,10 +131,17 @@ fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
 
 fn main() {
     // 🆕 初始化日志系统（必须在最前面）
-    use duckcoding::core::{init_logger, LogConfig};
+    use duckcoding::core::init_logger;
+    use duckcoding::utils::config::read_global_config;
 
-    let log_config = LogConfig::default();
-    if let Err(e) = init_logger(log_config) {
+    // 从配置文件读取日志配置，失败则使用默认配置
+    let log_config = read_global_config()
+        .ok()
+        .flatten()
+        .map(|cfg| cfg.log_config)
+        .unwrap_or_default();
+
+    if let Err(e) = init_logger(&log_config) {
         // 日志系统初始化失败时使用 eprintln!（因为 tracing 还不可用）
         eprintln!("WARNING: Failed to initialize logging system: {}", e);
         // 继续运行，但日志功能将不可用
@@ -394,6 +401,10 @@ fn main() {
             get_platform_info,
             get_recommended_package_format,
             trigger_check_update,
+            // 日志管理命令
+            get_log_config,
+            update_log_config,
+            is_release_build,
         ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件

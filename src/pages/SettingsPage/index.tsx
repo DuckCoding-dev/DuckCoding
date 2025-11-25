@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
+import { LogSettingsTab } from './components/LogSettingsTab';
 import { TransparentProxyMigrationNotice } from './components/TransparentProxyMigrationNotice';
 import { AboutTab } from './components/AboutTab';
 import type { GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
@@ -119,6 +120,7 @@ export function SettingsPage({
         <TabsList>
           <TabsTrigger value="basic">基本设置</TabsTrigger>
           <TabsTrigger value="proxy">代理设置</TabsTrigger>
+          <TabsTrigger value="log">日志配置</TabsTrigger>
           <TabsTrigger value="experimental">透明代理</TabsTrigger>
           <TabsTrigger value="about">关于</TabsTrigger>
         </TabsList>
@@ -155,6 +157,11 @@ export function SettingsPage({
             proxyBypassUrls={proxyBypassUrls}
             setProxyBypassUrls={setProxyBypassUrls}
           />
+        </TabsContent>
+
+        {/* 日志配置 */}
+        <TabsContent value="log" className="space-y-6">
+          <LogSettingsTab />
         </TabsContent>
 
         {/* 透明代理 (迁移提示) */}

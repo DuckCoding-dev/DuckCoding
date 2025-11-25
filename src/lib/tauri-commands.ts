@@ -60,6 +60,19 @@ export interface GlobalConfig {
   hide_transparent_proxy_tip?: boolean;
   // 是否隐藏会话级端点配置提示（默认显示）
   hide_session_config_hint?: boolean;
+  // 日志系统配置
+  log_config?: LogConfig;
+}
+
+export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
+export type LogFormat = 'json' | 'text';
+export type LogOutput = 'console' | 'file' | 'both';
+
+export interface LogConfig {
+  level: LogLevel;
+  format: LogFormat;
+  output: LogOutput;
+  file_path: string | null;
 }
 
 export interface GenerateApiKeyResult {
@@ -564,4 +577,29 @@ export async function updateSessionNote(sessionId: string, note: string | null):
     sessionId,
     note,
   });
+}
+
+// ==================== 日志配置管理 ====================
+
+/**
+ * 检测当前是否为 Release 构建
+ */
+export async function isReleaseBuild(): Promise<boolean> {
+  return await invoke<boolean>('is_release_build');
+}
+
+/**
+ * 获取当前日志配置
+ */
+export async function getLogConfig(): Promise<LogConfig> {
+  return await invoke<LogConfig>('get_log_config');
+}
+
+/**
+ * 更新日志配置
+ * @param newConfig - 新的日志配置
+ * @returns 提示消息，包含是否需要重启的信息
+ */
+export async function updateLogConfig(newConfig: LogConfig): Promise<string> {
+  return await invoke<string>('update_log_config', { newConfig });
 }

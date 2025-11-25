@@ -37,9 +37,10 @@ pub use models::update::PlatformInfo as UpdatePlatformInfo;
 pub use anyhow::{Context, Result};
 
 // 🆕 导出核心模块
+#[allow(deprecated)]
 pub use core::{
-    init_logger, set_log_level, AppError, AppResult, ErrorContext, LogConfig, LogContext, LogLevel,
-    Timer,
+    init_logger, set_log_level, update_log_level, AppError, AppResult, ErrorContext, LogConfig,
+    LogContext, LogFormat, LogLevel, LogOutput, Timer,
 };
 
 // 🆕 导出 UI 管理层

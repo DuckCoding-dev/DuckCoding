@@ -4,6 +4,79 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// 日志级别
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl Default for LogLevel {
+    fn default() -> Self {
+        if cfg!(debug_assertions) {
+            LogLevel::Debug
+        } else {
+            LogLevel::Info
+        }
+    }
+}
+
+impl LogLevel {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LogLevel::Trace => "trace",
+            LogLevel::Debug => "debug",
+            LogLevel::Info => "info",
+            LogLevel::Warn => "warn",
+            LogLevel::Error => "error",
+        }
+    }
+}
+
+/// 日志输出格式
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LogFormat {
+    Json,
+    #[default]
+    Text,
+}
+
+/// 日志输出目标
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LogOutput {
+    Console,
+    File,
+    #[default]
+    Both,
+}
+
+/// 日志系统配置
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LogConfig {
+    #[serde(default)]
+    pub level: LogLevel,
+    #[serde(default)]
+    pub format: LogFormat,
+    #[serde(default)]
+    pub output: LogOutput,
+    #[serde(default)]
+    pub file_path: Option<String>,
+}
+
+impl LogConfig {
+    /// 检查新配置是否可以热重载（无需重启应用）
+    /// 只有日志级别变更可以热重载，其他配置需要重启
+    pub fn can_hot_reload(&self, other: &LogConfig) -> bool {
+        self.format == other.format && self.output == other.output && self.file_path == other.file_path
+    }
+}
+
 /// 单个工具的透明代理配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolProxyConfig {
@@ -84,6 +157,9 @@ pub struct GlobalConfig {
     // 是否隐藏会话级端点配置提示（默认显示）
     #[serde(default)]
     pub hide_session_config_hint: bool,
+    // 日志系统配置
+    #[serde(default)]
+    pub log_config: LogConfig,
 }
 
 fn default_transparent_proxy_port() -> u16 {
