@@ -361,6 +361,7 @@ fn main() {
             generate_api_key_for_tool,
             get_usage_stats,
             get_user_quota,
+            fetch_api,
             handle_close_action,
             // expose current proxy for debugging/testing
             get_current_proxy,

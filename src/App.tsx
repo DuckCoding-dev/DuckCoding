@@ -4,6 +4,7 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { CloseActionDialog } from '@/components/dialogs/CloseActionDialog';
 import { UpdateDialog } from '@/components/dialogs/UpdateDialog';
 import { StatisticsPage } from '@/pages/StatisticsPage';
+import { BalancePage } from '@/pages/BalancePage';
 import { InstallationPage } from '@/pages/InstallationPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ConfigurationPage } from '@/pages/ConfigurationPage';
@@ -34,6 +35,7 @@ type TabType =
   | 'config'
   | 'switch'
   | 'statistics'
+  | 'balance'
   | 'transparent-proxy'
   | 'settings';
 
@@ -285,6 +287,7 @@ function App() {
             onLoadStatistics={loadStatistics}
           />
         )}
+        {activeTab === 'balance' && <BalancePage />}
         {activeTab === 'transparent-proxy' && (
           <TransparentProxyPage selectedToolId={selectedProxyToolId} />
         )}

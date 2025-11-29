@@ -6,6 +6,7 @@ import {
   Key,
   ArrowRightLeft,
   BarChart3,
+  Wallet,
   Radio,
   Settings as SettingsIcon,
 } from 'lucide-react';
@@ -75,6 +76,15 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
         >
           <BarChart3 className="mr-2 h-4 w-4" />
           用量统计
+        </Button>
+
+        <Button
+          variant={activeTab === 'balance' ? 'default' : 'ghost'}
+          className="w-full justify-start transition-all hover:scale-105"
+          onClick={() => onTabChange('balance')}
+        >
+          <Wallet className="mr-2 h-4 w-4" />
+          余额查询
         </Button>
 
         <Button

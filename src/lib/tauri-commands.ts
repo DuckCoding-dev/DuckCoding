@@ -301,6 +301,20 @@ export async function getUserQuota(): Promise<UserQuotaResult> {
   return await invoke<UserQuotaResult>('get_user_quota');
 }
 
+export async function fetchApi(
+  endpoint: string,
+  method: string,
+  headers: Record<string, string>,
+  timeoutMs?: number,
+): Promise<unknown> {
+  return await invoke('fetch_api', {
+    endpoint,
+    method,
+    headers,
+    timeout_ms: timeoutMs,
+  });
+}
+
 export async function applyCloseAction(action: CloseAction): Promise<void> {
   return await invoke<void>('handle_close_action', { action });
 }

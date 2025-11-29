@@ -61,7 +61,7 @@ last-updated: 2025-11-23
 - Linux 装 `libwebkit2gtk-4.1-dev`、`libjavascriptcoregtk-4.1-dev`、`patchelf` 等 Tauri v2 依赖；Windows 确保 WebView2 Runtime（先查注册表，winget 安装失败则回退微软官方静默安装包）；Node 20.19.0，Rust stable（含 clippy / rustfmt），启用 npm 与 cargo 缓存。
 - CI 未通过不得合并；缺少 dist 时会在 `npm run check` 内自动触发 `npm run build` 以满足 Clippy 输入。
 
-## 架构记忆（2025-11-21）
+## 架构记忆（2025-11-29）
 
 - `src-tauri/src/main.rs` 仅保留应用启动与托盘事件注册，所有 Tauri Commands 拆分到 `src-tauri/src/commands/*`，服务实现位于 `services/*`，核心设施放在 `core/*`（HTTP、日志、错误）。
 - **透明代理已重构为多工具架构**：
@@ -82,6 +82,14 @@ last-updated: 2025-11-23
 - 工具安装状态由 `services::tool::ToolStatusCache` 并行检测与缓存，`check_installations`/`refresh_tool_status` 命令复用该缓存；安装/更新成功后或手动刷新会清空命中的工具缓存。
 - UI 相关的托盘/窗口操作集中在 `src-tauri/src/ui/*`，其它模块如需最小化到托盘请调用 `ui::hide_window_to_tray` 等封装方法。
 - 新增 `TransparentProxyPage` 与会话数据库：`SESSION_MANAGER` 使用 SQLite 记录每个代理会话的 endpoint/API Key，前端可按工具启停代理、查看历史并启用「会话级 Endpoint 配置」开关。页面内的 `ProxyControlBar`、`ProxySettingsDialog`、`ProxyConfigDialog` 负责代理启停、配置切换、工具级设置并内建缺失配置提示。
+- **余额监控页面（BalancePage）**：
+  - 后端提供通用 `fetch_api` 命令（位于 `commands/api_commands.rs`），支持 GET/POST、自定义 headers、超时控制
+  - 前端使用 JavaScript `Function` 构造器执行用户自定义的 extractor 脚本（位于 `utils/extractor.ts`）
+  - 配置存储在 localStorage，API Key 仅保存在内存（`useApiKeys` hook）
+  - 支持预设模板（NewAPI、OpenAI、自定义），模板定义在 `templates/index.ts`
+  - `useBalanceMonitor` hook 负责自动刷新逻辑，支持配置级别的刷新间隔
+  - 配置表单（`ConfigFormDialog`）支持模板选择、代码编辑、静态 headers（JSON 格式）
+  - 卡片视图（`ConfigCard`）展示余额信息、使用比例、到期时间、错误提示
 
 ### 透明代理扩展指南
 
