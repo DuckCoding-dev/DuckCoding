@@ -69,6 +69,18 @@ pub struct LogConfig {
     pub file_path: Option<String>,
 }
 
+/// 新用户引导状态
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OnboardingStatus {
+    /// 已完成的引导版本（例如："v1", "v2"）
+    pub completed_version: String,
+    /// 跳过的步骤 ID 列表
+    #[serde(default)]
+    pub skipped_steps: Vec<String>,
+    /// 完成时间戳（ISO 8601 格式）
+    pub completed_at: Option<String>,
+}
+
 impl LogConfig {
     /// 检查新配置是否可以热重载（无需重启应用）
     /// 只有日志级别变更可以热重载，其他配置需要重启
@@ -162,6 +174,9 @@ pub struct GlobalConfig {
     // 日志系统配置
     #[serde(default)]
     pub log_config: LogConfig,
+    // 新用户引导状态
+    #[serde(default)]
+    pub onboarding_status: Option<OnboardingStatus>,
 }
 
 fn default_transparent_proxy_port() -> u16 {

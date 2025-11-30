@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { CloseActionDialog } from '@/components/dialogs/CloseActionDialog';
 import { UpdateDialog } from '@/components/dialogs/UpdateDialog';
@@ -11,10 +12,19 @@ import { ConfigurationPage } from '@/pages/ConfigurationPage';
 import { ProfileSwitchPage } from '@/pages/ProfileSwitchPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TransparentProxyPage } from '@/pages/TransparentProxyPage';
+import { ToolManagementPage } from '@/pages/ToolManagementPage';
+import { HelpPage } from '@/pages/HelpPage';
 import { useToast } from '@/hooks/use-toast';
 import { useAppEvents } from '@/hooks/useAppEvents';
 import { useCloseAction } from '@/hooks/useCloseAction';
 import { Toaster } from '@/components/ui/toaster';
+import OnboardingOverlay from '@/components/Onboarding/OnboardingOverlay';
+import {
+  getRequiredSteps,
+  getAllSteps,
+  CURRENT_ONBOARDING_VERSION,
+} from '@/components/Onboarding/config/versions';
+import type { OnboardingStatus, OnboardingStep } from '@/types/onboarding';
 import {
   checkInstallations,
   checkForAppUpdates,
@@ -31,18 +41,28 @@ import {
 
 type TabType =
   | 'dashboard'
+  | 'tool-management'
   | 'install'
   | 'config'
   | 'switch'
   | 'statistics'
   | 'balance'
   | 'transparent-proxy'
-  | 'settings';
+  | 'settings'
+  | 'help';
 
 function App() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [selectedProxyToolId, setSelectedProxyToolId] = useState<string | undefined>(undefined);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<string>('basic');
+  const [settingsRestrictToTab, setSettingsRestrictToTab] = useState<string | undefined>(undefined);
+
+  // 引导状态管理
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStep[]>([]);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [canExitOnboarding, setCanExitOnboarding] = useState(false);
 
   // 全局工具状态缓存
   const [tools, setTools] = useState<ToolStatus[]>([]);
@@ -154,6 +174,64 @@ function App() {
     loadGlobalConfig();
   }, [loadTools, loadGlobalConfig]);
 
+  // 检查是否需要显示引导
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      try {
+        const status = await invoke<OnboardingStatus | null>('get_onboarding_status');
+        const currentVersion = CURRENT_ONBOARDING_VERSION;
+
+        // 判断是否需要显示引导
+        if (!status || !status.completed_version) {
+          // 首次使用：显示完整引导
+          const steps = getRequiredSteps(null);
+          setOnboardingSteps(steps);
+          setShowOnboarding(steps.length > 0);
+        } else if (status.completed_version < currentVersion) {
+          // 版本升级：显示新增内容
+          const steps = getRequiredSteps(status.completed_version);
+          setOnboardingSteps(steps);
+          setShowOnboarding(steps.length > 0);
+        }
+        // else: 已是最新版本，无需引导
+      } catch (error) {
+        console.error('检查引导状态失败:', error);
+      } finally {
+        setOnboardingChecked(true);
+      }
+    };
+
+    checkOnboardingStatus();
+  }, []);
+
+  // 完成引导的处理函数
+  const handleOnboardingComplete = useCallback(() => {
+    setShowOnboarding(false);
+    toast({
+      title: '欢迎使用 DuckCoding',
+      description: '您已完成初始配置，现在可以开始使用了',
+    });
+  }, [toast]);
+
+  // 显示引导（帮助页面调用）
+  const handleShowOnboarding = useCallback(() => {
+    // 无论用户是否完成引导，都显示完整的引导步骤
+    const steps = getAllSteps();
+    setOnboardingSteps(steps);
+    setCanExitOnboarding(true); // 主动查看，允许退出
+    setShowOnboarding(true);
+  }, []);
+
+  // 退出引导（用户主动退出）
+  const handleExitOnboarding = useCallback(() => {
+    setShowOnboarding(false);
+    setCanExitOnboarding(false);
+    toast({
+      title: '已退出引导',
+      description: '您可以随时从帮助页面重新查看引导',
+    });
+  }, [toast]);
+
   // 应用启动时检查更新（延迟1秒，避免影响启动速度）
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -195,10 +273,23 @@ function App() {
       });
     });
 
+    // 监听打开设置事件（用于引导流程）
+    const unlistenOpenSettings = listen<{ tab?: string; restrictToTab?: boolean }>(
+      'open-settings',
+      (event) => {
+        const tab = event.payload?.tab || 'basic';
+        const restrictToTab = event.payload?.restrictToTab || false;
+        setSettingsInitialTab(tab);
+        setSettingsRestrictToTab(restrictToTab ? tab : undefined);
+        setActiveTab('settings');
+      },
+    );
+
     return () => {
       unlistenUpdateAvailable.then((fn) => fn());
       unlistenRequestCheck.then((fn) => fn());
       unlistenNotFound.then((fn) => fn());
+      unlistenOpenSettings.then((fn) => fn());
     };
   }, [toast]);
 
@@ -266,73 +357,96 @@ function App() {
   });
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      {/* 侧边栏 */}
-      <AppSidebar activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as TabType)} />
+    <>
+      {/* 引导遮罩层（如果需要显示） */}
+      {showOnboarding && onboardingChecked && onboardingSteps.length > 0 && (
+        <OnboardingOverlay
+          steps={onboardingSteps}
+          onComplete={handleOnboardingComplete}
+          canExit={canExitOnboarding}
+          onExit={handleExitOnboarding}
+        />
+      )}
 
-      {/* 主内容区域 */}
-      <main className="flex-1 overflow-auto">
-        {activeTab === 'dashboard' && <DashboardPage tools={tools} loading={toolsLoading} />}
-        {activeTab === 'install' && <InstallationPage tools={tools} loading={toolsLoading} />}
-        {activeTab === 'config' && <ConfigurationPage tools={tools} loading={toolsLoading} />}
-        {activeTab === 'switch' && <ProfileSwitchPage tools={tools} loading={toolsLoading} />}
-        {activeTab === 'statistics' && (
-          <StatisticsPage
-            globalConfig={globalConfig}
-            usageStats={usageStats}
-            userQuota={userQuota}
-            statsLoading={statsLoading}
-            statsLoadFailed={statsLoadFailed}
-            statsError={statsError}
-            onLoadStatistics={loadStatistics}
-          />
-        )}
-        {activeTab === 'balance' && <BalancePage />}
-        {activeTab === 'transparent-proxy' && (
-          <TransparentProxyPage selectedToolId={selectedProxyToolId} />
-        )}
-        {activeTab === 'settings' && (
-          <SettingsPage
-            globalConfig={globalConfig}
-            configLoading={configLoading}
-            onConfigChange={loadGlobalConfig}
-            updateInfo={updateInfo}
-            onUpdateCheck={() => {
-              // 清空旧的更新信息，打开弹窗，触发重新检查
-              setUpdateInfo(null);
-              setIsUpdateDialogOpen(true);
-            }}
-          />
-        )}
-      </main>
+      {/* 主应用界面 */}
+      <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+        {/* 侧边栏 */}
+        <AppSidebar
+          activeTab={activeTab}
+          onTabChange={(tab) => setActiveTab(tab as TabType)}
+          restrictNavigation={!!settingsRestrictToTab}
+        />
 
-      {/* 更新对话框 */}
-      <UpdateDialog
-        open={isUpdateDialogOpen}
-        onOpenChange={setIsUpdateDialogOpen}
-        updateInfo={updateInfo}
-        onCheckForUpdate={() => {
-          // 清空旧信息，触发重新检查
-          setUpdateInfo(null);
-          checkAppUpdates(true);
-        }}
-      />
+        {/* 主内容区域 */}
+        <main className="flex-1 overflow-auto">
+          {activeTab === 'dashboard' && <DashboardPage tools={tools} loading={toolsLoading} />}
+          {activeTab === 'tool-management' && (
+            <ToolManagementPage tools={tools} loading={toolsLoading} />
+          )}
+          {activeTab === 'install' && <InstallationPage tools={tools} loading={toolsLoading} />}
+          {activeTab === 'config' && <ConfigurationPage tools={tools} loading={toolsLoading} />}
+          {activeTab === 'switch' && <ProfileSwitchPage tools={tools} loading={toolsLoading} />}
+          {activeTab === 'statistics' && (
+            <StatisticsPage
+              globalConfig={globalConfig}
+              usageStats={usageStats}
+              userQuota={userQuota}
+              statsLoading={statsLoading}
+              statsLoadFailed={statsLoadFailed}
+              statsError={statsError}
+              onLoadStatistics={loadStatistics}
+            />
+          )}
+          {activeTab === 'balance' && <BalancePage />}
+          {activeTab === 'transparent-proxy' && (
+            <TransparentProxyPage selectedToolId={selectedProxyToolId} />
+          )}
+          {activeTab === 'settings' && (
+            <SettingsPage
+              globalConfig={globalConfig}
+              configLoading={configLoading}
+              onConfigChange={loadGlobalConfig}
+              updateInfo={updateInfo}
+              initialTab={settingsInitialTab}
+              restrictToTab={settingsRestrictToTab}
+              onUpdateCheck={() => {
+                // 清空旧的更新信息，打开弹窗，触发重新检查
+                setUpdateInfo(null);
+                setIsUpdateDialogOpen(true);
+              }}
+            />
+          )}
+          {activeTab === 'help' && <HelpPage onShowOnboarding={handleShowOnboarding} />}
+        </main>
 
-      {/* 关闭动作选择对话框 */}
-      <CloseActionDialog
-        open={closeDialogOpen}
-        closeActionLoading={closeActionLoading}
-        rememberCloseChoice={rememberCloseChoice}
-        onClose={closeDialog}
-        onRememberChange={setRememberCloseChoice}
-        onExecuteAction={(action: CloseAction, remember: boolean) =>
-          executeCloseAction(action, remember, false)
-        }
-      />
+        {/* 更新对话框 */}
+        <UpdateDialog
+          open={isUpdateDialogOpen}
+          onOpenChange={setIsUpdateDialogOpen}
+          updateInfo={updateInfo}
+          onCheckForUpdate={() => {
+            // 清空旧信息，触发重新检查
+            setUpdateInfo(null);
+            checkAppUpdates(true);
+          }}
+        />
 
-      {/* Toast 通知 */}
-      <Toaster />
-    </div>
+        {/* 关闭动作选择对话框 */}
+        <CloseActionDialog
+          open={closeDialogOpen}
+          closeActionLoading={closeActionLoading}
+          rememberCloseChoice={rememberCloseChoice}
+          onClose={closeDialog}
+          onRememberChange={setRememberCloseChoice}
+          onExecuteAction={(action: CloseAction, remember: boolean) =>
+            executeCloseAction(action, remember, false)
+          }
+        />
+
+        {/* Toast 通知 */}
+        <Toaster />
+      </div>
+    </>
   );
 }
 

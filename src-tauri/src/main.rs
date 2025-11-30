@@ -176,11 +176,22 @@ fn main() {
         cache: tool_status_cache,
     };
 
+    // 创建工具注册表（工具管理系统）
+    let tool_registry = tauri::async_runtime::block_on(async {
+        duckcoding::ToolRegistry::new()
+            .await
+            .expect("无法创建工具注册表")
+    });
+    let tool_registry_state = ToolRegistryState {
+        registry: Arc::new(TokioMutex::new(tool_registry)),
+    };
+
     let builder = tauri::Builder::default()
         .manage(transparent_proxy_state)
         .manage(proxy_manager_state)
         .manage(update_service_state)
         .manage(tool_status_cache_state)
+        .manage(tool_registry_state)
         .setup(|app| {
             // 尝试在应用启动时加载全局配置并应用代理设置,确保子进程继承代理 env
             apply_proxy_if_configured();
@@ -406,6 +417,20 @@ fn main() {
             get_log_config,
             update_log_config,
             is_release_build,
+            // 工具管理命令（工具管理系统）
+            get_tool_instances,
+            refresh_tool_instances,
+            list_wsl_distributions,
+            add_wsl_tool_instance,
+            add_ssh_tool_instance,
+            delete_tool_instance,
+            has_tools_in_database,
+            detect_and_save_tools,
+            // 引导管理命令
+            get_onboarding_status,
+            save_onboarding_progress,
+            complete_onboarding,
+            reset_onboarding,
         ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件

@@ -18,6 +18,8 @@ interface SettingsPageProps {
   onConfigChange: () => void;
   updateInfo?: UpdateInfo | null;
   onUpdateCheck?: () => void;
+  initialTab?: string;
+  restrictToTab?: string; // 限制只能访问特定 tab
 }
 
 export function SettingsPage({
@@ -25,9 +27,24 @@ export function SettingsPage({
   onConfigChange,
   updateInfo: _updateInfo,
   onUpdateCheck,
+  initialTab = 'basic',
+  restrictToTab,
 }: SettingsPageProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('basic');
+  const [activeTab, setActiveTab] = useState(initialTab);
+
+  // 如果有 restrictToTab，阻止切换到其他 tab
+  const handleTabChange = (value: string) => {
+    if (restrictToTab && value !== restrictToTab) {
+      toast({
+        title: '请先完成当前配置',
+        description: '完成引导配置后即可访问其他设置',
+        variant: 'default',
+      });
+      return;
+    }
+    setActiveTab(value);
+  };
 
   // 使用自定义 Hooks
   const {
@@ -111,18 +128,59 @@ export function SettingsPage({
 
   return (
     <PageContainer>
+      {/* 引导模式提示 */}
+      {restrictToTab && (
+        <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-5 w-5 text-primary"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-primary mb-1">引导模式</h3>
+              <p className="text-sm text-muted-foreground">
+                您正在配置引导流程中的代理设置。完成配置后，请点击右下角的「继续引导」按钮返回引导流程。
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <h2 className="text-2xl font-semibold mb-1">全局设置</h2>
         <p className="text-sm text-muted-foreground">配置 DuckCoding 的全局参数和功能</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
-          <TabsTrigger value="basic">基本设置</TabsTrigger>
-          <TabsTrigger value="proxy">代理设置</TabsTrigger>
-          <TabsTrigger value="log">日志配置</TabsTrigger>
-          <TabsTrigger value="experimental">透明代理</TabsTrigger>
-          <TabsTrigger value="about">关于</TabsTrigger>
+          <TabsTrigger value="basic" disabled={restrictToTab && restrictToTab !== 'basic'}>
+            基本设置
+          </TabsTrigger>
+          <TabsTrigger value="proxy" disabled={restrictToTab && restrictToTab !== 'proxy'}>
+            代理设置
+          </TabsTrigger>
+          <TabsTrigger value="log" disabled={restrictToTab && restrictToTab !== 'log'}>
+            日志配置
+          </TabsTrigger>
+          <TabsTrigger
+            value="experimental"
+            disabled={restrictToTab && restrictToTab !== 'experimental'}
+          >
+            透明代理
+          </TabsTrigger>
+          <TabsTrigger value="about" disabled={restrictToTab && restrictToTab !== 'about'}>
+            关于
+          </TabsTrigger>
         </TabsList>
 
         {/* 基本设置 */}
