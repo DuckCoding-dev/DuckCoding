@@ -16,6 +16,11 @@ pub mod update;
 // 重新导出服务
 pub use config::*;
 pub use proxy::*;
-pub use session::*;
-pub use tool::*;
+// session 模块：明确导出避免 db 名称冲突
+pub use session::{manager::SESSION_MANAGER, models::*};
+// tool 模块：导出主要服务类和子模块
+pub use tool::{
+    cache::ToolStatusCache, db::ToolInstanceDB, downloader, downloader::FileDownloader, installer,
+    installer::InstallerService, registry::ToolRegistry, version, version::VersionService,
+};
 pub use update::*;

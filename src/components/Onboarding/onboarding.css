@@ -1,0 +1,800 @@
+/* filepath: e:\DuckCoding\src\components\Onboarding\onboarding.css */
+
+/* ========== 全屏遮罩层 ========== */
+.onboarding-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  background: hsl(var(--background));
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.overlay-backdrop {
+  display: none; /* 移除半透明背景，使用纯色全屏 */
+}
+
+.overlay-content {
+  position: relative;
+  z-index: 10000;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.onboarding-window {
+  background: hsl(var(--background));
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ========== 退出按钮 ========== */
+.onboarding-exit-button {
+  position: absolute;
+  top: 1.5rem;
+  right: 2rem;
+  z-index: 10001;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.onboarding-exit-button:hover {
+  background: hsl(var(--accent));
+  transform: scale(1.1);
+}
+
+.onboarding-exit-button:active {
+  transform: scale(0.95);
+}
+
+/* ========== 流程控制器 ========== */
+.onboarding-flow {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.progress-indicator {
+  padding: 1rem 2rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+.progress-bar {
+  height: 4px;
+  background: hsl(var(--muted));
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: hsl(var(--primary));
+  transition: width 0.3s ease;
+  border-radius: 2px;
+}
+
+.progress-text {
+  text-align: center;
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.step-container {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1.5rem 2rem;
+}
+
+.step-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.step-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--muted));
+  transition: all 0.2s ease;
+}
+
+.step-dot.active {
+  background: hsl(var(--primary));
+  transform: scale(1.2);
+}
+
+.step-dot.completed {
+  background: hsl(var(--primary));
+  opacity: 0.5;
+}
+
+/* ========== 步骤通用样式 ========== */
+.onboarding-step {
+  animation: fadeInStep 0.3s ease;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.step-content {
+  width: 100%;
+}
+
+.step-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.5rem;
+  line-height: 1.2;
+}
+
+.step-description {
+  font-size: 0.9375rem;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.step-note {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+/* ========== 欢迎页 ========== */
+.welcome-step {
+  text-align: center;
+}
+
+.welcome-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.duck-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.welcome-title {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.75rem;
+}
+
+.welcome-subtitle {
+  font-size: 1rem;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 2rem;
+}
+
+.feature-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: hsl(var(--muted));
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--border));
+}
+
+.feature-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.feature-text h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.125rem;
+  line-height: 1.3;
+}
+
+.feature-text p {
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.4;
+}
+
+.welcome-actions {
+  display: flex;
+  justify-content: center;
+}
+
+/* ========== 代理配置页 ========== */
+.info-box {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.info-icon {
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.info-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.5rem;
+}
+
+.info-content p {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+
+.config-hint {
+  margin-bottom: 2rem;
+}
+
+.config-hint h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.75rem;
+}
+
+.config-hint ul {
+  list-style: none;
+  padding: 0;
+}
+
+.config-hint li {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+}
+
+.config-hint li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+/* ========== 工具介绍页 ========== */
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+
+.tool-card {
+  padding: 1rem;
+  background: hsl(var(--muted) / 0.3);
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+}
+
+.tool-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.tool-logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.tool-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.tool-description {
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+}
+
+.tool-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.tool-features li {
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+  padding-left: 1.25rem;
+  position: relative;
+  line-height: 1.3;
+}
+
+.tool-features li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+/* ========== 完成页 ========== */
+.complete-step {
+  text-align: center;
+}
+
+.complete-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.complete-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+  margin-bottom: 1rem;
+}
+
+.complete-subtitle {
+  font-size: 1.125rem;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 3rem;
+}
+
+.quick-start-guide {
+  text-align: left;
+  margin-bottom: 2rem;
+}
+
+.quick-start-guide h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.guide-steps {
+  display: grid;
+  gap: 1rem;
+}
+
+.guide-step {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.guide-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.guide-content h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.25rem;
+}
+
+.guide-content p {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
+}
+
+.helpful-tips {
+  text-align: left;
+  padding: 1rem;
+  background: hsl(var(--muted));
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  margin-bottom: 2rem;
+}
+
+.helpful-tips h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.75rem;
+}
+
+.helpful-tips ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.helpful-tips li {
+  font-size: 0.875rem;
+  color: hsl(var(--muted-foreground));
+  padding: 0.375rem 0;
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.helpful-tips li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: hsl(var(--primary));
+}
+
+/* ========== 按钮样式 ========== */
+.action-buttons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.action-right {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-text {
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.375rem;
+  font-weight: 500;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  outline: none;
+}
+
+.btn-primary {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary.btn-large {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+}
+
+.btn-secondary {
+  background: hsl(var(--secondary));
+  color: hsl(var(--secondary-foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: hsl(var(--muted));
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-text {
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+}
+
+.btn-text:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
+/* ========== 动画 ========== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInStep {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========== PC 端优化 ========== */
+/* PC 应用，无需移动端适配 */
+
+/* ========== 悬浮继续引导按钮 ========== */
+.onboarding-continue-fab {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 9998;
+  animation: fadeIn 0.3s ease;
+}
+
+.fab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.875rem 1.5rem;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  border-radius: 2rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s ease;
+}
+
+.fab-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  background: hsl(var(--primary) / 0.9);
+}
+
+.fab-button:active {
+  transform: translateY(0);
+}
+
+.fab-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ========== 工具检测页 ========== */
+.tool-detection-step {
+  text-align: center;
+}
+
+.tool-detection-step .step-icon {
+  margin-bottom: 1rem;
+}
+
+.icon-large {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.tool-detection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 2rem 0;
+  text-align: left;
+}
+
+.tool-detection-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: hsl(var(--muted) / 0.3);
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.tool-detection-item.status-detecting {
+  border-color: hsl(var(--primary) / 0.5);
+  background: hsl(var(--primary) / 0.05);
+}
+
+.tool-detection-item.status-done {
+  border-color: hsl(var(--border));
+}
+
+.tool-detection-item .tool-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  width: 40px;
+  text-align: center;
+}
+
+.tool-detection-item .tool-info {
+  flex: 1;
+}
+
+.tool-detection-item .tool-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 0.25rem;
+}
+
+.tool-detection-item .tool-status {
+  font-size: 0.875rem;
+}
+
+.tool-detection-item .text-muted {
+  color: hsl(var(--muted-foreground));
+}
+
+.tool-detection-item .text-detecting {
+  color: hsl(var(--primary));
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tool-detection-item .text-installed {
+  color: hsl(142.1 76.2% 36.3%); /* green-600 */
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tool-detection-item .text-not-installed {
+  color: hsl(var(--muted-foreground));
+}
+
+.tool-detection-item .text-error {
+  color: hsl(0 72.2% 50.6%); /* red-600 */
+}
+
+.tool-detection-item .version {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  background: hsl(var(--muted));
+  border-radius: 0.25rem;
+  font-weight: normal;
+}
+
+.tool-detection-item .tool-check {
+  flex-shrink: 0;
+  width: 24px;
+  text-align: center;
+}
+
+.tool-detection-item .check-icon {
+  color: hsl(142.1 76.2% 36.3%);
+  font-weight: bold;
+  font-size: 1.125rem;
+}
+
+.tool-detection-item .cross-icon {
+  color: hsl(var(--muted-foreground));
+  font-size: 1.125rem;
+}
+
+.tool-detection-item .spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid hsl(var(--primary) / 0.3);
+  border-top-color: hsl(var(--primary));
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.detection-summary {
+  text-align: center;
+  padding: 1rem;
+  background: hsl(var(--muted) / 0.5);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.detection-summary .summary-text {
+  font-size: 0.9375rem;
+  color: hsl(var(--foreground));
+  margin: 0;
+}
+
+.detection-summary .summary-text strong {
+  color: hsl(var(--primary));
+}
+
+.error-box {
+  padding: 1rem;
+  background: hsl(0 72.2% 50.6% / 0.1);
+  border: 1px solid hsl(0 72.2% 50.6% / 0.3);
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.error-box p {
+  color: hsl(0 72.2% 50.6%);
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.btn-small {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+}

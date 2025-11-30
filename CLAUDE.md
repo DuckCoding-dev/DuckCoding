@@ -61,9 +61,22 @@ last-updated: 2025-11-23
 - Linux 装 `libwebkit2gtk-4.1-dev`、`libjavascriptcoregtk-4.1-dev`、`patchelf` 等 Tauri v2 依赖；Windows 确保 WebView2 Runtime（先查注册表，winget 安装失败则回退微软官方静默安装包）；Node 20.19.0，Rust stable（含 clippy / rustfmt），启用 npm 与 cargo 缓存。
 - CI 未通过不得合并；缺少 dist 时会在 `npm run check` 内自动触发 `npm run build` 以满足 Clippy 输入。
 
-## 架构记忆（2025-11-21）
+## 架构记忆（2025-11-29）
 
 - `src-tauri/src/main.rs` 仅保留应用启动与托盘事件注册，所有 Tauri Commands 拆分到 `src-tauri/src/commands/*`，服务实现位于 `services/*`，核心设施放在 `core/*`（HTTP、日志、错误）。
+- **工具管理系统**：
+  - 多环境架构：支持本地（Local）、WSL、SSH 三种环境的工具实例管理
+  - 数据模型：`ToolType`（环境类型）、`ToolSource`（DuckCodingManaged/External）、`ToolInstance`（工具实例）存储在 `models/tool.rs`
+  - SQLite 存储：`tool_instances` 表由 `services/tool/db::ToolInstanceDB` 管理，存储用户添加的 WSL/SSH 实例
+  - 混合架构：`services/tool/registry::ToolRegistry` 统一管理内置工具（自动检测）和用户工具（数据库读取）
+  - WSL 支持：`utils/wsl_executor::WSLExecutor` 提供 Windows 下的 WSL 命令执行和工具检测（10秒超时）
+  - 来源识别：通过安装路径自动判断工具来源（`~/.duckcoding/tool/bin/` 为 DuckCoding 管理，其它为外部安装）
+  - Tauri 命令：`get_tool_instances`、`refresh_tool_instances`、`add_wsl_tool_instance`、`add_ssh_tool_instance`、`delete_tool_instance`（位于 `commands/tool_management.rs`）
+  - 前端页面：`ToolManagementPage` 按工具（Claude Code/CodeX/Gemini CLI）分组展示，每个工具下列出所有环境实例，使用表格列表样式（`components/ToolListSection`）
+  - 功能支持：检测更新（仅 DuckCoding 管理 + 非 SSH）、版本管理（占位 UI）、删除实例（仅 SSH 非内置）
+  - 导航集成：AppSidebar 新增"工具管理"入口（Wrench 图标），原"安装工具"已注释
+  - 类型安全：完整的 TypeScript 类型定义在 `types/tool-management.ts`，Hook `useToolManagement` 负责状态管理和操作
+  - SSH 功能：本期仅保留 UI 和数据结构，实际功能禁用（`AddInstanceDialog` 和表格操作按钮灰显）
 - **透明代理已重构为多工具架构**：
   - `ProxyManager` 统一管理三个工具（Claude Code、Codex、Gemini CLI）的代理实例
   - `HeadersProcessor` trait 定义工具特定的 headers 处理逻辑（位于 `services/proxy/headers/`）
@@ -82,6 +95,15 @@ last-updated: 2025-11-23
 - 工具安装状态由 `services::tool::ToolStatusCache` 并行检测与缓存，`check_installations`/`refresh_tool_status` 命令复用该缓存；安装/更新成功后或手动刷新会清空命中的工具缓存。
 - UI 相关的托盘/窗口操作集中在 `src-tauri/src/ui/*`，其它模块如需最小化到托盘请调用 `ui::hide_window_to_tray` 等封装方法。
 - 新增 `TransparentProxyPage` 与会话数据库：`SESSION_MANAGER` 使用 SQLite 记录每个代理会话的 endpoint/API Key，前端可按工具启停代理、查看历史并启用「会话级 Endpoint 配置」开关。页面内的 `ProxyControlBar`、`ProxySettingsDialog`、`ProxyConfigDialog` 负责代理启停、配置切换、工具级设置并内建缺失配置提示。
+- **新用户引导系统**：
+  - 首次启动强制引导，配置存储在 `GlobalConfig.onboarding_status: Option<OnboardingStatus>`（包含已完成版本、跳过步骤、完成时间）
+  - 版本化管理，支持增量更新（v1 -> v2 只展示新增内容），独立的引导内容版本号（与应用版本解耦）
+  - 前端定义引导步骤（`components/Onboarding/config/versions.ts`：`CURRENT_ONBOARDING_VERSION`、`VERSION_STEPS`、`getRequiredSteps`）
+  - Rust 命令：`get_onboarding_status`、`save_onboarding_progress`、`complete_onboarding`、`reset_onboarding`（位于 `commands/onboarding.rs`）
+  - 设置页「关于」标签可重新打开引导（调用 `reset_onboarding` 后刷新页面）
+  - v1 引导包含 4 步：欢迎页、代理配置（可跳过）、工具介绍、完成页
+  - 引导组件：`OnboardingOverlay`（全屏遮罩）、`OnboardingFlow`（流程控制）、步骤组件（`steps/v1/*`）
+  - App.tsx 启动时检查 `onboarding_status`，根据版本对比决定是否显示引导
 
 ### 透明代理扩展指南
 

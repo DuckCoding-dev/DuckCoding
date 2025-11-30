@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { ToolInstance, SSHConfig } from '@/types/tool-management';
 
 export interface ToolStatus {
   mirrorIsStale: boolean;
@@ -602,4 +603,83 @@ export async function getLogConfig(): Promise<LogConfig> {
  */
 export async function updateLogConfig(newConfig: LogConfig): Promise<string> {
   return await invoke<string>('update_log_config', { newConfig });
+}
+
+// ==================== 工具管理系统 ====================
+
+/**
+ * 获取所有工具实例（按工具ID分组）
+ * @returns 按工具ID分组的实例集合
+ */
+export async function getToolInstances(): Promise<Record<string, ToolInstance[]>> {
+  return await invoke<Record<string, ToolInstance[]>>('get_tool_instances');
+}
+
+/**
+ * 刷新工具实例状态
+ * @returns 刷新后的实例集合
+ */
+export async function refreshToolInstances(): Promise<Record<string, ToolInstance[]>> {
+  return await invoke<Record<string, ToolInstance[]>>('refresh_tool_instances');
+}
+
+/**
+ * 列出所有可用的WSL发行版
+ * @returns WSL发行版名称列表
+ */
+export async function listWslDistributions(): Promise<string[]> {
+  return await invoke<string[]>('list_wsl_distributions');
+}
+
+/**
+ * 添加WSL工具实例
+ * @param baseId - 工具ID（claude-code, codex, gemini-cli）
+ * @param distroName - WSL发行版名称
+ * @returns 创建的实例
+ */
+export async function addWslToolInstance(
+  baseId: string,
+  distroName: string,
+): Promise<ToolInstance> {
+  return await invoke<ToolInstance>('add_wsl_tool_instance', { baseId, distroName });
+}
+
+/**
+ * 添加SSH工具实例
+ * @param baseId - 工具ID
+ * @param sshConfig - SSH连接配置
+ * @returns 创建的实例
+ */
+export async function addSshToolInstance(
+  baseId: string,
+  sshConfig: SSHConfig,
+): Promise<ToolInstance> {
+  return await invoke<ToolInstance>('add_ssh_tool_instance', {
+    baseId,
+    sshConfig,
+  });
+}
+
+/**
+ * 删除工具实例（仅SSH类型）
+ * @param instanceId - 实例ID
+ */
+export async function deleteToolInstance(instanceId: string): Promise<void> {
+  return await invoke<void>('delete_tool_instance', { instanceId });
+}
+
+/**
+ * 检查数据库中是否已有本地工具数据
+ * @returns 是否已有本地工具数据
+ */
+export async function hasToolsInDatabase(): Promise<boolean> {
+  return await invoke<boolean>('has_tools_in_database');
+}
+
+/**
+ * 检测本地工具并保存到数据库（用于新手引导）
+ * @returns 检测到的工具实例列表
+ */
+export async function detectAndSaveTools(): Promise<ToolInstance[]> {
+  return await invoke<ToolInstance[]>('detect_and_save_tools');
 }

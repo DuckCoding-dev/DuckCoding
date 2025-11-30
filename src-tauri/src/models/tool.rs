@@ -181,3 +181,226 @@ impl Tool {
 
 /// Provider 配置
 pub const DUCKCODING_BASE_URL: &str = "https://jp.duckcoding.com";
+
+// ============================================================================
+// 工具管理系统扩展（2025-11-29）
+// ============================================================================
+
+/// 工具环境类型
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum ToolType {
+    /// 本地环境
+    Local,
+    /// WSL 环境
+    WSL,
+    /// SSH 远程环境
+    SSH,
+}
+
+impl ToolType {
+    /// 转换为字符串（用于数据库存储）
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ToolType::Local => "Local",
+            ToolType::WSL => "WSL",
+            ToolType::SSH => "SSH",
+        }
+    }
+
+    /// 从字符串解析（避免与 std::str::FromStr 混淆）
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "Local" => Some(ToolType::Local),
+            "WSL" => Some(ToolType::WSL),
+            "SSH" => Some(ToolType::SSH),
+            _ => None,
+        }
+    }
+}
+
+/// 工具安装来源
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ToolSource {
+    /// DuckCoding 管理（安装在 ~/.duckcoding/tool/bin/）
+    DuckCodingManaged,
+    /// 外部安装（npm、官方脚本等）
+    External,
+}
+
+impl ToolSource {
+    /// 转换为字符串（用于数据库存储）
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ToolSource::DuckCodingManaged => "DuckCodingManaged",
+            ToolSource::External => "External",
+        }
+    }
+
+    /// 从字符串解析（避免与 std::str::FromStr 混淆）
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "DuckCodingManaged" => Some(ToolSource::DuckCodingManaged),
+            "External" => Some(ToolSource::External),
+            _ => None,
+        }
+    }
+
+    /// 根据安装路径判断来源
+    pub fn from_install_path(path: &str) -> Self {
+        if path.contains("/.duckcoding/tool/bin/") || path.contains("\\.duckcoding\\tool\\bin\\") {
+            ToolSource::DuckCodingManaged
+        } else {
+            ToolSource::External
+        }
+    }
+}
+
+/// SSH 连接配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SSHConfig {
+    /// 显示名称（如"开发服务器"、"生产环境"）
+    pub display_name: String,
+    /// 主机地址
+    pub host: String,
+    /// 端口
+    pub port: u16,
+    /// 用户名
+    pub user: String,
+    /// SSH 密钥路径（可选）
+    pub key_path: Option<String>,
+}
+
+/// 工具实例（具体环境中的安装）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolInstance {
+    /// 实例唯一标识（如"claude-code-local", "codex-wsl-Ubuntu", "gemini-ssh-dev"）
+    pub instance_id: String,
+    /// 基础工具ID（claude-code, codex, gemini-cli）
+    pub base_id: String,
+    /// 工具名称（用于显示）
+    pub tool_name: String,
+    /// 环境类型
+    pub tool_type: ToolType,
+    /// 安装来源
+    pub tool_source: ToolSource,
+    /// 是否已安装
+    pub installed: bool,
+    /// 版本号
+    pub version: Option<String>,
+    /// 实际安装路径
+    pub install_path: Option<String>,
+    /// WSL发行版名称（仅WSL类型使用）
+    pub wsl_distro: Option<String>,
+    /// SSH配置（仅SSH类型使用）
+    pub ssh_config: Option<SSHConfig>,
+    /// 是否为内置实例（内置的本地工具实例）
+    pub is_builtin: bool,
+    /// 创建时间（Unix timestamp）
+    pub created_at: i64,
+    /// 更新时间（Unix timestamp）
+    pub updated_at: i64,
+}
+
+impl ToolInstance {
+    /// 从基础工具创建本地实例
+    pub fn from_tool_local(
+        tool: &Tool,
+        installed: bool,
+        version: Option<String>,
+        install_path: Option<String>,
+    ) -> Self {
+        let now = chrono::Utc::now().timestamp();
+        let tool_source = install_path
+            .as_ref()
+            .map(|p| ToolSource::from_install_path(p))
+            .unwrap_or(ToolSource::External);
+
+        ToolInstance {
+            instance_id: format!("{}-local", tool.id),
+            base_id: tool.id.clone(),
+            tool_name: tool.name.clone(),
+            tool_type: ToolType::Local,
+            tool_source,
+            installed,
+            version,
+            install_path,
+            wsl_distro: None,
+            ssh_config: None,
+            is_builtin: true,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// 创建WSL实例
+    pub fn create_wsl_instance(
+        base_id: String,
+        tool_name: String,
+        distro_name: String,
+        installed: bool,
+        version: Option<String>,
+        install_path: Option<String>,
+    ) -> Self {
+        let now = chrono::Utc::now().timestamp();
+        let tool_source = install_path
+            .as_ref()
+            .map(|p| ToolSource::from_install_path(p))
+            .unwrap_or(ToolSource::External);
+
+        // instance_id 格式: {base_id}-wsl-{distro_name}
+        let sanitized_distro = distro_name.to_lowercase().replace(' ', "-");
+
+        ToolInstance {
+            instance_id: format!("{}-wsl-{}", base_id, sanitized_distro),
+            base_id,
+            tool_name,
+            tool_type: ToolType::WSL,
+            tool_source,
+            installed,
+            version,
+            install_path,
+            wsl_distro: Some(distro_name),
+            ssh_config: None,
+            is_builtin: false,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// 创建SSH实例
+    pub fn create_ssh_instance(
+        base_id: String,
+        tool_name: String,
+        ssh_config: SSHConfig,
+        installed: bool,
+        version: Option<String>,
+        install_path: Option<String>,
+    ) -> Self {
+        let now = chrono::Utc::now().timestamp();
+        let ssh_display_name = ssh_config.display_name.clone();
+        let tool_source = install_path
+            .as_ref()
+            .map(|p| ToolSource::from_install_path(p))
+            .unwrap_or(ToolSource::External);
+
+        ToolInstance {
+            instance_id: format!(
+                "{}-ssh-{}",
+                base_id,
+                ssh_display_name.to_lowercase().replace(' ', "-")
+            ),
+            base_id,
+            tool_name,
+            tool_type: ToolType::SSH,
+            tool_source,
+            installed,
+            version,
+            install_path,
+            wsl_distro: None,
+            ssh_config: Some(ssh_config),
+            is_builtin: false,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+}

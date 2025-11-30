@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Info, RefreshCw, Github, Globe } from 'lucide-react';
 import { getCurrentAppVersion } from '@/services/update';
-import duckLogo from '@/assets/duck-logo.png'; // Assuming logo exists, checking file tree... yes
+import duckLogo from '@/assets/duck-logo.png';
 
 interface AboutTabProps {
   onCheckUpdate: () => void;
@@ -36,7 +36,6 @@ export function AboutTab({ onCheckUpdate }: AboutTabProps) {
         <CardContent className="flex flex-col items-center py-8 space-y-6">
           <div className="relative">
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center shadow-lg">
-              {/* Fallback if image fails or use the image component */}
               <img src={duckLogo} alt="DuckCoding Logo" className="w-20 h-20 object-contain" />
             </div>
             <Badge className="absolute -bottom-2 -right-2 bg-slate-800 text-white">

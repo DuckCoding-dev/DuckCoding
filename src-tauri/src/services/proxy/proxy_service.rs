@@ -230,6 +230,7 @@ mod tests {
             hide_transparent_proxy_tip: false,
             hide_session_config_hint: false,
             log_config: crate::models::config::LogConfig::default(),
+            onboarding_status: None,
         };
 
         let url = ProxyService::build_proxy_url(&config);
@@ -259,6 +260,7 @@ mod tests {
             hide_transparent_proxy_tip: false,
             hide_session_config_hint: false,
             log_config: crate::models::config::LogConfig::default(),
+            onboarding_status: None,
         };
 
         let url = ProxyService::build_proxy_url(&config);
@@ -291,6 +293,7 @@ mod tests {
             hide_transparent_proxy_tip: false,
             hide_session_config_hint: false,
             log_config: crate::models::config::LogConfig::default(),
+            onboarding_status: None,
         };
 
         let url = ProxyService::build_proxy_url(&config);
