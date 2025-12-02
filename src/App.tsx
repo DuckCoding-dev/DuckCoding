@@ -345,7 +345,10 @@ function App() {
       console.log('Navigate to config:', detail);
     },
     onNavigateToInstall: () => setActiveTab('install'),
-    onNavigateToSettings: () => setActiveTab('settings'),
+    onNavigateToSettings: (detail) => {
+      setSettingsInitialTab(detail?.tab ?? 'basic');
+      setActiveTab('settings');
+    },
     onNavigateToTransparentProxy: (detail) => {
       setActiveTab('transparent-proxy');
       if (detail?.toolId) {

@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import {
   switchProfile,
   deleteProfile,
@@ -7,9 +8,21 @@ import {
   startToolProxy,
   stopToolProxy,
   getAllProxyStatus,
+  saveGlobalConfig,
+  getExternalChanges,
+  ackExternalChange,
+  listProfileDescriptors,
+  getMigrationReport,
+  importNativeChange,
+  cleanLegacyBackups,
   type ToolStatus,
   type GlobalConfig,
   type AllProxyStatus,
+  type ExternalConfigChange,
+  type ProfileDescriptor,
+  type MigrationRecord,
+  type ImportExternalChangeResult,
+  type LegacyCleanupResult,
 } from '@/lib/tauri-commands';
 import { useProfileLoader } from '@/hooks/useProfileLoader';
 
@@ -19,10 +32,18 @@ export function useProfileManagement(
 ) {
   const [switching, setSwitching] = useState(false);
   const [deletingProfiles, setDeletingProfiles] = useState<Record<string, boolean>>({});
-  const [selectedProfile, setSelectedProfile] = useState<Record<string, string>>({});
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(null);
   const [allProxyStatus, setAllProxyStatus] = useState<AllProxyStatus>({});
   const [loadingTools, setLoadingTools] = useState<Set<string>>(new Set());
+  const [externalChanges, setExternalChanges] = useState<ExternalConfigChange[]>([]);
+  const [profileDescriptors, setProfileDescriptors] = useState<ProfileDescriptor[]>([]);
+  const [migrationRecords, setMigrationRecords] = useState<MigrationRecord[]>([]);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [cleaningLegacy, setCleaningLegacy] = useState(false);
+  const [cleanupResults, setCleanupResults] = useState<LegacyCleanupResult[]>([]);
+  const [notifyEnabled, setNotifyEnabled] = useState(true);
+  const [listenerError, setListenerError] = useState<string | null>(null);
+  const [pollIntervalMs, setPollIntervalMs] = useState(5000);
 
   // 使用共享配置加载 Hook，传入排序转换函数
   const { profiles, setProfiles, activeConfigs, setActiveConfigs, loadAllProfiles } =
@@ -33,6 +54,12 @@ export function useProfileManagement(
     try {
       const config = await getGlobalConfig();
       setGlobalConfig(config);
+      if (config?.external_watch_enabled !== undefined) {
+        setNotifyEnabled(config.external_watch_enabled);
+      }
+      if (config?.external_poll_interval_ms !== undefined) {
+        setPollIntervalMs(config.external_poll_interval_ms);
+      }
     } catch (error) {
       console.error('Failed to load global config:', error);
     }
@@ -47,6 +74,175 @@ export function useProfileManagement(
       console.error('Failed to load all proxy status:', error);
     }
   }, []);
+
+  const loadExternalChanges = useCallback(async () => {
+    setLoadingInsights(true);
+    try {
+      const [changes, descriptors, records] = await Promise.all([
+        getExternalChanges().catch((error) => {
+          console.error('Failed to load external changes:', error);
+          return [];
+        }),
+        listProfileDescriptors().catch((error) => {
+          console.error('Failed to load profile descriptors:', error);
+          return [];
+        }),
+        getMigrationReport().catch((error) => {
+          console.error('Failed to load migration report:', error);
+          return [];
+        }),
+      ]);
+      setExternalChanges(changes);
+      setProfileDescriptors(descriptors);
+      setMigrationRecords(records);
+    } finally {
+      setLoadingInsights(false);
+    }
+  }, []);
+
+  const acknowledgeChange = useCallback(
+    async (toolId: string) => {
+      try {
+        await ackExternalChange(toolId);
+        await loadExternalChanges();
+      } catch (error) {
+        console.error('Failed to acknowledge external change:', error);
+      }
+    },
+    [loadExternalChanges],
+  );
+
+  // 监听后端事件，实时追加外部改动
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const setup = async () => {
+      try {
+        unlisten = await listen<ExternalConfigChange>('external-config-changed', (event) => {
+          if (!notifyEnabled) return;
+          const payload = event.payload;
+          setExternalChanges((prev) => {
+            const filtered = prev.filter(
+              (c) => !(c.tool_id === payload.tool_id && c.path === payload.path),
+            );
+            return [...filtered, payload];
+          });
+        });
+      } catch (error) {
+        console.error('Failed to listen external-config-changed:', error);
+        setListenerError(String(error));
+      }
+    };
+
+    void setup();
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [notifyEnabled]);
+
+  // 轮询补偿：按配置间隔刷新外部改动
+  useEffect(() => {
+    if (!notifyEnabled || pollIntervalMs <= 0) return;
+    const timer = setInterval(() => {
+      void loadExternalChanges();
+    }, pollIntervalMs);
+    return () => clearInterval(timer);
+  }, [notifyEnabled, pollIntervalMs, loadExternalChanges]);
+
+  // 初次加载/重新开启监听时，立即拉取一次外部改动
+  useEffect(() => {
+    if (!notifyEnabled) return;
+    void loadExternalChanges();
+  }, [notifyEnabled, loadExternalChanges]);
+
+  const importExternalChange = useCallback(
+    async (
+      toolId: string,
+      profileName: string,
+      asNew: boolean,
+    ): Promise<{
+      success: boolean;
+      message: string;
+      result?: ImportExternalChangeResult;
+    }> => {
+      const trimmedName = profileName.trim();
+      if (!trimmedName) {
+        return { success: false, message: 'Profile 名称不能为空' };
+      }
+
+      setLoadingInsights(true);
+      try {
+        const result = await importNativeChange(toolId, trimmedName, asNew);
+        await Promise.all([loadExternalChanges(), loadAllProfiles()]);
+
+        try {
+          const active = await getActiveConfig(toolId);
+          setActiveConfigs((prev) => ({ ...prev, [toolId]: active }));
+        } catch (error) {
+          console.error('Failed to refresh active config after import:', error);
+        }
+
+        return {
+          success: true,
+          message: asNew
+            ? `已将外部改动导入为 ${result.profileName}`
+            : `已覆盖 profile：${result.profileName}`,
+          result,
+        };
+      } catch (error) {
+        console.error('Failed to import external change:', error);
+        return { success: false, message: String(error) };
+      } finally {
+        setLoadingInsights(false);
+      }
+    },
+    [loadExternalChanges, loadAllProfiles, setActiveConfigs],
+  );
+
+  const cleanupLegacyBackups = useCallback(async (): Promise<{
+    success: boolean;
+    message: string;
+    results?: LegacyCleanupResult[];
+  }> => {
+    setCleaningLegacy(true);
+    try {
+      const results = await cleanLegacyBackups();
+      await loadExternalChanges();
+      setCleanupResults(results);
+      const removed = results.reduce((sum, r) => sum + r.removed.length, 0);
+      const failed = results.reduce((sum, r) => sum + r.failed.length, 0);
+      return {
+        success: true,
+        message:
+          failed > 0
+            ? `已清理旧版备份：成功 ${removed}，失败 ${failed}`
+            : `已清理旧版备份：成功 ${removed}`,
+        results,
+      };
+    } catch (error) {
+      console.error('Failed to clean legacy backups:', error);
+      return { success: false, message: String(error) };
+    } finally {
+      setCleaningLegacy(false);
+    }
+  }, [loadExternalChanges]);
+
+  const persistWatchSettings = useCallback(
+    async (enabled: boolean, intervalMs: number) => {
+      if (!globalConfig) return;
+      const next: GlobalConfig = {
+        ...globalConfig,
+        external_watch_enabled: enabled,
+        external_poll_interval_ms: intervalMs,
+      };
+      await saveGlobalConfig(next);
+      setGlobalConfig(next);
+      setNotifyEnabled(enabled);
+      setPollIntervalMs(intervalMs);
+    },
+    [globalConfig],
+  );
 
   // 获取指定工具的代理是否启用
   const isToolProxyEnabled = useCallback(
@@ -90,7 +286,6 @@ export function useProfileManagement(
 
         // 切换配置（后端会自动处理透明代理更新）
         await switchProfile(toolId, profile);
-        setSelectedProfile((prev) => ({ ...prev, [toolId]: profile }));
 
         // 重新加载当前生效的配置
         try {
@@ -154,15 +349,6 @@ export function useProfileManagement(
           ...prev,
           [toolId]: updatedProfiles,
         }));
-
-        // 清理相关状态
-        setSelectedProfile((prev) => {
-          const updated = { ...prev };
-          if (updated[toolId] === profile) {
-            delete updated[toolId];
-          }
-          return updated;
-        });
 
         // 尝试重新加载所有配置，确保与后端同步
         try {
@@ -287,16 +473,30 @@ export function useProfileManagement(
     // State
     switching,
     deletingProfiles,
-    selectedProfile,
     profiles,
     setProfiles,
     activeConfigs,
     globalConfig,
     allProxyStatus,
+    externalChanges,
+    profileDescriptors,
+    migrationRecords,
+    loadingInsights,
+    cleaningLegacy,
+    cleanupResults,
+    notifyEnabled,
+    listenerError,
+    pollIntervalMs,
 
     // Actions
     loadGlobalConfig,
     loadAllProxyStatus,
+    loadExternalChanges,
+    acknowledgeChange,
+    importExternalChange,
+    cleanupLegacyBackups,
+    persistWatchSettings,
+    setPollIntervalMs,
     loadAllProfiles,
     handleSwitchProfile,
     handleDeleteProfile,

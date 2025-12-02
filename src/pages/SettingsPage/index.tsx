@@ -10,6 +10,7 @@ import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { LogSettingsTab } from './components/LogSettingsTab';
 import { TransparentProxyMigrationNotice } from './components/TransparentProxyMigrationNotice';
 import { AboutTab } from './components/AboutTab';
+import { ConfigManagementTab } from './components/ConfigManagementTab';
 import type { GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
 
 interface SettingsPageProps {
@@ -166,6 +167,12 @@ export function SettingsPage({
           <TabsTrigger value="basic" disabled={!!restrictToTab && restrictToTab !== 'basic'}>
             基本设置
           </TabsTrigger>
+          <TabsTrigger
+            value="config-management"
+            disabled={!!restrictToTab && restrictToTab !== 'config-management'}
+          >
+            配置管理
+          </TabsTrigger>
           <TabsTrigger value="proxy" disabled={!!restrictToTab && restrictToTab !== 'proxy'}>
             代理设置
           </TabsTrigger>
@@ -220,6 +227,11 @@ export function SettingsPage({
         {/* 日志配置 */}
         <TabsContent value="log" className="space-y-6">
           <LogSettingsTab />
+        </TabsContent>
+
+        {/* 配置管理 */}
+        <TabsContent value="config-management" className="space-y-6">
+          <ConfigManagementTab />
         </TabsContent>
 
         {/* 透明代理 (迁移提示) */}
