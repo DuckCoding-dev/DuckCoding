@@ -15,7 +15,9 @@ last-updated: 2025-11-23
 - `npm run check:fix`：修复版入口，顺序同上，遇可修复项会自动 `--fix`。
 - `npm run tauri dev`：本地启动 Tauri 应用进行端到端手动验证。
 - `npm run tauri build`: 本地构建 Tauri 应用安装包。
+- `npm run test` / `npm run test:rs`：后端 Rust 单测（当前无前端测试，test 等同 test:rs）。
 - `cargo test --locked`：Rust 单测执行器；缺乏覆盖时请补测试后再运行。
+- `npm run coverage:rs`：后端覆盖率检查（基于 cargo-llvm-cov，默认行覆盖阈值 90%，需先安装 llvm-tools-preview 与 cargo-llvm-cov，可运行 `npm run coverage:rs:setup` 自动安装依赖）。
 
 ## 日常开发流程
 
@@ -103,6 +105,7 @@ last-updated: 2025-11-23
   - `useBalanceMonitor` hook 负责自动刷新逻辑，支持配置级别的刷新间隔
   - 配置表单（`ConfigFormDialog`）支持模板选择、代码编辑、静态 headers（JSON 格式）
   - 卡片视图（`ConfigCard`）展示余额信息、使用比例、到期时间、错误提示
+- Profile Center 已为三工具保存完整原生快照：Claude（settings.json + config.json，可选）、Codex（config.toml + auth.json）、Gemini（settings.json + .env），导入/激活/监听都会覆盖附属文件。
 - **新用户引导系统**：
   - 首次启动强制引导，配置存储在 `GlobalConfig.onboarding_status: Option<OnboardingStatus>`（包含已完成版本、跳过步骤、完成时间）
   - 版本化管理，支持增量更新（v1 -> v2 只展示新增内容），独立的引导内容版本号（与应用版本解耦）
