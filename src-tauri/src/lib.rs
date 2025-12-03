@@ -1,6 +1,7 @@
 // lib.rs - 暴露服务层给 CLI 和 GUI 使用
 
 pub mod core; // 🆕 核心基础设施层
+pub mod data; // 🆕 统一数据管理层
 pub mod http_client;
 pub mod models;
 pub mod services;

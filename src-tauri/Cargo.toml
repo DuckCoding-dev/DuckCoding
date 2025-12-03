@@ -50,6 +50,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # 单例模式
 lazy_static = "1.5"
 notify = "6"
+# LRU 缓存
+linked-hash-map = "0.5"
+# 序列化/反序列化
+bincode = "1.3"
 
 [dev-dependencies]
 tempfile = "3.8"
