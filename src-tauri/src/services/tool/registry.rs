@@ -117,7 +117,11 @@ impl ToolRegistry {
 
     /// 检测单个工具（内部使用，用于并行检测）
     async fn detect_single_tool(&self, tool: Tool) -> ToolInstance {
-        tracing::debug!("检测工具: {}", tool.name);
+        tracing::info!(
+            "开始检测工具: {}, check_command={}",
+            tool.name,
+            tool.check_command
+        );
 
         // 检测安装状态
         let installed = self
@@ -125,17 +129,29 @@ impl ToolRegistry {
             .command_exists_async(&tool.check_command)
             .await;
 
+        tracing::info!(
+            "工具 {} 命令存在性检测结果: installed={}",
+            tool.name,
+            installed
+        );
+
         // 如果已安装，获取版本和路径
         let (version, install_path) = if installed {
+            tracing::info!("工具 {} 检测到已安装，获取版本和路径", tool.name);
             let version = self.get_local_version(&tool).await;
             let path = self.get_local_install_path(&tool.check_command).await;
+            tracing::info!("工具 {} 版本={:?}, 路径={:?}", tool.name, version, path);
             (version, path)
         } else {
+            tracing::warn!(
+                "工具 {} 未检测到安装 (command_exists_async 返回 false)",
+                tool.name
+            );
             (None, None)
         };
 
-        tracing::debug!(
-            "工具 {} 检测结果: installed={}, version={:?}, path={:?}",
+        tracing::info!(
+            "工具 {} 最终检测结果: installed={}, version={:?}, path={:?}",
             tool.name,
             installed,
             version,
@@ -428,8 +444,43 @@ impl ToolRegistry {
         // 清除缓存
         self.cache.clear().await;
 
-        // 重新检测本地工具并保存
-        self.detect_and_persist_local_tools().await?;
+        // 重新检测本地工具，更新已有实例的状态
+        let tools = Tool::all();
+        tracing::info!("刷新所有工具实例，共 {} 个工具", tools.len());
+
+        // 并行检测所有工具
+        let futures: Vec<_> = tools
+            .iter()
+            .map(|tool| self.detect_single_tool(tool.clone()))
+            .collect();
+
+        let results = futures_util::future::join_all(futures).await;
+
+        // 更新数据库中的实例状态
+        let db = self.db.lock().await;
+        for instance in results {
+            tracing::info!(
+                "工具 {} (ID: {}) 检测结果: installed={}, version={:?}, path={:?}",
+                instance.tool_name,
+                instance.instance_id,
+                instance.installed,
+                instance.version,
+                instance.install_path
+            );
+            // 使用 upsert 更新或插入实例（包括更新 installed 状态）
+            if let Err(e) = db.upsert_instance(&instance) {
+                tracing::warn!("更新工具实例失败: {}", e);
+            } else {
+                tracing::info!(
+                    "工具 {} (ID: {}) 更新到数据库成功",
+                    instance.tool_name,
+                    instance.instance_id
+                );
+            }
+        }
+        drop(db);
+
+        tracing::info!("工具实例刷新完成");
 
         // 返回所有工具实例
         self.get_all_grouped().await

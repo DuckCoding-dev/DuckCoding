@@ -99,10 +99,14 @@ impl CommandExecutor {
 
     /// 检查命令是否存在
     pub fn command_exists(&self, command: &str) -> bool {
+        // 从命令字符串中提取命令名（第一个词）
+        // 例如: "claude --version" -> "claude"
+        let cmd_name = command.split_whitespace().next().unwrap_or(command);
+
         let check_cmd = if self.platform.is_windows {
-            format!("where {command}")
+            format!("where {cmd_name}")
         } else {
-            format!("which {command}")
+            format!("which {cmd_name}")
         };
 
         self.execute(&check_cmd).success
@@ -110,13 +114,35 @@ impl CommandExecutor {
 
     /// 检查命令是否存在（异步）
     pub async fn command_exists_async(&self, command: &str) -> bool {
+        // 从命令字符串中提取命令名（第一个词）
+        // 例如: "claude --version" -> "claude"
+        let cmd_name = command.split_whitespace().next().unwrap_or(command);
+
         let check_cmd = if self.platform.is_windows {
-            format!("where {command}")
+            format!("where {cmd_name}")
         } else {
-            format!("which {command}")
+            format!("which {cmd_name}")
         };
 
-        self.execute_async(&check_cmd).await.success
+        tracing::info!(
+            "检查命令是否存在: command={}, cmd_name={}, check_cmd={}",
+            command,
+            cmd_name,
+            check_cmd
+        );
+
+        let result = self.execute_async(&check_cmd).await;
+
+        tracing::info!(
+            "命令检查结果: command={}, cmd_name={}, success={}, stdout={:?}, stderr={:?}",
+            command,
+            cmd_name,
+            result.success,
+            result.stdout.trim(),
+            result.stderr.trim()
+        );
+
+        result.success
     }
 }
 
