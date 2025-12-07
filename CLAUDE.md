@@ -1,17 +1,17 @@
 ---
-agent: Claude Code
+agents: Codex, Claude-Code, Gemini-Cli
 last-updated: 2025-12-07
 ---
 
 # DuckCoding 开发协作规范
 
-> 本文档为指导 AI AGENT 的开发协作规范，同时也作为 AI AGENT 开发指南和持久化项目记忆存在。文档共有 `CLAUDE.md`、`AGENTS.md` 两份。两份规范文档的正文部分必须始终保持一致，yaml头部无需同步。
+> 本文档为指导 AI AGENT 的开发协作规范，同时也作为 AI AGENT 开发指南和持久化项目记忆存在。
 > 本文档作为项目记忆文档，需要及时更新。**请务必在开发完成后根据代码的实际情况更新本文档需要修改的地方以反映真实代码情况!!!**
 
 ## 核心命令一览
 
 - `npm install`：安装前后端依赖（Node 18+ / npm 9+）。
-- `npm run check`：开发工具链主入口，统一调度 AI 记忆文档同步 → ESLint → Clippy → Prettier → cargo fmt，并输出中文摘要。若缺少 `dist/`，会自动尝试 `npm run build` 供 Tauri Clippy 使用。
+- `npm run check`：开发工具链主入口，统一调度 AI Agent 配置检查 → ESLint → Clippy → Prettier → cargo fmt，并输出中文摘要。若缺少 `dist/`，会自动尝试 `npm run build` 供 Tauri Clippy 使用。
 - `npm run check:fix`：修复版入口，顺序同上，遇可修复项会自动 `--fix`。
 - `npm run tauri dev`：本地启动 Tauri 应用进行端到端手动验证。
 - `npm run tauri build`: 本地构建 Tauri 应用安装包。
@@ -30,11 +30,11 @@ last-updated: 2025-12-07
 4. **提交前**：
    - 运行 `npm run check`；失败立即`npm run check:fix`尝试自动修复，若无法自动修复则手动修复，禁止忽略告警。
    - 运行 `cargo test --locked` 与必要的端测脚本。
-   - 若有必要，更新 `AGENTS.md` / `CLAUDE.md` （根据所使用的 AI Agent 来决定），并执行 `npm run guidelines:fix` 自动同步另一份文档。
+   - 若有必要，更新 `CLAUDE.md`
 5. **提交/PR**：
    - commit/pr 需遵循 Conventional Commits 规范，description使用简体中文。
    - pr 描述需包含：动机、主要改动点、测试情况、风险评估。
-   - 避免“修复 CI”类模糊描述，明确指出受影响模块。
+   - 避免"修复 CI"类模糊描述，明确指出受影响模块。
    - 如有可关闭的 issue，应在 pr 内提及，以便在 merge 后自动关闭。
 
 ## 零警告与质量门禁
@@ -43,11 +43,22 @@ last-updated: 2025-12-07
 - CI 未通过禁止合并；若需临时跳过必须在 PR 中详细说明原因并获 Reviewer 认可。
 - 引入第三方依赖需说明用途、体积和维护计划。
 
-## 文档同步要求
+## AI 自动阅读文档前提
 
-- `AGENTS.md`、`CLAUDE.md` 用于不同协作者（全体/Claude/Codex），但内容必须完全一致。
-- `npm run guidelines:fix` / `npm run check:fix` 会以最近修改的正文为基准自动同步两份文档，YAML 头信息不参与同步。
-- GitHub Actions 会在 PR 中运行同样的脚本，若不一致将直接失败。
+- `CLAUDE.md` 默认为 Claude-Code 使用
+- Codex 使用需要设置 ~/.codex/config.toml 中的
+  ```toml
+  project_doc_fallback_filenames = ["CLAUDE.md"]
+  ```
+- Gemini-CLI 使用需要设置 ~/.gemini/settings.json 中的
+  ```json
+  {
+    "context": {
+      "fileName": "CLAUDE.md"
+    }
+  }
+  ```
+- `npm run check` 会检查这两项配置（仅当检测到对应工具已安装时），未通过显示警告。可用 `npm run check:fix` 自动修复。
 
 ## PR 清单
 
@@ -59,7 +70,7 @@ last-updated: 2025-12-07
 
 - `.github/workflows/pr-check.yml` 在 pull_request / workflow_dispatch 下运行，矩阵覆盖 ubuntu-22.04、windows-latest、macos-14 (arm64)、macos-13 (x64)，策略 `fail-fast: false`。
 - 每个平台执行 `npm ci` → `npm run check`；若首次检查失败，会继续跑 `npm run check:fix` 与复验 `npm run check` 以判断是否可自动修复，但只要初次检查失败，该平台作业仍标红以阻止合并。
-- PR 事件下只保留一条自动评论，双语表格固定展示四个平台；未跑完的平台显示“运行中...”，跑完后实时更新结果、check/fix/recheck 状态、run 链接与日志包名（artifact `pr-check-<platform>.zip`，含 `npm run check` / `check:fix` / `recheck` 输出）。文案提示：如首检失败请本地 `npm run check:fix` → `npm run check` 并提交修复；若 fix 仍失败则需本地排查；跨平台差异无法复现可复制日志给 AI 获取排查建议。
+- PR 事件下只保留一条自动评论，双语表格固定展示四个平台；未跑完的平台显示"运行中..."，跑完后实时更新结果、check/fix/recheck 状态、run 链接与日志包名（artifact `pr-check-<platform>.zip`，含 `npm run check` / `check:fix` / `recheck` 输出）。文案提示：如首检失败请本地 `npm run check:fix` → `npm run check` 并提交修复；若 fix 仍失败则需本地排查；跨平台差异无法复现可复制日志给 AI 获取排查建议。
 - Linux 装 `libwebkit2gtk-4.1-dev`、`libjavascriptcoregtk-4.1-dev`、`patchelf` 等 Tauri v2 依赖；Windows 确保 WebView2 Runtime（先查注册表，winget 安装失败则回退微软官方静默安装包）；Node 20.19.0，Rust stable（含 clippy / rustfmt），启用 npm 与 cargo 缓存。
 - CI 未通过不得合并；缺少 dist 时会在 `npm run check` 内自动触发 `npm run build` 以满足 Clippy 输入。
 

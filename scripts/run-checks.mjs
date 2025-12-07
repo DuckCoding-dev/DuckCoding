@@ -11,8 +11,8 @@ const steps =
   mode === 'fix'
     ? [
         {
-          name: 'AI 项目记忆文档同步修复',
-          command: ['node', 'scripts/ensure-guidelines-sync.mjs', '--mode=fix'],
+          name: 'AI Agent 配置修复',
+          command: ['node', 'scripts/ensure-agent-config.mjs', '--mode=fix'],
         },
         { name: '前端 ESLint 修复', command: ['npm', 'run', 'lint:ts:fix'] },
         {
@@ -25,8 +25,8 @@ const steps =
       ]
     : [
         {
-          name: 'AI 项目记忆文档同步检查',
-          command: ['node', 'scripts/ensure-guidelines-sync.mjs', '--mode=check'],
+          name: 'AI Agent 配置检查',
+          command: ['node', 'scripts/ensure-agent-config.mjs', '--mode=check'],
         },
         { name: '前端 ESLint 检查', command: ['npm', 'run', 'lint:ts'] },
         {
