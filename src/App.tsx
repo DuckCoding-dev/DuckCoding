@@ -7,7 +7,6 @@ import { UpdateDialog } from '@/components/dialogs/UpdateDialog';
 import { StatisticsPage } from '@/pages/StatisticsPage';
 import { InstallationPage } from '@/pages/InstallationPage';
 import { DashboardPage } from '@/pages/DashboardPage';
-import { ProfileSwitchPage } from '@/pages/ProfileSwitchPage';
 import ProfileManagementPage from '@/pages/ProfileManagementPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TransparentProxyPage } from '@/pages/TransparentProxyPage';
@@ -383,7 +382,6 @@ function App() {
             <ToolManagementPage tools={tools} loading={toolsLoading} />
           )}
           {activeTab === 'install' && <InstallationPage tools={tools} loading={toolsLoading} />}
-          {activeTab === 'switch' && <ProfileSwitchPage tools={tools} loading={toolsLoading} />}
           {activeTab === 'balance' && <BalancePage />}
           {activeTab === 'profile-management' && <ProfileManagementPage />}
           {activeTab === 'statistics' && (

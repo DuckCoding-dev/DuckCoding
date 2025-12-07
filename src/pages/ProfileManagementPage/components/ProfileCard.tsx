@@ -63,7 +63,7 @@ export function ProfileCard({
 
   return (
     <>
-      <Card className={profile.is_active ? 'border-primary' : ''}>
+      <Card className={profile.is_active && !proxyRunning ? 'border-primary' : ''}>
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
           <div className="space-y-1">
             <div className="flex items-center gap-2">

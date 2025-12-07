@@ -3,7 +3,6 @@ import { Separator } from '@/components/ui/separator';
 import {
   LayoutDashboard,
   Wrench,
-  ArrowRightLeft,
   Settings2,
   BarChart3,
   Wallet,
@@ -67,27 +66,6 @@ export function AppSidebar({ activeTab, onTabChange, restrictNavigation }: AppSi
         >
           <Wrench className="mr-2 h-4 w-4" />
           工具管理
-        </Button>
-
-        {/* 安装工具页面已废弃，保留代码供参考 */}
-        {/* <Button
-          variant={activeTab === 'install' ? 'default' : 'ghost'}
-          className="w-full justify-start transition-all hover:scale-105"
-          onClick={() => handleTabChange('install')}
-          disabled={restrictNavigation && activeTab !== 'install'}
-        >
-          <Package className="mr-2 h-4 w-4" />
-          安装工具
-        </Button> */}
-
-        <Button
-          variant={activeTab === 'switch' ? 'default' : 'ghost'}
-          className="w-full justify-start transition-all hover:scale-105"
-          onClick={() => handleTabChange('switch')}
-          disabled={restrictNavigation && activeTab !== 'switch'}
-        >
-          <ArrowRightLeft className="mr-2 h-4 w-4" />
-          高级设置
         </Button>
 
         <Button
