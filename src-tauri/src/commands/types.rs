@@ -3,6 +3,16 @@
 // 重新导出 ToolStatus（定义在 models 层）
 pub use duckcoding::models::ToolStatus;
 
+/// 工具扫描结果（用于添加实例预览，包含路径信息）
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ToolScanResult {
+    pub id: String,
+    pub name: String,
+    pub installed: bool,
+    pub version: Option<String>,
+    pub install_path: Option<String>,
+}
+
 /// Node 环境信息
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct NodeEnvironment {

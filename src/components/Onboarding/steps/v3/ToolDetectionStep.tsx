@@ -1,190 +1,104 @@
 // filepath: e:\DuckCoding\src\components\Onboarding\steps\v3\ToolDetectionStep.tsx
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { StepProps } from '../../../../types/onboarding';
-import { detectAndSaveTools } from '@/lib/tauri-commands';
-import type { ToolInstance } from '@/types/tool-management';
+import type { OnboardingNavigationPayload } from '../../../../types/onboarding';
+import { emit, listen } from '@tauri-apps/api/event';
 
-// 工具信息定义
-const TOOLS = [
-  { id: 'claude-code', name: 'Claude Code', icon: '🤖' },
-  { id: 'codex', name: 'CodeX', icon: '📦' },
-  { id: 'gemini-cli', name: 'Gemini CLI', icon: '✨' },
-];
-
-type DetectionStatus = 'pending' | 'detecting' | 'done' | 'error';
-
-interface ToolDetectionState {
-  status: DetectionStatus;
-  installed: boolean;
-  version: string | null;
-}
-
-export default function ToolDetectionStep({ onNext }: StepProps) {
-  const [detecting, setDetecting] = useState(false);
-  const [toolStates, setToolStates] = useState<Record<string, ToolDetectionState>>(() => {
-    const initial: Record<string, ToolDetectionState> = {};
-    TOOLS.forEach((tool) => {
-      initial[tool.id] = { status: 'pending', installed: false, version: null };
-    });
-    return initial;
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [completed, setCompleted] = useState(false);
-
-  // 使用 ref 追踪是否已开始检测，防止重复执行
-  const hasStartedRef = useRef(false);
-
-  const runDetection = async () => {
-    if (detecting) return;
-
-    setDetecting(true);
-    setError(null);
-
-    // 设置所有工具为检测中状态
-    setToolStates((prev) => {
-      const updated = { ...prev };
-      TOOLS.forEach((tool) => {
-        updated[tool.id] = { ...updated[tool.id], status: 'detecting' };
-      });
-      return updated;
-    });
-
+export default function ToolDetectionStep({ onNext, onPrevious, isFirst }: StepProps) {
+  const handleGoToToolManagement = async () => {
     try {
-      // 调用后端并行检测
-      const results = await detectAndSaveTools();
-
-      // 更新各工具状态
-      setToolStates((prev) => {
-        const updated = { ...prev };
-        results.forEach((instance: ToolInstance) => {
-          if (updated[instance.base_id]) {
-            updated[instance.base_id] = {
-              status: 'done',
-              installed: instance.installed,
-              version: instance.version ?? null,
-            };
-          }
-        });
-        // 确保没有结果的工具也标记为完成
-        TOOLS.forEach((tool) => {
-          if (updated[tool.id].status !== 'done') {
-            updated[tool.id] = { status: 'done', installed: false, version: null };
-          }
-        });
-        return updated;
-      });
-
-      setCompleted(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '检测失败');
-      setToolStates((prev) => {
-        const updated = { ...prev };
-        TOOLS.forEach((tool) => {
-          if (updated[tool.id].status === 'detecting') {
-            updated[tool.id] = { ...updated[tool.id], status: 'error' };
-          }
-        });
-        return updated;
-      });
-    } finally {
-      setDetecting(false);
+      // 隐藏引导界面
+      await emit('hide-onboarding');
+      // 使用标准化导航事件
+      await emit('onboarding-navigate', {
+        targetPage: 'tool-management',
+        autoAction: 'open-add-instance-dialog',
+      } as OnboardingNavigationPayload);
+    } catch (error) {
+      console.error('打开工具管理页面失败:', error);
     }
   };
 
-  // 组件挂载时自动开始检测（仅执行一次）
-  useEffect(() => {
-    if (hasStartedRef.current) return;
-    hasStartedRef.current = true;
-    runDetection();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleNext = async () => {
+    // 清除限制并恢复引导界面
+    await emit('clear-onboarding-restriction');
+    await emit('show-onboarding');
+    onNext();
+  };
 
-  const installedCount = Object.values(toolStates).filter(
-    (s) => s.status === 'done' && s.installed,
-  ).length;
+  // 监听继续引导事件
+  useEffect(() => {
+    const unlisten = listen('continue-onboarding', async () => {
+      await emit('clear-onboarding-restriction');
+      await emit('show-onboarding');
+      onNext();
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [onNext]);
 
   return (
     <div className="onboarding-step tool-detection-step">
       <div className="step-content">
         <div className="step-icon">
-          <span className="icon-large">🔍</span>
+          <span className="icon-large">🛠️</span>
         </div>
 
-        <h2 className="step-title">检测系统工具</h2>
+        <h2 className="step-title">配置工具实例</h2>
 
-        <p className="step-description">正在检测您系统中已安装的 AI 编程工具...</p>
+        <p className="step-description">
+          DuckCoding 支持管理多个 AI 编程工具实例，您可以在工具管理页面添加和配置它们
+        </p>
 
-        <div className="tool-detection-list">
-          {TOOLS.map((tool) => {
-            const state = toolStates[tool.id];
-            return (
-              <div key={tool.id} className={`tool-detection-item status-${state.status}`}>
-                <div className="tool-icon">{tool.icon}</div>
-                <div className="tool-info">
-                  <div className="tool-name">{tool.name}</div>
-                  <div className="tool-status">
-                    {state.status === 'pending' && <span className="text-muted">等待检测</span>}
-                    {state.status === 'detecting' && (
-                      <span className="text-detecting">
-                        <span className="spinner" /> 检测中...
-                      </span>
-                    )}
-                    {state.status === 'done' && state.installed && (
-                      <span className="text-installed">
-                        已安装 {state.version && <span className="version">v{state.version}</span>}
-                      </span>
-                    )}
-                    {state.status === 'done' && !state.installed && (
-                      <span className="text-not-installed">未安装</span>
-                    )}
-                    {state.status === 'error' && <span className="text-error">检测失败</span>}
-                  </div>
-                </div>
-                <div className="tool-check">
-                  {state.status === 'done' && state.installed && (
-                    <span className="check-icon">✓</span>
-                  )}
-                  {state.status === 'done' && !state.installed && (
-                    <span className="cross-icon">✗</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+        <div className="info-box">
+          <div className="info-icon">💡</div>
+          <div className="info-content">
+            <h3>如何添加工具实例？</h3>
+            <p>点击下方的「前往配置」按钮，在工具管理页面点击「添加实例」，然后选择：</p>
+            <ul>
+              <li>
+                <strong>本地环境</strong>：支持自动扫描或手动指定路径
+              </li>
+              <li>
+                <strong>WSL 环境</strong>：在 Windows 子系统 Linux 中使用工具
+              </li>
+            </ul>
+          </div>
         </div>
 
-        {error && (
-          <div className="error-box">
-            <p>{error}</p>
-            <button type="button" className="btn-secondary btn-small" onClick={runDetection}>
-              重试
-            </button>
-          </div>
-        )}
-
-        {completed && (
-          <div className="detection-summary">
-            {installedCount > 0 ? (
-              <p className="summary-text">
-                检测到 <strong>{installedCount}</strong> 个已安装的工具
-              </p>
-            ) : (
-              <p className="summary-text">未检测到已安装的工具，您可以稍后在工具管理页面安装</p>
-            )}
-          </div>
-        )}
+        <div className="config-hint">
+          <h3>支持的添加方式</h3>
+          <ul>
+            <li>
+              <strong>自动扫描</strong>：自动检测系统中已安装的工具（npm、Homebrew 等）
+            </li>
+            <li>
+              <strong>手动指定</strong>：选择工具可执行文件路径
+            </li>
+          </ul>
+        </div>
 
         <div className="action-buttons">
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => onNext()}
-            disabled={!completed}
-          >
-            {completed ? '继续' : '检测中...'}
+          <button type="button" className="btn-secondary" onClick={onPrevious} disabled={isFirst}>
+            上一步
           </button>
+
+          <div className="action-right">
+            <button type="button" className="btn-secondary" onClick={handleGoToToolManagement}>
+              前往配置
+            </button>
+            <button type="button" className="btn-primary" onClick={handleNext}>
+              下一步
+            </button>
+          </div>
         </div>
+
+        <p className="step-note">
+          提示：点击「前往配置」会打开工具管理页面，配置完成后点击「下一步」继续引导
+        </p>
       </div>
     </div>
   );

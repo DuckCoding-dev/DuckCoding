@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Loader2, InfoIcon } from 'lucide-react';
+import { listen } from '@tauri-apps/api/event';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ToolListSection } from './components/ToolListSection';
 import { AddInstanceDialog } from './components/AddInstanceDialog';
 import { VersionManagementDialog } from './components/VersionManagementDialog';
@@ -12,11 +14,13 @@ import type { ToolStatus } from '@/lib/tauri-commands';
 interface ToolManagementPageProps {
   tools: ToolStatus[];
   loading: boolean;
+  restrictNavigation?: boolean; // 新增：引导模式限制
 }
 
 export function ToolManagementPage({
   tools: _toolsProp,
   loading: loadingProp,
+  restrictNavigation,
 }: ToolManagementPageProps) {
   // _toolsProp 和 loadingProp 用于全局缓存，但工具管理需要更详细的 ToolInstance 数据
   // 所以仍然需要加载完整的工具实例信息
@@ -68,6 +72,20 @@ export function ToolManagementPage({
     });
   };
 
+  // 监听来自引导页面的打开添加实例对话框事件
+  useEffect(() => {
+    console.log('[ToolManagement] 注册 open-add-instance-dialog 事件监听');
+    const unlisten = listen('open-add-instance-dialog', () => {
+      console.log('[ToolManagement] 接收到 open-add-instance-dialog 事件，打开对话框');
+      setShowAddDialog(true);
+    });
+
+    return () => {
+      console.log('[ToolManagement] 清理 open-add-instance-dialog 事件监听');
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
   return (
     <PageContainer>
       {/* 页面标题和操作按钮 */}
@@ -86,12 +104,7 @@ export function ToolManagementPage({
           >
             安装工具
           </Button>
-          <Button
-            variant="outline"
-            disabled
-            title="功能开发中"
-            onClick={() => setShowAddDialog(true)}
-          >
+          <Button variant="outline" onClick={() => setShowAddDialog(true)}>
             添加实例
           </Button>
           <Button variant="outline" onClick={onRefreshTools}>
@@ -99,6 +112,16 @@ export function ToolManagementPage({
           </Button>
         </div>
       </div>
+
+      {/* 引导模式提示 */}
+      {restrictNavigation && (
+        <Alert className="mb-4">
+          <InfoIcon className="h-4 w-4" />
+          <AlertDescription>
+            当前处于引导模式，请点击「添加实例」按钮配置工具。完成后点击右下角悬浮按钮继续引导。
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* 加载状态 */}
       {(loadingProp || dataLoading) && (

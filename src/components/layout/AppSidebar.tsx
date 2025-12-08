@@ -37,6 +37,7 @@ interface AppSidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   restrictNavigation?: boolean;
+  allowedPage?: string; // 新增：允许访问的页面（引导模式下）
 }
 
 // 导航项配置
@@ -54,7 +55,12 @@ const secondaryItems = [
   { id: 'settings', label: '设置', icon: SettingsIcon },
 ];
 
-export function AppSidebar({ activeTab, onTabChange, restrictNavigation }: AppSidebarProps) {
+export function AppSidebar({
+  activeTab,
+  onTabChange,
+  restrictNavigation,
+  allowedPage,
+}: AppSidebarProps) {
   const { toast } = useToast();
   const { theme, actualTheme, setTheme } = useTheme();
 
@@ -68,13 +74,16 @@ export function AppSidebar({ activeTab, onTabChange, restrictNavigation }: AppSi
   }, [isCollapsed]);
 
   const handleTabChange = (tab: string) => {
-    if (restrictNavigation && tab !== activeTab) {
-      toast({
-        title: '请先完成引导',
-        description: '完成当前引导步骤后即可访问其他页面',
-        variant: 'default',
-      });
-      return;
+    if (restrictNavigation) {
+      // 只允许访问 allowedPage
+      if (allowedPage && tab !== allowedPage) {
+        toast({
+          title: '请先完成引导',
+          description: '完成当前引导步骤后即可访问其他页面',
+          variant: 'default',
+        });
+        return;
+      }
     }
     onTabChange(tab);
   };
@@ -96,7 +105,7 @@ export function AppSidebar({ activeTab, onTabChange, restrictNavigation }: AppSi
             : 'hover:bg-accent hover:shadow-md hover:scale-[1.02]'
         }`}
         onClick={() => handleTabChange(item.id)}
-        disabled={restrictNavigation && activeTab !== item.id}
+        disabled={restrictNavigation && allowedPage ? item.id !== allowedPage : false}
       >
         {isActive && !isCollapsed && (
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />

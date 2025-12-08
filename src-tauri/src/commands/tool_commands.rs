@@ -28,23 +28,21 @@ pub async fn check_installations(
         .map_err(|e| format!("检查工具状态失败: {}", e))
 }
 
-/// 刷新工具状态（重新检测并更新数据库）
+/// 刷新工具状态（仅从数据库读取，不重新检测）
 ///
-/// 工作流程：
-/// 1. 重新检测所有本地工具（并行，约 1.3s）
-/// 2. 更新数据库（upsert，删除已卸载的工具）
-/// 3. 返回最新的 ToolStatus
-///
-/// 用途：用户点击"刷新"按钮、安装/卸载工具后
+/// 修改说明：不再自动检测所有工具，仅返回数据库中已有的工具状态
+/// 如需添加新工具或验证已有工具，请使用：
+/// - 添加新工具：工具管理页面 → 添加实例
+/// - 验证单个工具：使用 detect_single_tool 命令
 #[tauri::command]
 pub async fn refresh_tool_status(
     registry_state: tauri::State<'_, ToolRegistryState>,
 ) -> Result<Vec<ToolStatus>, String> {
     let registry = registry_state.registry.lock().await;
     registry
-        .refresh_and_get_local_status()
+        .get_local_tool_status()
         .await
-        .map_err(|e| format!("刷新工具状态失败: {}", e))
+        .map_err(|e| format!("获取工具状态失败: {}", e))
 }
 
 /// 检测 Node.js 和 npm 环境
@@ -299,4 +297,236 @@ pub async fn update_tool(tool: String, force: Option<bool>) -> Result<UpdateResu
             Err("⏱️ 更新超时（120秒）\n\n可能的原因：\n• 网络连接不稳定\n• 服务器响应慢\n\n建议：\n1. 检查网络连接\n2. 重试更新\n3. 或尝试手动更新（详见文档）".to_string())
         }
     }
+}
+
+/// 验证用户指定的工具路径是否有效
+///
+/// 工作流程：
+/// 1. 检查文件是否存在
+/// 2. 执行 --version 命令
+/// 3. 解析版本号
+///
+/// 返回：版本号字符串
+#[tauri::command]
+pub async fn validate_tool_path(_tool_id: String, path: String) -> Result<String, String> {
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    let path_buf = PathBuf::from(&path);
+
+    // 检查文件是否存在
+    if !path_buf.exists() {
+        return Err(format!("路径不存在: {}", path));
+    }
+
+    // 检查是否是文件
+    if !path_buf.is_file() {
+        return Err(format!("路径不是文件: {}", path));
+    }
+
+    // 执行 --version 命令
+    let version_cmd = format!("{} --version", path);
+
+    #[cfg(target_os = "windows")]
+    let output = Command::new("cmd")
+        .arg("/C")
+        .arg(&version_cmd)
+        .output()
+        .map_err(|e| format!("执行命令失败: {}", e))?;
+
+    #[cfg(not(target_os = "windows"))]
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(&version_cmd)
+        .output()
+        .map_err(|e| format!("执行命令失败: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!("命令执行失败，退出码: {}", output.status));
+    }
+
+    // 解析版本号
+    let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if version_str.is_empty() {
+        return Err("无法获取版本信息".to_string());
+    }
+
+    // 简单验证：版本号应该包含数字
+    if !version_str.chars().any(|c| c.is_numeric()) {
+        return Err(format!("无效的版本信息: {}", version_str));
+    }
+
+    Ok(version_str)
+}
+
+/// 手动添加工具实例（保存用户指定的路径）
+///
+/// 工作流程：
+/// 1. 验证路径有效性
+/// 2. 创建 ToolInstance
+/// 3. 保存到数据库
+///
+/// 返回：工具状态信息
+#[tauri::command]
+pub async fn add_manual_tool_instance(
+    tool_id: String,
+    path: String,
+    _registry_state: tauri::State<'_, ToolRegistryState>,
+) -> Result<crate::commands::types::ToolStatus, String> {
+    use ::duckcoding::models::{InstallMethod, ToolInstance, ToolType};
+    use ::duckcoding::services::tool::ToolInstanceDB;
+
+    // 1. 验证路径
+    let version = validate_tool_path(tool_id.clone(), path.clone()).await?;
+
+    // 2. 创建工具显示名称
+    let tool_name = match tool_id.as_str() {
+        "claude-code" => "Claude Code",
+        "codex" => "CodeX",
+        "gemini-cli" => "Gemini CLI",
+        _ => &tool_id,
+    };
+
+    // 3. 创建 ToolInstance
+    let instance_id = format!("{}-local-manual", tool_id);
+    let now = chrono::Utc::now().timestamp();
+    let instance = ToolInstance {
+        instance_id: instance_id.clone(),
+        base_id: tool_id.clone(),
+        tool_name: tool_name.to_string(),
+        tool_type: ToolType::Local,
+        install_method: Some(InstallMethod::Npm), // 手动添加默认为 Npm，可后续优化
+        installed: true,
+        version: Some(version.clone()),
+        install_path: Some(path.clone()),
+        wsl_distro: None,
+        ssh_config: None,
+        is_builtin: false, // 手动添加的工具不是内置的
+        created_at: now,
+        updated_at: now,
+    };
+
+    // 4. 保存到数据库
+    let db = ToolInstanceDB::new().map_err(|e| format!("初始化数据库失败: {}", e))?;
+
+    db.add_instance(&instance)
+        .map_err(|e| format!("保存到数据库失败: {}", e))?;
+
+    // 5. 返回 ToolStatus 格式
+    Ok(crate::commands::types::ToolStatus {
+        id: tool_id.clone(),
+        name: tool_name.to_string(),
+        installed: true,
+        version: Some(version),
+    })
+}
+
+/// 检测单个工具但不保存（仅用于预览）
+///
+/// 工作流程：
+/// 1. 简化版检测：直接调用命令检查工具是否存在
+/// 2. 返回检测结果（不保存到数据库）
+///
+/// 返回：工具状态信息
+#[tauri::command]
+pub async fn detect_tool_without_save(
+    tool_id: String,
+    _registry_state: tauri::State<'_, ToolRegistryState>,
+) -> Result<crate::commands::types::ToolStatus, String> {
+    use ::duckcoding::utils::CommandExecutor;
+
+    let command_executor = CommandExecutor::new();
+
+    // 根据工具ID确定检测命令和名称
+    let (check_cmd, tool_name) = match tool_id.as_str() {
+        "claude-code" => ("claude", "Claude Code"),
+        "codex" => ("codex", "CodeX"),
+        "gemini-cli" => ("gemini", "Gemini CLI"),
+        _ => return Err(format!("未知工具ID: {}", tool_id)),
+    };
+
+    // 检测工具是否存在
+    let installed = command_executor.command_exists_async(check_cmd).await;
+
+    let version = if installed {
+        // 获取版本
+        let version_cmd = format!("{} --version", check_cmd);
+        let result = command_executor.execute_async(&version_cmd).await;
+        if result.success {
+            let version_str = result.stdout.trim().to_string();
+            if !version_str.is_empty() {
+                Some(version_str)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    Ok(crate::commands::types::ToolStatus {
+        id: tool_id.clone(),
+        name: tool_name.to_string(),
+        installed,
+        version,
+    })
+}
+
+/// 检测单个工具并保存到数据库
+///
+/// 工作流程：
+/// 1. 先查询数据库中是否已有该工具的实例
+/// 2. 如果已有且已安装，直接返回（除非 force_redetect = true）
+/// 3. 如果没有或需要重新检测，执行单工具检测（会先删除旧实例）
+///
+/// 返回：工具实例信息
+#[tauri::command]
+pub async fn detect_single_tool(
+    tool_id: String,
+    force_redetect: Option<bool>,
+    registry_state: tauri::State<'_, ToolRegistryState>,
+) -> Result<crate::commands::types::ToolStatus, String> {
+    use ::duckcoding::models::ToolType;
+    use ::duckcoding::services::tool::ToolInstanceDB;
+
+    let force = force_redetect.unwrap_or(false);
+
+    if !force {
+        // 1. 先查询数据库中是否已有该工具的本地实例
+        let db = ToolInstanceDB::new().map_err(|e| format!("初始化数据库失败: {}", e))?;
+        let all_instances = db
+            .get_all_instances()
+            .map_err(|e| format!("读取数据库失败: {}", e))?;
+
+        // 查找该工具的本地实例
+        if let Some(existing) = all_instances.iter().find(|inst| {
+            inst.base_id == tool_id && inst.tool_type == ToolType::Local && inst.installed
+        }) {
+            // 如果已有实例且已安装，直接返回
+            tracing::info!("工具 {} 已在数据库中，直接返回", existing.tool_name);
+            return Ok(crate::commands::types::ToolStatus {
+                id: tool_id.clone(),
+                name: existing.tool_name.clone(),
+                installed: true,
+                version: existing.version.clone(),
+            });
+        }
+    }
+
+    // 2. 执行单工具检测（会删除旧实例避免重复）
+    let registry = registry_state.registry.lock().await;
+    let instance = registry
+        .detect_and_persist_single_tool(&tool_id)
+        .await
+        .map_err(|e| format!("检测失败: {}", e))?;
+
+    // 3. 返回 ToolStatus 格式
+    Ok(crate::commands::types::ToolStatus {
+        id: tool_id.clone(),
+        name: instance.tool_name.clone(),
+        installed: instance.installed,
+        version: instance.version.clone(),
+    })
 }

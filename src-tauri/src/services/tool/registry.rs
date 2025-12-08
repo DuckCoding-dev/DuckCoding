@@ -150,26 +150,76 @@ impl ToolRegistry {
 
         // 创建 ToolInstance（需要获取 Tool 的完整信息）
         let tool = Tool::by_id(tool_id).unwrap_or_else(|| {
-            // 如果 Tool 定义不存在，从 Detector 构建最小化 Tool
-            Tool {
-                id: tool_id.to_string(),
-                name: tool_name.to_string(),
-                group_name: format!("{} 专用分组", tool_name),
-                npm_package: detector.npm_package().to_string(),
-                check_command: detector.check_command().to_string(),
-                config_dir: detector.config_dir(),
-                config_file: detector.config_file().to_string(),
-                env_vars: crate::models::EnvVars {
-                    api_key: String::new(),
-                    base_url: String::new(),
-                },
-                use_proxy_for_version_check: detector.use_proxy_for_version_check(),
+            tracing::warn!("未找到工具定义: {}, 使用对应的静态方法", tool_id);
+            match tool_id {
+                "claude-code" => Tool::claude_code(),
+                "codex" => Tool::codex(),
+                "gemini-cli" => Tool::gemini_cli(),
+                _ => panic!("未知工具ID: {}", tool_id),
             }
         });
 
-        let mut instance = ToolInstance::from_tool_local(&tool, installed, version, install_path);
-        instance.install_method = install_method; // 设置检测到的安装方式
-        instance
+        let instance_id = format!("{}-local", tool_id);
+        let now = chrono::Utc::now().timestamp();
+
+        ToolInstance {
+            instance_id,
+            base_id: tool.id.clone(),
+            tool_name: tool.name.clone(),
+            tool_type: ToolType::Local,
+            install_method,
+            installed,
+            version,
+            install_path,
+            wsl_distro: None,
+            ssh_config: None,
+            is_builtin: true,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    /// 检测单个本地工具并持久化（公开方法）
+    ///
+    /// 工作流程：
+    /// 1. 删除该工具的所有现有本地实例（避免重复）
+    /// 2. 执行检测
+    /// 3. 如果检测到，保存到数据库
+    ///
+    /// 返回：工具实例
+    pub async fn detect_and_persist_single_tool(&self, tool_id: &str) -> Result<ToolInstance> {
+        let detector = self
+            .detector_registry
+            .get(tool_id)
+            .ok_or_else(|| anyhow::anyhow!("未找到工具 {} 的检测器", tool_id))?;
+
+        tracing::info!("开始检测单个工具: {}", tool_id);
+
+        // 1. 删除该工具的所有本地实例（避免重复）
+        let db = self.db.lock().await;
+        let all_instances = db.get_all_instances()?;
+        for inst in all_instances {
+            if inst.base_id == tool_id && inst.tool_type == ToolType::Local {
+                tracing::info!("删除旧实例: {}", inst.instance_id);
+                let _ = db.delete_instance(&inst.instance_id);
+            }
+        }
+        drop(db);
+
+        // 2. 执行检测
+        let instance = self.detect_single_tool_by_detector(detector).await;
+
+        // 3. 保存到数据库
+        let db = self.db.lock().await;
+        if instance.installed {
+            db.upsert_instance(&instance)?;
+            tracing::info!("工具 {} 检测并保存成功", instance.tool_name);
+        } else {
+            tracing::info!("工具 {} 未检测到", instance.tool_name);
+        }
+        drop(db);
+
+        Ok(instance)
     }
 
     /// 刷新本地工具状态（重新检测，更新存在的，删除不存在的）
@@ -357,16 +407,7 @@ impl ToolRegistry {
     pub async fn get_local_tool_status(&self) -> Result<Vec<crate::models::ToolStatus>> {
         tracing::debug!("获取本地工具轻量级状态");
 
-        // 检查数据库是否有本地工具数据
-        let has_data = self.has_local_tools_in_db().await?;
-
-        if !has_data {
-            tracing::info!("数据库为空，执行首次检测并持久化");
-            // 首次检测并保存到数据库
-            self.detect_and_persist_local_tools().await?;
-        }
-
-        // 从数据库读取所有实例
+        // 从数据库读取所有实例（不主动检测）
         let grouped = self.get_all_grouped().await?;
 
         // 转换为轻量级 ToolStatus

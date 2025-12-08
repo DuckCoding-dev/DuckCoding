@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { CloseActionDialog } from '@/components/dialogs/CloseActionDialog';
@@ -55,6 +55,7 @@ function App() {
   const [selectedProxyToolId, setSelectedProxyToolId] = useState<string | undefined>(undefined);
   const [settingsInitialTab, setSettingsInitialTab] = useState<string>('basic');
   const [settingsRestrictToTab, setSettingsRestrictToTab] = useState<string | undefined>(undefined);
+  const [restrictedPage, setRestrictedPage] = useState<string | undefined>(undefined);
 
   // 引导状态管理
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -283,11 +284,51 @@ function App() {
       },
     );
 
+    // 监听统一引导导航事件（标准化）
+    const unlistenOnboardingNavigate = listen<{
+      targetPage: string;
+      restrictToTab?: string;
+      autoAction?: string;
+    }>('onboarding-navigate', (event) => {
+      const { targetPage, restrictToTab, autoAction } = event.payload || {};
+
+      console.log('[Onboarding Nav] 接收导航事件:', { targetPage, restrictToTab, autoAction });
+
+      // 设置页面限制
+      setRestrictedPage(targetPage);
+
+      // 处理设置页面的特殊逻辑
+      if (targetPage === 'settings' && restrictToTab) {
+        setSettingsInitialTab(restrictToTab);
+        setSettingsRestrictToTab(restrictToTab);
+      }
+
+      // 跳转到目标页面
+      setActiveTab(targetPage as TabType);
+
+      // 延迟触发自动动作（等待页面渲染和事件监听建立）
+      if (autoAction) {
+        console.log('[Onboarding Nav] 将在 500ms 后触发自动动作:', autoAction);
+        setTimeout(() => {
+          console.log('[Onboarding Nav] 触发自动动作:', autoAction);
+          emit(autoAction);
+        }, 500);
+      }
+    });
+
+    // 监听清除引导限制
+    const unlistenClearRestriction = listen('clear-onboarding-restriction', () => {
+      setRestrictedPage(undefined);
+      setSettingsRestrictToTab(undefined);
+    });
+
     return () => {
       unlistenUpdateAvailable.then((fn) => fn());
       unlistenRequestCheck.then((fn) => fn());
       unlistenNotFound.then((fn) => fn());
       unlistenOpenSettings.then((fn) => fn());
+      unlistenOnboardingNavigate.then((fn) => fn());
+      unlistenClearRestriction.then((fn) => fn());
     };
   }, [toast]);
 
@@ -371,14 +412,19 @@ function App() {
         <AppSidebar
           activeTab={activeTab}
           onTabChange={(tab) => setActiveTab(tab as TabType)}
-          restrictNavigation={!!settingsRestrictToTab}
+          restrictNavigation={!!settingsRestrictToTab || !!restrictedPage}
+          allowedPage={restrictedPage || (settingsRestrictToTab ? 'settings' : undefined)}
         />
 
         {/* 主内容区域 */}
         <main className="flex-1 overflow-auto">
           {activeTab === 'dashboard' && <DashboardPage tools={tools} loading={toolsLoading} />}
           {activeTab === 'tool-management' && (
-            <ToolManagementPage tools={tools} loading={toolsLoading} />
+            <ToolManagementPage
+              tools={tools}
+              loading={toolsLoading}
+              restrictNavigation={restrictedPage === 'tool-management'}
+            />
           )}
           {activeTab === 'install' && <InstallationPage tools={tools} loading={toolsLoading} />}
           {activeTab === 'balance' && <BalancePage />}

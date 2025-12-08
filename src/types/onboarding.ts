@@ -45,6 +45,18 @@ export interface StepProps {
 }
 
 /**
+ * 标准化引导导航配置（用于 Tauri 事件通信）
+ */
+export interface OnboardingNavigationPayload {
+  /** 目标页面 ID（如 'settings', 'tool-management'） */
+  targetPage: string;
+  /** 限制到特定 tab（仅设置页面使用，如 'proxy'） */
+  restrictToTab?: string;
+  /** 自动触发的动作（如 'open-add-instance-dialog'） */
+  autoAction?: string;
+}
+
+/**
  * 引导版本配置映射类型
  */
 export type VersionStepsMap = Record<string, OnboardingStep[]>;

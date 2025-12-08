@@ -22,16 +22,14 @@ pub async fn has_tools_in_database(
         .map_err(|e| format!("检查数据库失败: {}", e))
 }
 
-/// 检测本地工具并保存到数据库（用于新手引导）
+/// 检测本地工具并保存到数据库（已废弃）
+///
+/// 此命令已废弃，请使用工具管理页面的「添加实例」功能单独添加工具
 #[tauri::command]
 pub async fn detect_and_save_tools(
-    state: tauri::State<'_, ToolRegistryState>,
+    _state: tauri::State<'_, ToolRegistryState>,
 ) -> Result<Vec<ToolInstance>, String> {
-    let registry = state.registry.lock().await;
-    registry
-        .detect_and_persist_local_tools()
-        .await
-        .map_err(|e| format!("检测工具失败: {}", e))
+    Err("此功能已废弃，请使用工具管理页面的「添加实例」功能单独添加工具".to_string())
 }
 
 /// 获取所有工具实例（按工具ID分组）- 只从数据库读取
@@ -46,16 +44,19 @@ pub async fn get_tool_instances(
         .map_err(|e| format!("获取工具实例失败: {}", e))
 }
 
-/// 刷新工具实例状态（重新检测并更新数据库）
+/// 刷新工具实例状态（仅从数据库读取，不重新检测）
+///
+/// 修改说明：不再自动检测所有工具，仅返回数据库中已有的工具实例
+/// 如需添加新工具，请使用工具管理页面的「添加实例」功能
 #[tauri::command]
 pub async fn refresh_tool_instances(
     state: tauri::State<'_, ToolRegistryState>,
 ) -> Result<HashMap<String, Vec<ToolInstance>>, String> {
     let registry = state.registry.lock().await;
     registry
-        .refresh_all()
+        .get_all_grouped()
         .await
-        .map_err(|e| format!("刷新工具实例失败: {}", e))
+        .map_err(|e| format!("获取工具实例失败: {}", e))
 }
 
 /// 列出所有可用的WSL发行版

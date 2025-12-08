@@ -413,7 +413,8 @@ fn main() {
 
             Ok(())
         })
-        .plugin(tauri_plugin_shell::init());
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init());
 
     // 条件注册单实例插件
     let builder = if single_instance_enabled {
@@ -450,6 +451,10 @@ fn main() {
         check_update,
         check_all_updates,
         update_tool,
+        validate_tool_path,
+        add_manual_tool_instance,
+        detect_single_tool,
+        detect_tool_without_save,
         // 请使用新的 pm_ 系列命令
         save_global_config,
         get_global_config,

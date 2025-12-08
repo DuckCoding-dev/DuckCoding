@@ -83,22 +83,33 @@ export function useToolManagement() {
 
   // 添加实例
   const handleAddInstance = useCallback(
-    async (baseId: string, type: 'wsl' | 'ssh', sshConfig?: SSHConfig, distroName?: string) => {
+    async (
+      baseId: string,
+      type: 'local' | 'wsl' | 'ssh',
+      sshConfig?: SSHConfig,
+      distroName?: string,
+    ) => {
       try {
-        if (type === 'wsl') {
+        if (type === 'local') {
+          // 本地实例已通过 detectSingleTool 或 addManualToolInstance 添加
+          // 这里只需要重新读取数据库，不重新检测
+          toast({ title: '添加成功', description: '本地工具实例已添加' });
+          await loadTools(); // 只从数据库读取，不重新检测
+        } else if (type === 'wsl') {
           if (!distroName) {
             throw new Error('WSL发行版名称不能为空');
           }
           await addWslToolInstance(baseId, distroName);
           toast({ title: '添加成功', description: 'WSL工具实例已添加' });
+          await refreshTools();
         } else {
           if (!sshConfig) {
             throw new Error('SSH配置不能为空');
           }
           await addSshToolInstance(baseId, sshConfig);
           toast({ title: '添加成功', description: 'SSH工具实例已添加' });
+          await refreshTools();
         }
-        await refreshTools();
       } catch (err) {
         toast({
           title: '添加失败',
@@ -107,7 +118,7 @@ export function useToolManagement() {
         });
       }
     },
-    [refreshTools, toast],
+    [refreshTools, loadTools, toast],
   );
 
   // 删除实例

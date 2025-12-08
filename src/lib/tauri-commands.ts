@@ -868,3 +868,45 @@ export async function updateProxyConfig(toolId: ToolId, config: ToolProxyConfig)
 export async function getAllProxyConfigs(): Promise<Record<string, ToolProxyConfig>> {
   return invoke<Record<string, ToolProxyConfig>>('get_all_proxy_configs');
 }
+
+/**
+ * 验证用户指定的工具路径是否有效
+ * @param toolId 工具ID
+ * @param path 工具可执行文件路径
+ * @returns 版本号字符串
+ */
+export async function validateToolPath(toolId: string, path: string): Promise<string> {
+  return invoke<string>('validate_tool_path', { toolId, path });
+}
+
+/**
+ * 手动添加工具实例（保存用户指定的路径）
+ * @param toolId 工具ID
+ * @param path 工具可执行文件路径
+ * @returns 工具状态信息
+ */
+export async function addManualToolInstance(toolId: string, path: string): Promise<ToolStatus> {
+  return invoke<ToolStatus>('add_manual_tool_instance', { toolId, path });
+}
+
+/**
+ * 检测单个工具但不保存（仅用于预览）
+ * @param toolId 工具ID
+ * @returns 工具状态信息
+ */
+export async function detectToolWithoutSave(toolId: string): Promise<ToolStatus> {
+  return invoke<ToolStatus>('detect_tool_without_save', { toolId });
+}
+
+/**
+ * 检测单个工具并保存到数据库
+ * @param toolId 工具ID
+ * @param forceRedetect 是否强制重新检测（默认 false，会优先读取数据库）
+ * @returns 工具状态信息
+ */
+export async function detectSingleTool(
+  toolId: string,
+  forceRedetect?: boolean,
+): Promise<ToolStatus> {
+  return invoke<ToolStatus>('detect_single_tool', { toolId, forceRedetect });
+}
