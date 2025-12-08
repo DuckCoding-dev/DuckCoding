@@ -27,8 +27,8 @@
     "test:rs": "cargo test --manifest-path src-tauri/Cargo.toml --workspace --locked",
     "coverage:rs": "cargo llvm-cov --manifest-path src-tauri/Cargo.toml --workspace --locked --fail-under-lines 90",
     "coverage:rs:setup": "rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked",
-    "guidelines:check": "node scripts/ensure-guidelines-sync.mjs --mode=check",
-    "guidelines:fix": "node scripts/ensure-guidelines-sync.mjs --mode=fix",
+    "agent-config:check": "node scripts/ensure-agent-config.mjs --mode=check",
+    "agent-config:fix": "node scripts/ensure-agent-config.mjs --mode=fix",
     "check": "node scripts/run-checks.mjs",
     "check:fix": "node scripts/run-checks.mjs --fix"
   },
