@@ -16,16 +16,17 @@ pub enum DownloadEvent {
 
 /// 文件下载器
 #[derive(Clone)]
-pub struct FileDownloader {
-    client: reqwest::Client,
-}
+pub struct FileDownloader {}
 
 impl FileDownloader {
     pub fn new() -> Self {
-        Self {
-            client: crate::http_client::build_client()
-                .expect("Failed to create HTTP client for downloader"),
-        }
+        Self {}
+    }
+
+    /// 创建 HTTP 客户端（每次调用时动态创建，以确保使用最新的代理配置）
+    fn create_client() -> Result<reqwest::Client> {
+        crate::http_client::build_client()
+            .map_err(|e| anyhow::anyhow!("Failed to create HTTP client: {e}"))
     }
 
     /// 异步下载文件，支持进度回调
@@ -49,8 +50,8 @@ impl FileDownloader {
         }
 
         // 发起HTTP请求
-        let response = self
-            .client
+        let client = Self::create_client()?;
+        let response = client
             .get(url)
             .send()
             .await
@@ -127,7 +128,8 @@ impl FileDownloader {
 
     /// 获取文件大小（如果支持）
     pub async fn get_file_size(&self, url: &str) -> Result<Option<u64>> {
-        match self.client.head(url).send().await {
+        let client = Self::create_client()?;
+        match client.head(url).send().await {
             Ok(response) => Ok(response.content_length()),
             Err(e) => {
                 // 如果HEAD请求失败，可能是服务器不支持HEAD请求，记录但不阻断下载
