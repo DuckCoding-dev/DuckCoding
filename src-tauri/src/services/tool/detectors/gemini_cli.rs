@@ -95,7 +95,7 @@ impl ToolDetector for GeminiCLIDetector {
     ) -> Result<()> {
         match method {
             InstallMethod::Npm => self.install_npm(executor, force).await,
-            InstallMethod::Official | InstallMethod::Brew => {
+            InstallMethod::Official | InstallMethod::Brew | InstallMethod::Other => {
                 anyhow::bail!("Gemini CLI 仅支持 npm 安装")
             }
         }

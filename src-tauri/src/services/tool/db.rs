@@ -92,6 +92,7 @@ impl ToolInstanceDB {
                     installed: instance.installed,
                     version: instance.version.clone(),
                     install_path: instance.install_path.clone(),
+                    installer_path: instance.installer_path.clone(), // 新增
                     install_method: instance.install_method.clone(),
                     is_builtin: instance.is_builtin,
                     created_at: instance.created_at,
@@ -326,6 +327,7 @@ impl ToolInstanceDB {
                 installed: installed_int != 0,
                 version: row.get(5)?,
                 install_path: row.get(6)?,
+                installer_path: None, // 旧数据没有，需要后续检测
                 wsl_distro: row.get(7)?,
                 ssh_config,
                 is_builtin: is_builtin_int != 0,
@@ -384,6 +386,7 @@ mod tests {
             installed: true,
             version: Some("1.0.0".to_string()),
             install_path: Some("/usr/local/bin/test".to_string()),
+            installer_path: Some("/usr/local/bin/npm".to_string()),
             wsl_distro: None,
             ssh_config: None,
             is_builtin: true,

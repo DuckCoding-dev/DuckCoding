@@ -884,10 +884,22 @@ export async function validateToolPath(toolId: string, path: string): Promise<st
  * 手动添加工具实例（保存用户指定的路径）
  * @param toolId 工具ID
  * @param path 工具可执行文件路径
+ * @param installMethod 安装方法（"npm" | "brew" | "official" | "other"）
+ * @param installerPath 安装器路径（非 other 类型时必填）
  * @returns 工具状态信息
  */
-export async function addManualToolInstance(toolId: string, path: string): Promise<ToolStatus> {
-  return invoke<ToolStatus>('add_manual_tool_instance', { toolId, path });
+export async function addManualToolInstance(
+  toolId: string,
+  path: string,
+  installMethod: string,
+  installerPath?: string,
+): Promise<ToolStatus> {
+  return invoke<ToolStatus>('add_manual_tool_instance', {
+    toolId,
+    path,
+    installMethod,
+    installerPath,
+  });
 }
 
 /**

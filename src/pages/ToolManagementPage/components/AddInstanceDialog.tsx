@@ -58,12 +58,22 @@ const LOCAL_METHODS = [
   { id: 'manual', name: '手动指定', description: '选择工具可执行文件路径' },
 ];
 
+const INSTALL_METHODS = [
+  { id: 'npm', name: 'npm', description: '使用 npm 安装' },
+  { id: 'brew', name: 'Homebrew', description: '使用 brew 安装（仅 macOS）' },
+  { id: 'official', name: '官方脚本', description: '使用官方安装脚本' },
+  { id: 'other', name: '其他', description: '不支持APP内快捷更新' },
+];
+
 export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogProps) {
   const { toast } = useToast();
+  const [step, setStep] = useState(1); // 当前步骤：1=选择工具和方式，2=配置详情
   const [baseId, setBaseId] = useState('claude-code');
   const [envType, setEnvType] = useState<'local' | 'wsl' | 'ssh'>('local');
   const [localMethod, setLocalMethod] = useState<'auto' | 'manual'>('auto');
   const [manualPath, setManualPath] = useState('');
+  const [installMethod, setInstallMethod] = useState<'npm' | 'brew' | 'official' | 'other'>('npm');
+  const [installerPath, setInstallerPath] = useState('');
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -148,6 +158,34 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
       if (selected && typeof selected === 'string') {
         setManualPath(selected);
         handleValidate(selected);
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: '打开文件选择器失败',
+        description: String(error),
+      });
+    }
+  };
+
+  // 浏览选择安装器路径
+  const handleBrowseInstaller = async () => {
+    try {
+      const isWindows = navigator.platform.toLowerCase().includes('win');
+      const selected = await openDialog({
+        directory: false,
+        multiple: false,
+        title: `选择安装器可执行文件（${installMethod}）`,
+        filters: [
+          {
+            name: '可执行文件',
+            extensions: isWindows ? ['exe', 'cmd', 'bat'] : [],
+          },
+        ],
+      });
+
+      if (selected && typeof selected === 'string') {
+        setInstallerPath(selected);
       }
     } catch (error) {
       toast({
@@ -276,9 +314,25 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
             description: `${toolNames[baseId]} v${result.version}`,
           });
         } else {
-          // 手动指定：保存路径
-          console.log('[AddInstance] 保存手动指定路径:', manualPath);
-          await addManualToolInstance(baseId, manualPath);
+          // 手动指定：验证并保存路径
+          console.log('[AddInstance] 保存手动指定路径:', manualPath, '安装器:', installMethod);
+
+          // 验证：非 other 类型必须提供安装器路径
+          if (installMethod !== 'other' && !installerPath) {
+            toast({
+              variant: 'destructive',
+              title: '请选择安装器路径',
+              description: `${INSTALL_METHODS.find((m) => m.id === installMethod)?.name} 需要提供安装器路径`,
+            });
+            return;
+          }
+
+          await addManualToolInstance(
+            baseId,
+            manualPath,
+            installMethod,
+            installerPath || undefined,
+          );
           toast({
             title: '添加成功',
             description: `${toolNames[baseId]} 已成功添加`,
@@ -320,14 +374,34 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
   const handleClose = () => {
     if (!loading && !scanning) {
       onClose();
+      setStep(1);
       setBaseId('claude-code');
       setEnvType('local');
       setLocalMethod('auto');
       setManualPath('');
+      setInstallMethod('npm');
+      setInstallerPath('');
       setValidationError(null);
       setSelectedDistro('');
       setScanResult(null);
     }
+  };
+
+  const handleNext = () => {
+    // 验证第一步的选择
+    if (envType === 'wsl' && !selectedDistro) {
+      toast({
+        variant: 'destructive',
+        title: '请选择 WSL 发行版',
+      });
+      return;
+    }
+    setStep(2);
+  };
+
+  const handleBack = () => {
+    setStep(1);
+    setScanResult(null);
   };
 
   return (
@@ -518,7 +592,80 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
                         <AlertDescription>{validationError}</AlertDescription>
                       </Alert>
                     )}
+                  </div>
 
+                  {/* 安装器类型选择 */}
+                  <div className="space-y-3">
+                    <Label className="text-base font-semibold">安装器类型</Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {INSTALL_METHODS.map((method) => (
+                        <button
+                          key={method.id}
+                          type="button"
+                          onClick={() =>
+                            setInstallMethod(method.id as 'npm' | 'brew' | 'official' | 'other')
+                          }
+                          className={cn(
+                            'relative flex flex-col items-center justify-center py-2 px-2 rounded-lg border-2 transition-all hover:border-primary/50',
+                            installMethod === method.id
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border',
+                          )}
+                        >
+                          {installMethod === method.id && (
+                            <CheckCircle2 className="absolute top-1 right-1 h-3 w-3 text-primary" />
+                          )}
+                          <span className="text-xs font-medium mb-0.5">{method.name}</span>
+                          <span className="text-[10px] text-muted-foreground text-center leading-tight">
+                            {method.description}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 安装器路径（非 other 时显示） */}
+                  {installMethod !== 'other' && (
+                    <div className="space-y-2">
+                      <Label>安装器路径（用于更新工具）</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={installerPath}
+                          onChange={(e) => setInstallerPath(e.target.value)}
+                          placeholder={`如: ${navigator.platform.toLowerCase().includes('win') ? 'C:\\Program Files\\nodejs\\npm.cmd' : '/usr/local/bin/npm'}`}
+                          disabled={loading || scanning}
+                        />
+                        <Button
+                          onClick={handleBrowseInstaller}
+                          variant="outline"
+                          disabled={loading || scanning}
+                        >
+                          浏览...
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        安装器路径用于 APP 内快捷更新，留空则无法使用快捷更新功能
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Other 类型警告 */}
+                  {installMethod === 'other' && (
+                    <Alert
+                      variant="default"
+                      className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/30"
+                    >
+                      <InfoIcon className="h-4 w-4 text-yellow-600" />
+                      <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                        <strong>「其他」类型不支持 APP 内快捷更新</strong>
+                        <br />
+                        您需要手动更新此工具
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* 验证路径按钮 */}
+                  <div>
                     <Button
                       onClick={handleScan}
                       disabled={scanning || !manualPath || !!validationError}

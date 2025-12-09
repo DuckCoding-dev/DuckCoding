@@ -110,6 +110,9 @@ impl ToolDetector for CodeXDetector {
             }
             InstallMethod::Npm => self.install_npm(executor, force).await,
             InstallMethod::Brew => self.install_brew(executor).await,
+            InstallMethod::Other => {
+                anyhow::bail!("不支持 APP 内安装，请手动安装")
+            }
         }
     }
 

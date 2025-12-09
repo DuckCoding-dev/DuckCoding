@@ -115,6 +115,9 @@ impl ToolDetector for ClaudeCodeDetector {
             InstallMethod::Brew => {
                 anyhow::bail!("Claude Code 不支持 Homebrew 安装，请使用官方安装或 npm")
             }
+            InstallMethod::Other => {
+                anyhow::bail!("不支持 APP 内安装，请手动安装")
+            }
         }
     }
 

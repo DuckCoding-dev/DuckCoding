@@ -184,9 +184,7 @@ export function useToolManagement() {
           const updated = { ...prev };
           for (const [toolId, instances] of Object.entries(updated)) {
             updated[toolId] = instances.map((inst) =>
-              inst.instance_id === instanceId
-                ? { ...inst, version: result.current_version }
-                : inst,
+              inst.instance_id === instanceId ? { ...inst, version: result.current_version } : inst,
             );
           }
           return updated;

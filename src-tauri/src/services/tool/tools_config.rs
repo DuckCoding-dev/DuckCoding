@@ -41,6 +41,8 @@ pub struct LocalToolInstance {
     pub installed: bool,
     pub version: Option<String>,
     pub install_path: Option<String>,
+    #[serde(default)]
+    pub installer_path: Option<String>, // 安装器路径（如 npm/brew 路径）
     pub install_method: Option<InstallMethod>,
     pub is_builtin: bool,
     pub created_at: i64,
@@ -124,6 +126,7 @@ impl ToolsConfig {
                     installed: local.installed,
                     version: local.version.clone(),
                     install_path: local.install_path.clone(),
+                    installer_path: local.installer_path.clone(), // 新增
                     wsl_distro: None,
                     ssh_config: None,
                     is_builtin: local.is_builtin,
@@ -143,6 +146,7 @@ impl ToolsConfig {
                     installed: wsl.installed,
                     version: wsl.version.clone(),
                     install_path: wsl.install_path.clone(),
+                    installer_path: None, // WSL环境暂不支持
                     wsl_distro: Some(wsl.distro_name.clone()),
                     ssh_config: None,
                     is_builtin: wsl.is_builtin,
@@ -162,6 +166,7 @@ impl ToolsConfig {
                     installed: ssh.installed,
                     version: ssh.version.clone(),
                     install_path: ssh.install_path.clone(),
+                    installer_path: None, // SSH环境暂不支持
                     wsl_distro: None,
                     ssh_config: Some(ssh.ssh_config.clone()),
                     is_builtin: ssh.is_builtin,
@@ -213,6 +218,7 @@ impl ToolsConfig {
                             installed: instance.installed,
                             version: instance.version,
                             install_path: instance.install_path,
+                            installer_path: instance.installer_path, // 新增
                             install_method: instance.install_method,
                             is_builtin: instance.is_builtin,
                             created_at: instance.created_at,
@@ -284,6 +290,7 @@ mod tests {
             installed: true,
             version: Some("2.0.5".to_string()),
             install_path: Some("/usr/local/bin/claude".to_string()),
+            installer_path: Some("/usr/local/bin/npm".to_string()),
             install_method: Some(InstallMethod::Npm),
             is_builtin: true,
             created_at: 1733299200,

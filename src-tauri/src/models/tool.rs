@@ -38,6 +38,7 @@ pub enum InstallMethod {
     Official, // 官方脚本
     Npm,      // npm install
     Brew,     // Homebrew (macOS)
+    Other,    // 其他（不支持APP内快捷更新）
 }
 
 impl Tool {
@@ -252,6 +253,8 @@ pub struct ToolInstance {
     pub version: Option<String>,
     /// 实际安装路径
     pub install_path: Option<String>,
+    /// 安装器路径（如 npm/brew 的可执行文件路径，用于更新）
+    pub installer_path: Option<String>,
     /// WSL发行版名称（仅WSL类型使用）
     pub wsl_distro: Option<String>,
     /// SSH配置（仅SSH类型使用）
@@ -283,6 +286,7 @@ impl ToolInstance {
             installed,
             version,
             install_path,
+            installer_path: None,
             wsl_distro: None,
             ssh_config: None,
             is_builtin: true,
@@ -314,6 +318,7 @@ impl ToolInstance {
             installed,
             version,
             install_path,
+            installer_path: None,
             wsl_distro: Some(distro_name),
             ssh_config: None,
             is_builtin: false,
@@ -347,6 +352,7 @@ impl ToolInstance {
             installed,
             version,
             install_path,
+            installer_path: None,
             wsl_distro: None,
             ssh_config: Some(ssh_config),
             is_builtin: false,

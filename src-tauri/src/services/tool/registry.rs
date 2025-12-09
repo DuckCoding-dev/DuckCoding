@@ -139,13 +139,57 @@ impl ToolRegistry {
             (None, None, None)
         };
 
+        // 检测安装器路径（基于安装方法）
+        let installer_path = if let (true, Some(method)) = (installed, &install_method) {
+            match method {
+                InstallMethod::Npm => {
+                    // 检测 npm 路径：先用 which/where
+                    let npm_detect_cmd = if cfg!(target_os = "windows") {
+                        "where npm"
+                    } else {
+                        "which npm"
+                    };
+
+                    match self.command_executor.execute_async(npm_detect_cmd).await {
+                        result if result.success => {
+                            let path = result.stdout.lines().next().unwrap_or("").trim();
+                            if !path.is_empty() {
+                                Some(path.to_string())
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None,
+                    }
+                }
+                InstallMethod::Brew => {
+                    // 检测 brew 路径（仅 macOS）
+                    match self.command_executor.execute_async("which brew").await {
+                        result if result.success => {
+                            let path = result.stdout.trim();
+                            if !path.is_empty() {
+                                Some(path.to_string())
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+
         tracing::debug!(
-            "工具 {} 检测结果: installed={}, version={:?}, path={:?}, method={:?}",
+            "工具 {} 检测结果: installed={}, version={:?}, path={:?}, method={:?}, installer={:?}",
             tool_name,
             installed,
             version,
             install_path,
-            install_method
+            install_method,
+            installer_path
         );
 
         // 创建 ToolInstance（需要获取 Tool 的完整信息）
@@ -171,6 +215,7 @@ impl ToolRegistry {
             installed,
             version,
             install_path,
+            installer_path, // 使用检测到的安装器路径
             wsl_distro: None,
             ssh_config: None,
             is_builtin: true,
