@@ -7,7 +7,9 @@
 // - update: 应用自身更新
 // - session: 会话管理（透明代理请求追踪）
 // - migration_manager: 统一迁移管理（新）
+// - balance: 余额监控配置管理
 
+pub mod balance;
 pub mod config;
 pub mod config_watcher;
 pub mod migration_manager;
@@ -19,6 +21,7 @@ pub mod tool;
 pub mod update;
 
 // 重新导出服务
+pub use balance::*;
 pub use config::*;
 pub use config_watcher::*;
 pub use migration_manager::{create_migration_manager, MigrationManager};

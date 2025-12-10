@@ -7,6 +7,8 @@ export interface BalanceConfig {
   extractorScript: string; // 提取器 JavaScript 代码
   intervalSec?: number; // 0 或 undefined 表示不自动刷新
   timeoutMs?: number; // 请求超时（毫秒）
+  saveApiKey?: boolean; // 是否保存 API Key 到文件（新增）
+  apiKey?: string; // API Key（可选，持久化时保存，新增）
   updatedAt: number;
   createdAt: number;
 }
@@ -44,7 +46,8 @@ export interface BalanceFormValues {
   extractorScript: string;
   intervalSec?: number;
   timeoutMs?: number;
-  apiKey?: string; // 用于 Authorization header，不持久化
+  apiKey?: string; // 用于 Authorization header
+  saveApiKey?: boolean; // 是否保存 API Key 到文件（新增）
 }
 
 // 预设模板类型

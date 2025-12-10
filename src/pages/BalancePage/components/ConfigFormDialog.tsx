@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { BalanceConfig, BalanceFormValues } from '../types';
 import { BALANCE_TEMPLATES } from '../templates';
@@ -44,6 +45,7 @@ export function ConfigFormDialog({ open, initial, onClose, onSubmit }: ConfigFor
     intervalSec: 0,
     timeoutMs: 30000,
     apiKey: '',
+    saveApiKey: true, // 默认勾选
   });
   const [showKey, setShowKey] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -58,7 +60,8 @@ export function ConfigFormDialog({ open, initial, onClose, onSubmit }: ConfigFor
         extractorScript: initial.extractorScript,
         intervalSec: initial.intervalSec ?? 0,
         timeoutMs: initial.timeoutMs ?? 30000,
-        apiKey: '',
+        apiKey: initial.apiKey ?? '', // 编辑时加载已保存的 API Key
+        saveApiKey: initial.saveApiKey ?? true, // 编辑时加载保存状态，默认 true
       });
       setSelectedTemplate('');
     } else {
@@ -71,6 +74,7 @@ export function ConfigFormDialog({ open, initial, onClose, onSubmit }: ConfigFor
         intervalSec: 0,
         timeoutMs: 30000,
         apiKey: '',
+        saveApiKey: true, // 新增时默认勾选
       });
       setSelectedTemplate('');
     }
@@ -183,7 +187,7 @@ export function ConfigFormDialog({ open, initial, onClose, onSubmit }: ConfigFor
               rows={3}
             />
             <p className="text-xs text-muted-foreground">
-              静态请求头将被持久化。API Key 请在下方单独输入，不会被保存。
+              静态请求头将被持久化。如需使用 API Key，请在下方单独输入。
             </p>
           </div>
 
@@ -231,8 +235,8 @@ export function ConfigFormDialog({ open, initial, onClose, onSubmit }: ConfigFor
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="apiKey">API Key（仅保存在内存）</Label>
+          <div className="space-y-3">
+            <Label htmlFor="apiKey">API Key</Label>
             <div className="flex items-center gap-2">
               <Input
                 id="apiKey"
@@ -251,9 +255,27 @@ export function ConfigFormDialog({ open, initial, onClose, onSubmit }: ConfigFor
                 {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">
-              密钥仅保存在内存中，将用于 Authorization: Bearer 请求头。
-            </p>
+
+            <div className="flex items-start space-x-2 pt-1">
+              <Checkbox
+                id="saveApiKey"
+                checked={values.saveApiKey}
+                onCheckedChange={(checked: boolean) =>
+                  setValues((v) => ({ ...v, saveApiKey: checked === true }))
+                }
+              />
+              <div className="grid gap-1.5 leading-none">
+                <label
+                  htmlFor="saveApiKey"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  保存 API Key 到文件
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  勾选后密钥将保存到 balance.json，应用重启后自动加载。不勾选则仅保存在内存中。
+                </p>
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="gap-2">

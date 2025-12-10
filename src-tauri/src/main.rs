@@ -470,6 +470,11 @@ fn main() {
         get_usage_stats,
         get_user_quota,
         fetch_api,
+        load_balance_configs,
+        save_balance_config,
+        update_balance_config,
+        delete_balance_config,
+        migrate_balance_from_localstorage,
         handle_close_action,
         // expose current proxy for debugging/testing
         get_current_proxy,

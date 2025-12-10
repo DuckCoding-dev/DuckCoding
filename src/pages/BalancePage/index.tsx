@@ -10,6 +10,7 @@ import { BalanceConfig, BalanceFormValues } from './types';
 import { EmptyState } from './components/EmptyState';
 import { ConfigCard } from './components/ConfigCard';
 import { ConfigFormDialog } from './components/ConfigFormDialog';
+import { useToast } from '@/hooks/use-toast';
 
 function createId() {
   return typeof crypto !== 'undefined' && crypto.randomUUID
@@ -18,11 +19,12 @@ function createId() {
 }
 
 export function BalancePage() {
-  const { configs, addConfig, updateConfig, deleteConfig } = useBalanceConfigs();
-  const { setApiKey, removeApiKey, getApiKey } = useApiKeys();
+  const { configs, addConfig, updateConfig, deleteConfig, loading } = useBalanceConfigs();
+  const { setApiKey, removeApiKey, getApiKey } = useApiKeys(configs);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<BalanceConfig | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const { toast } = useToast();
 
   const { stateMap, refreshOne, refreshAll } = useBalanceMonitor(configs, getApiKey, true);
 
@@ -55,9 +57,12 @@ export function BalancePage() {
         extractorScript: values.extractorScript,
         intervalSec: values.intervalSec ?? 0,
         timeoutMs: values.timeoutMs,
+        saveApiKey: values.saveApiKey ?? true, // 默认勾选保存
+        apiKey: values.saveApiKey && values.apiKey?.trim() ? values.apiKey.trim() : undefined, // 根据选项保存 API Key
         updatedAt: now,
       };
       updateConfig(next);
+      // 无论是否持久化，都在内存中更新 API Key
       if (values.apiKey?.trim()) {
         setApiKey(editingConfig.id, values.apiKey.trim());
       } else {
@@ -74,10 +79,13 @@ export function BalancePage() {
         extractorScript: values.extractorScript,
         intervalSec: values.intervalSec ?? 0,
         timeoutMs: values.timeoutMs,
+        saveApiKey: values.saveApiKey ?? true, // 默认勾选保存
+        apiKey: values.saveApiKey && values.apiKey?.trim() ? values.apiKey.trim() : undefined, // 根据选项保存 API Key
         createdAt: now,
         updatedAt: now,
       };
       addConfig(config);
+      // 内存中存储 API Key
       if (values.apiKey?.trim()) {
         setApiKey(id, values.apiKey.trim());
       }
@@ -98,6 +106,18 @@ export function BalancePage() {
   };
 
   const handleRefreshAll = async () => {
+    // 检查是否有配置缺少 API Key
+    const configsWithoutKey = configs.filter((c) => !getApiKey(c.id));
+
+    if (configsWithoutKey.length > 0) {
+      const names = configsWithoutKey.map((c) => c.name).join('、');
+      toast({
+        title: '提示',
+        description: `以下配置缺少 API Key，将跳过查询：${names}`,
+        variant: 'default',
+      });
+    }
+
     setRefreshingAll(true);
     try {
       await refreshAll();
@@ -107,6 +127,14 @@ export function BalancePage() {
   };
 
   const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="flex justify-center items-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
     if (!sortedConfigs.length) {
       return <EmptyState onAdd={() => setDialogOpen(true)} />;
     }
@@ -134,7 +162,7 @@ export function BalancePage() {
           <div>
             <h1 className="text-2xl font-semibold">余额监控</h1>
             <p className="text-sm text-muted-foreground">
-              管理多个 API 余额配置，支持自定义提取器脚本（API Key 默认仅存内存）
+              管理多个 API 余额配置，支持自定义提取器脚本（API Key 可选择保存到文件）
             </p>
           </div>
           <div className="flex gap-2">

@@ -1,8 +1,11 @@
 // 余额查询相关命令
 //
 // 支持通过自定义 API 端点和提取器脚本查询余额信息
+// 以及余额监控配置的持久化存储管理
 
 use ::duckcoding::http_client::build_client;
+use ::duckcoding::models::{BalanceConfig, BalanceStore};
+use ::duckcoding::services::balance::BalanceManager;
 use ::duckcoding::utils::config::apply_proxy_if_configured;
 use std::collections::HashMap;
 
@@ -71,4 +74,52 @@ pub async fn fetch_api(
         .map_err(|e| format!("解析响应 JSON 失败: {e}"))?;
 
     Ok(data)
+}
+
+// ========== 配置管理命令 ==========
+
+/// 加载所有余额监控配置
+#[tauri::command]
+pub async fn load_balance_configs() -> Result<BalanceStore, String> {
+    let manager = BalanceManager::new().map_err(|e| e.to_string())?;
+    manager.load_store().map_err(|e| e.to_string())
+}
+
+/// 添加新的余额监控配置
+#[tauri::command]
+pub async fn save_balance_config(config: BalanceConfig) -> Result<(), String> {
+    let manager = BalanceManager::new().map_err(|e| e.to_string())?;
+    manager.add_config(config).map_err(|e| e.to_string())
+}
+
+/// 更新现有的余额监控配置
+#[tauri::command]
+pub async fn update_balance_config(config: BalanceConfig) -> Result<(), String> {
+    let manager = BalanceManager::new().map_err(|e| e.to_string())?;
+    manager.update_config(config).map_err(|e| e.to_string())
+}
+
+/// 删除余额监控配置
+#[tauri::command]
+pub async fn delete_balance_config(id: String) -> Result<(), String> {
+    let manager = BalanceManager::new().map_err(|e| e.to_string())?;
+    manager.delete_config(&id).map_err(|e| e.to_string())
+}
+
+/// 批量保存配置（用于从 localStorage 迁移）
+///
+/// 这个命令由前端在首次加载时自动调用，完成数据迁移
+#[tauri::command]
+pub async fn migrate_balance_from_localstorage(
+    configs: Vec<BalanceConfig>,
+) -> Result<usize, String> {
+    let manager = BalanceManager::new().map_err(|e| e.to_string())?;
+
+    let count = configs.len();
+    manager
+        .save_all_configs(configs)
+        .map_err(|e| e.to_string())?;
+
+    tracing::info!("从 localStorage 迁移了 {} 个余额监控配置", count);
+    Ok(count)
 }
