@@ -183,8 +183,11 @@ export function useToolManagement() {
         setGroupedTools((prev) => {
           const updated = { ...prev };
           for (const [toolId, instances] of Object.entries(updated)) {
-            updated[toolId] = instances.map((inst) =>
-              inst.instance_id === instanceId ? { ...inst, version: result.current_version } : inst,
+            updated[toolId] = instances.map(
+              (inst): ToolInstance =>
+                inst.instance_id === instanceId
+                  ? { ...inst, version: result.current_version ?? inst.version }
+                  : inst,
             );
           }
           return updated;
