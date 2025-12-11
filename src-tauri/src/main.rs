@@ -452,7 +452,6 @@ fn main() {
         check_update_for_instance,
         refresh_all_tool_versions,
         check_all_updates,
-        update_tool,
         update_tool_instance,
         validate_tool_path,
         add_manual_tool_instance,
