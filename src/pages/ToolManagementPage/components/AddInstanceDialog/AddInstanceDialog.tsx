@@ -107,26 +107,30 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
     } finally {
       actions.setLoadingDistros(false);
     }
-  }, [actions, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]);
 
   // 对话框打开时重置状态
   useEffect(() => {
     if (open) {
       actions.resetAllState();
     }
-  }, [open, actions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // WSL 环境切换时加载发行版
   useEffect(() => {
     if (open && state.envType === 'wsl') {
       loadWslDistros();
     }
-  }, [open, state.envType, loadWslDistros]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, state.envType]);
 
   // 工具/环境/方式变更时重置扫描状态
   useEffect(() => {
     actions.resetScanState();
-  }, [state.baseId, state.envType, state.localMethod, actions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.baseId, state.envType, state.localMethod]);
 
   // 浏览选择工具路径
   const handleBrowse = async () => {
