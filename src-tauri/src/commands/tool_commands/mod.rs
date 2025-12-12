@@ -3,7 +3,6 @@ mod installation;
 mod management;
 mod scanner;
 mod update;
-mod utils;
 mod validation;
 
 // 重新导出所有命令函数

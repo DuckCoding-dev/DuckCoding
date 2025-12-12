@@ -361,3 +361,16 @@ impl ToolInstance {
         }
     }
 }
+
+/// 工具更新结果
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateResult {
+    pub success: bool,
+    pub message: String,
+    pub has_update: bool,
+    pub current_version: Option<String>,
+    pub latest_version: Option<String>,
+    pub mirror_version: Option<String>, // 镜像实际可安装的版本
+    pub mirror_is_stale: Option<bool>,  // 镜像是否滞后
+    pub tool_id: Option<String>,        // 工具ID，用于批量检查时识别工具
+}

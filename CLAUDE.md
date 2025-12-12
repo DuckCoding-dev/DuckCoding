@@ -99,6 +99,25 @@ last-updated: 2025-12-07
     - `ToolRegistry` 和 `InstallerService` 优先使用 Detector，未注册的工具回退到旧逻辑（向后兼容）
     - 新增工具仅需：1) 实现 ToolDetector trait，2) 注册到 DetectorRegistry，3) 添加 Tool 定义
     - 每个 Detector 文件包含完整的检测、安装、更新、配置管理逻辑，模块化且易测试
+  - **命令层模块化重构（2025-12-11）**：
+    - 原 `commands/tool_commands.rs` (1001行) 按职责拆分为 6 个模块
+    - 模块结构：
+      - `tool_commands/installation.rs` - 安装和状态查询（3个命令）
+      - `tool_commands/detection.rs` - 工具检测（3个命令）
+      - `tool_commands/validation.rs` - 路径和环境验证（2个命令）
+      - `tool_commands/update.rs` - 版本更新管理（5个命令）
+      - `tool_commands/scanner.rs` - 安装器扫描（1个命令）
+      - `tool_commands/management.rs` - 实例管理（1个命令）
+      - `tool_commands/mod.rs` - 统一导出
+    - 架构原则：严格遵守三层架构（Commands → Services → Utils），命令层仅做参数验证，业务逻辑全部在服务层
+    - 服务层增强：
+      - `ToolRegistry` 新增 7 个方法：`update_instance`、`check_update_for_instance`、`refresh_all_tool_versions`、`scan_tool_candidates`、`validate_tool_path`、`add_tool_instance`、`detect_single_tool_with_cache`
+      - `InstallerService` 新增 1 个方法：`update_instance_by_installer`
+      - `utils/version.rs` 新增模块：统一版本号解析逻辑（含 6 个单元测试）
+    - 代码质量：命令层从 1001 行减少到 548 行（-45%），平均函数从 62 行减少到 8 行（-87%）
+    - 重复代码消除：版本解析、命令执行、数据库访问统一化，消除 ~280 行重复代码
+    - 测试覆盖：新增 11 个单元测试（version.rs: 6个，registry.rs: 5个，installer.rs: 3个）
+    - 废弃代码清理：删除 `update_tool` 命令（72行），移除 main.rs 中的引用
 - **透明代理已重构为多工具架构**：
   - `ProxyManager` 统一管理三个工具（Claude Code、Codex、Gemini CLI）的代理实例
   - `HeadersProcessor` trait 定义工具特定的 headers 处理逻辑（位于 `services/proxy/headers/`）

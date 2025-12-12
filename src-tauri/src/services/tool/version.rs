@@ -68,22 +68,37 @@ pub struct VersionService {
     detector_registry: DetectorRegistry,
     command_executor: CommandExecutor,
     mirror_api_url: String,
+    #[allow(dead_code)]
+    use_local_fallback: bool, // 是否启用本地 fallback
 }
 
 impl VersionService {
     pub fn new() -> Self {
+        // 检查是否启用本地 fallback（开发/测试模式）
+        let use_local_fallback = std::env::var("DUCKCODING_USE_LOCAL_VERSIONS")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(false);
+
         VersionService {
             detector_registry: DetectorRegistry::new(),
             command_executor: CommandExecutor::new(),
             mirror_api_url: "https://mirror.duckcoding.com/api/v1/tools".to_string(),
+            use_local_fallback,
         }
     }
 
     pub fn with_mirror_url(mirror_url: String) -> Self {
+        let use_local_fallback = std::env::var("DUCKCODING_USE_LOCAL_VERSIONS")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(false);
+
         VersionService {
             detector_registry: DetectorRegistry::new(),
             command_executor: CommandExecutor::new(),
             mirror_api_url: mirror_url,
+            use_local_fallback,
         }
     }
 

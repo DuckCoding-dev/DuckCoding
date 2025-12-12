@@ -35,6 +35,7 @@ impl CommandResult {
 }
 
 /// 命令执行器
+#[derive(Clone)]
 pub struct CommandExecutor {
     platform: PlatformInfo,
 }
