@@ -147,6 +147,19 @@ last-updated: 2025-12-07
       - `registry.rs`、`installer.rs`、`detection.rs` 已使用 `utils::parse_version_string()`（保持不变）
     - **测试覆盖**：7 个测试函数（6 个字符串提取测试 + 1 个 semver 解析测试，7 个断言），覆盖所有格式
     - **代码减少**：删除 `VersionService` 和 `Detector` 中的重复正则定义（约 15 行）
+  - **ToolRegistry 模块化拆分（2025-12-13）**：
+    - **问题**：原 `services/tool/registry.rs` 文件过大（1118行），包含 21 个方法，职责混杂
+    - **解决方案**：按职责拆分为 5 个子模块，每个文件 < 400 行
+    - **新架构**（位于 `services/tool/registry/`）：
+      - `mod.rs` (57行)：ToolRegistry 结构体定义、初始化方法、ToolDetectionProgress
+      - `detection.rs` (323行)：工具检测与持久化（5个方法：`detect_and_persist_local_tools`、`detect_single_tool_by_detector`、`detect_and_persist_single_tool`、`refresh_local_tools`、`detect_single_tool_with_cache`）
+      - `instance.rs` (229行)：实例 CRUD 操作（4个方法：`add_wsl_instance`、`add_ssh_instance`、`delete_instance`、`add_tool_instance`）
+      - `version_ops.rs` (239行)：版本检查与更新（4个方法：`update_instance`、`check_update_for_instance`、`refresh_all_tool_versions`、`detect_install_methods`）
+      - `query.rs` (286行)：查询与辅助工具（6个方法：`get_all_grouped`、`refresh_all`、`get_local_tool_status`、`refresh_and_get_local_status`、`scan_tool_candidates`、`validate_tool_path`）
+    - **向后兼容**：保持 `use crate::services::tool::ToolRegistry` 路径不变，调用方无需修改
+    - **测试迁移**：4 个单元测试随代码迁移到对应子模块（instance.rs: 1个，query.rs: 3个）
+    - **代码质量**：遵循单一职责原则（SOLID - SRP），每个模块职责明确，易于维护和测试
+    - **文件大小减少**：最大文件从 1118 行减少到 323 行（-71%），平均文件 227 行
 - **透明代理已重构为多工具架构**：
   - `ProxyManager` 统一管理三个工具（Claude Code、Codex、Gemini CLI）的代理实例
   - `HeadersProcessor` trait 定义工具特定的 headers 处理逻辑（位于 `services/proxy/headers/`）
