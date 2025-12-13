@@ -253,7 +253,7 @@ function buildProfilePayload(toolId: ToolId, data: ProfileFormData): ProfilePayl
       return {
         api_key: data.api_key,
         base_url: data.base_url,
-        model: data.model || 'gemini-2.0-flash-exp', // 必须有 model
+        model: data.model && data.model !== '' ? data.model : undefined, // 空值不设置 model
       };
 
     default:

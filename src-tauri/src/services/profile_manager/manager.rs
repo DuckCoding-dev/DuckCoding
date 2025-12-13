@@ -6,6 +6,20 @@ use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
 use std::path::PathBuf;
 
+/// 系统保留的 Profile 名称前缀
+const RESERVED_PREFIX: &str = "dc_proxy_";
+
+/// 校验 Profile 名称是否使用保留前缀
+fn validate_profile_name(name: &str) -> Result<()> {
+    if name.starts_with(RESERVED_PREFIX) {
+        return Err(anyhow!(
+            "Profile 名称不能以 '{}' 开头（系统保留前缀）",
+            RESERVED_PREFIX
+        ));
+    }
+    Ok(())
+}
+
 pub struct ProfileManager {
     data_manager: DataManager,
     profiles_path: PathBuf,
@@ -60,6 +74,9 @@ impl ProfileManager {
     // ==================== Claude Code ====================
 
     pub fn save_claude_profile(&self, name: &str, api_key: String, base_url: String) -> Result<()> {
+        // 保留字校验
+        validate_profile_name(name)?;
+
         let mut store = self.load_profiles_store()?;
 
         let profile = if let Some(existing) = store.claude_code.get_mut(name) {
@@ -121,7 +138,12 @@ impl ProfileManager {
 
     pub fn list_claude_profiles(&self) -> Result<Vec<String>> {
         let store = self.load_profiles_store()?;
-        Ok(store.claude_code.keys().cloned().collect())
+        Ok(store
+            .claude_code
+            .keys()
+            .filter(|name| !name.starts_with(RESERVED_PREFIX))
+            .cloned()
+            .collect())
     }
 
     // ==================== Codex ====================
@@ -133,6 +155,9 @@ impl ProfileManager {
         base_url: String,
         wire_api: Option<String>,
     ) -> Result<()> {
+        // 保留字校验
+        validate_profile_name(name)?;
+
         let mut store = self.load_profiles_store()?;
 
         let profile = if let Some(existing) = store.codex.get_mut(name) {
@@ -198,7 +223,12 @@ impl ProfileManager {
 
     pub fn list_codex_profiles(&self) -> Result<Vec<String>> {
         let store = self.load_profiles_store()?;
-        Ok(store.codex.keys().cloned().collect())
+        Ok(store
+            .codex
+            .keys()
+            .filter(|name| !name.starts_with(RESERVED_PREFIX))
+            .cloned()
+            .collect())
     }
 
     // ==================== Gemini CLI ====================
@@ -210,6 +240,9 @@ impl ProfileManager {
         base_url: String,
         model: Option<String>,
     ) -> Result<()> {
+        // 保留字校验
+        validate_profile_name(name)?;
+
         let mut store = self.load_profiles_store()?;
 
         let profile = if let Some(existing) = store.gemini_cli.get_mut(name) {
@@ -221,7 +254,9 @@ impl ProfileManager {
                 existing.base_url = base_url;
             }
             if let Some(m) = model {
-                existing.model = m;
+                if !m.is_empty() {
+                    existing.model = Some(m);
+                }
             }
             existing.updated_at = Utc::now();
             existing.clone()
@@ -233,7 +268,7 @@ impl ProfileManager {
             GeminiProfile {
                 api_key,
                 base_url,
-                model: model.unwrap_or_else(|| "gemini-2.0-flash-exp".to_string()),
+                model: model.filter(|m| !m.is_empty()),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
                 raw_settings: None,
@@ -275,7 +310,12 @@ impl ProfileManager {
 
     pub fn list_gemini_profiles(&self) -> Result<Vec<String>> {
         let store = self.load_profiles_store()?;
-        Ok(store.gemini_cli.keys().cloned().collect())
+        Ok(store
+            .gemini_cli
+            .keys()
+            .filter(|name| !name.starts_with(RESERVED_PREFIX))
+            .cloned()
+            .collect())
     }
 
     // ==================== 通用列表 ====================
@@ -288,18 +328,27 @@ impl ProfileManager {
         // Claude Code
         let active_claude = active_store.get_active("claude-code");
         for (name, profile) in &profiles_store.claude_code {
+            if name.starts_with(RESERVED_PREFIX) {
+                continue; // 跳过内置 Profile
+            }
             descriptors.push(ProfileDescriptor::from_claude(name, profile, active_claude));
         }
 
         // Codex
         let active_codex = active_store.get_active("codex");
         for (name, profile) in &profiles_store.codex {
+            if name.starts_with(RESERVED_PREFIX) {
+                continue; // 跳过内置 Profile
+            }
             descriptors.push(ProfileDescriptor::from_codex(name, profile, active_codex));
         }
 
         // Gemini CLI
         let active_gemini = active_store.get_active("gemini-cli");
         for (name, profile) in &profiles_store.gemini_cli {
+            if name.starts_with(RESERVED_PREFIX) {
+                continue; // 跳过内置 Profile
+            }
             descriptors.push(ProfileDescriptor::from_gemini(name, profile, active_gemini));
         }
 
@@ -382,6 +431,146 @@ impl ProfileManager {
 
     pub fn capture_from_native(&self, tool_id: &str, profile_name: &str) -> Result<()> {
         self.capture_profile_from_native(tool_id, profile_name)
+    }
+
+    // ==================== 内部方法（跳过保留字校验） ====================
+
+    /// 内部方法：保存 Claude Profile（跳过保留字校验，用于系统内置 Profile）
+    pub fn save_claude_profile_internal(
+        &self,
+        name: &str,
+        api_key: String,
+        base_url: String,
+    ) -> Result<()> {
+        let mut store = self.load_profiles_store()?;
+
+        let profile = if let Some(existing) = store.claude_code.get_mut(name) {
+            // 更新模式：只更新非空字段
+            if !api_key.is_empty() {
+                existing.api_key = api_key;
+            }
+            if !base_url.is_empty() {
+                existing.base_url = base_url;
+            }
+            existing.updated_at = Utc::now();
+            existing.clone()
+        } else {
+            // 创建模式：必须有完整数据
+            if api_key.is_empty() || base_url.is_empty() {
+                return Err(anyhow!("创建 Profile 时 API Key 和 Base URL 不能为空"));
+            }
+            ClaudeProfile {
+                api_key,
+                base_url,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                raw_settings: None,
+                raw_config_json: None,
+            }
+        };
+
+        store.claude_code.insert(name.to_string(), profile);
+        store.metadata.last_updated = Utc::now();
+        self.save_profiles_store(&store)?;
+
+        tracing::debug!("已创建/更新内置 Profile: {}", name);
+        Ok(())
+    }
+
+    /// 内部方法：保存 Codex Profile（跳过保留字校验，用于系统内置 Profile）
+    pub fn save_codex_profile_internal(
+        &self,
+        name: &str,
+        api_key: String,
+        base_url: String,
+        wire_api: Option<String>,
+    ) -> Result<()> {
+        let mut store = self.load_profiles_store()?;
+
+        let profile = if let Some(existing) = store.codex.get_mut(name) {
+            // 更新模式：只更新非空字段
+            if !api_key.is_empty() {
+                existing.api_key = api_key;
+            }
+            if !base_url.is_empty() {
+                existing.base_url = base_url;
+            }
+            if let Some(w) = wire_api {
+                existing.wire_api = w;
+            }
+            existing.updated_at = Utc::now();
+            existing.clone()
+        } else {
+            // 创建模式：必须有完整数据
+            if api_key.is_empty() || base_url.is_empty() {
+                return Err(anyhow!("创建 Profile 时 API Key 和 Base URL 不能为空"));
+            }
+            CodexProfile {
+                api_key,
+                base_url,
+                wire_api: wire_api.unwrap_or_else(|| "responses".to_string()),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                raw_config_toml: None,
+                raw_auth_json: None,
+            }
+        };
+
+        store.codex.insert(name.to_string(), profile);
+        store.metadata.last_updated = Utc::now();
+        self.save_profiles_store(&store)?;
+
+        tracing::debug!("已创建/更新内置 Profile: {}", name);
+        Ok(())
+    }
+
+    /// 内部方法：保存 Gemini Profile（跳过保留字校验，用于系统内置 Profile）
+    pub fn save_gemini_profile_internal(
+        &self,
+        name: &str,
+        api_key: String,
+        base_url: String,
+        model: Option<String>,
+    ) -> Result<()> {
+        let mut store = self.load_profiles_store()?;
+
+        let profile = if let Some(existing) = store.gemini_cli.get_mut(name) {
+            // 更新模式：只更新非空字段
+            if !api_key.is_empty() {
+                existing.api_key = api_key;
+            }
+            if !base_url.is_empty() {
+                existing.base_url = base_url;
+            }
+            if let Some(m) = model {
+                if !m.is_empty() {
+                    existing.model = Some(m);
+                }
+            }
+            existing.updated_at = Utc::now();
+            existing.clone()
+        } else {
+            // 创建模式：必须有完整数据
+            if api_key.is_empty() || base_url.is_empty() {
+                return Err(anyhow!("创建 Profile 时 API Key 和 Base URL 不能为空"));
+            }
+            GeminiProfile {
+                api_key,
+                base_url,
+                model: model.filter(|m| !m.is_empty()),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                raw_settings: None,
+                raw_env: None,
+            }
+        };
+
+        store.gemini_cli.insert(name.to_string(), profile);
+        store.metadata.last_updated = Utc::now();
+        self.save_profiles_store(&store)?;
+
+        tracing::debug!("已创建/更新内置 Profile: {}", name);
+        Ok(())
     }
 
     // ==================== 删除 ====================

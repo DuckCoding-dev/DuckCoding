@@ -22,6 +22,9 @@ pub struct ToolProxyConfig {
     pub session_endpoint_config_enabled: bool,
     #[serde(default)]
     pub auto_start: bool,
+    /// 启动代理前激活的 Profile 名称（用于关闭时还原）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_active_profile: Option<String>,
 }
 
 impl ToolProxyConfig {
@@ -37,6 +40,7 @@ impl ToolProxyConfig {
             allow_public: false,
             session_endpoint_config_enabled: false,
             auto_start: false,
+            original_active_profile: None,
         }
     }
 

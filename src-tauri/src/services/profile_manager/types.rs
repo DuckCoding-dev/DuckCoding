@@ -45,18 +45,14 @@ fn default_codex_wire_api() -> String {
 pub struct GeminiProfile {
     pub api_key: String,
     pub base_url: String,
-    #[serde(default = "default_gemini_model")]
-    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_settings: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub raw_env: Option<String>,
-}
-
-fn default_gemini_model() -> String {
-    "gemini-2.0-flash-exp".to_string()
 }
 
 // ==================== profiles.json 结构 ====================
@@ -314,7 +310,7 @@ impl ProfileDescriptor {
             is_active,
             switched_at,
             provider: None,
-            model: Some(profile.model.clone()),
+            model: profile.model.clone(),
         }
     }
 }

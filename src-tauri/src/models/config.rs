@@ -107,6 +107,9 @@ pub struct ToolProxyConfig {
     pub session_endpoint_config_enabled: bool, // 工具级：是否允许会话自定义端点
     #[serde(default)]
     pub auto_start: bool, // 应用启动时自动运行代理（默认关闭）
+    /// 启动代理前激活的 Profile 名称（用于关闭时还原）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_active_profile: Option<String>,
 }
 
 impl Default for ToolProxyConfig {
@@ -122,6 +125,7 @@ impl Default for ToolProxyConfig {
             allow_public: false,
             session_endpoint_config_enabled: false,
             auto_start: false,
+            original_active_profile: None,
         }
     }
 }
@@ -212,6 +216,7 @@ fn default_proxy_configs() -> HashMap<String, ToolProxyConfig> {
             allow_public: false,
             session_endpoint_config_enabled: false,
             auto_start: false,
+            original_active_profile: None,
         },
     );
 
@@ -228,6 +233,7 @@ fn default_proxy_configs() -> HashMap<String, ToolProxyConfig> {
             allow_public: false,
             session_endpoint_config_enabled: false,
             auto_start: false,
+            original_active_profile: None,
         },
     );
 
@@ -244,6 +250,7 @@ fn default_proxy_configs() -> HashMap<String, ToolProxyConfig> {
             allow_public: false,
             session_endpoint_config_enabled: false,
             auto_start: false,
+            original_active_profile: None,
         },
     );
 
@@ -276,6 +283,7 @@ impl GlobalConfig {
                 allow_public: false,
                 session_endpoint_config_enabled: false,
                 auto_start: false,
+                original_active_profile: None,
             });
     }
 

@@ -136,6 +136,67 @@ fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
     }
 }
 
+/// 初始化内置 Profile（用于透明代理配置切换）
+fn initialize_proxy_profiles() -> Result<(), Box<dyn std::error::Error>> {
+    use duckcoding::services::profile_manager::ProfileManager;
+    use duckcoding::services::proxy_config_manager::ProxyConfigManager;
+
+    let proxy_mgr = ProxyConfigManager::new()?;
+    let profile_mgr = ProfileManager::new()?;
+
+    for tool_id in &["claude-code", "codex", "gemini-cli"] {
+        if let Ok(Some(config)) = proxy_mgr.get_config(tool_id) {
+            // 只有在配置完整时才创建内置 Profile
+            if config.enabled
+                && config.local_api_key.is_some()
+                && config.real_api_key.is_some()
+                && config.real_base_url.is_some()
+            {
+                let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
+                let proxy_endpoint = format!("http://127.0.0.1:{}", config.port);
+                let proxy_key = config.local_api_key.unwrap();
+
+                let result = match *tool_id {
+                    "claude-code" => profile_mgr.save_claude_profile_internal(
+                        &proxy_profile_name,
+                        proxy_key,
+                        proxy_endpoint,
+                    ),
+                    "codex" => profile_mgr.save_codex_profile_internal(
+                        &proxy_profile_name,
+                        proxy_key,
+                        proxy_endpoint,
+                        Some("responses".to_string()),
+                    ),
+                    "gemini-cli" => profile_mgr.save_gemini_profile_internal(
+                        &proxy_profile_name,
+                        proxy_key,
+                        proxy_endpoint,
+                        None, // 不设置 model，保留用户原有配置
+                    ),
+                    _ => continue,
+                };
+
+                if let Err(e) = result {
+                    tracing::warn!(
+                        tool_id = tool_id,
+                        error = ?e,
+                        "初始化内置 Profile 失败"
+                    );
+                } else {
+                    tracing::debug!(
+                        tool_id = tool_id,
+                        profile = %proxy_profile_name,
+                        "已初始化内置 Profile"
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn main() {
     // 🆕 初始化日志系统（必须在最前面）
     use duckcoding::core::init_logger;
@@ -155,6 +216,11 @@ fn main() {
     }
 
     tracing::info!("DuckCoding 应用启动");
+
+    // 🆕 初始化内置 Profile（用于透明代理）
+    if let Err(e) = initialize_proxy_profiles() {
+        tracing::warn!(error = ?e, "初始化内置 Profile 失败");
+    }
 
     // 创建透明代理服务实例（旧架构，保持兼容）
     let transparent_proxy_port = 8787; // 默认端口,实际会从配置读取

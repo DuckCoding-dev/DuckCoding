@@ -155,6 +155,14 @@ last-updated: 2025-12-07
   - 旧的 `transparent_proxy_*` 字段会在读取配置时自动迁移到新结构
   - 新命令：`start_tool_proxy`、`stop_tool_proxy`、`get_all_proxy_status`
   - 旧命令保持兼容，内部使用新架构实现
+  - **配置管理机制（2025-12-12）**：
+    - 代理启动时自动创建内置 Profile（`dc_proxy_*`），通过 `ProfileManager` 切换配置
+    - 内置 Profile 在 UI 中不可见（列表查询时过滤 `dc_proxy_` 前缀）
+    - `dc_proxy_` 为系统保留前缀，用户无法创建同名 Profile
+    - 代理关闭时自动还原到启动前激活的 Profile
+    - 运行时禁止修改 `ToolProxyConfig`，确保配置一致性
+    - `original_active_profile` 字段记录启动前的 Profile 用于还原
+    - Gemini CLI 的 model 字段为可选，允许不填（内置代理 Profile 不设置 model，保留用户原有配置）
 - `ToolProxyConfig` 额外存储 `real_profile_name`、`auto_start`、工具级 `session_endpoint_config_enabled`，全局配置新增 `hide_transparent_proxy_tip` 控制设置页横幅显示
 - `GlobalConfig.hide_session_config_hint` 持久化会话级端点提示的隐藏状态，`ProxyControlBar`/`ProxySettingsDialog`/`ClaudeContent` 通过 `open-proxy-settings` 与 `proxy-config-updated` 事件联动刷新视图
 - 日志系统支持完整配置管理：`GlobalConfig.log_config` 存储级别/格式/输出目标；`log_commands.rs` 提供查询与更新命令，`LogSettingsTab` 可热重载级别、保存文件输出设置；`core/logger.rs` 通过 `update_log_level` reload 机制动态调整
@@ -169,7 +177,23 @@ last-updated: 2025-12-07
   - `ToolStatusCache` 标记为已废弃，保留仅用于向后兼容
   - 所有工具状态查询统一走 `ToolRegistry::get_local_tool_status()` 和 `refresh_and_get_local_status()`
 - UI 相关的托盘/窗口操作集中在 `src-tauri/src/ui/*`，其它模块如需最小化到托盘请调用 `ui::hide_window_to_tray` 等封装方法。
-- 新增 `TransparentProxyPage` 与会话数据库：`SESSION_MANAGER` 使用 SQLite 记录每个代理会话的 endpoint/API Key，前端可按工具启停代理、查看历史并启用「会话级 Endpoint 配置」开关。页面内的 `ProxyControlBar`、`ProxySettingsDialog`、`ProxyConfigDialog` 负责代理启停、配置切换、工具级设置并内建缺失配置提示。
+- **会话管理系统（2025-12-12 重构）**：
+  - **架构迁移**：`SessionDatabase` 已删除，`SessionManager` 直接使用 `DataManager::sqlite()` 管理会话数据
+  - **核心模块**（位于 `services/session/`）：
+    - `manager.rs`：`SESSION_MANAGER` 单例，内部持有 `Arc<DataManager>` 和 `db_path`
+    - `db_utils.rs`：私有工具模块，提供 `QueryRow ↔ ProxySession` 转换、SQL 常量定义
+    - `models.rs`：数据模型（`ProxySession`、`SessionEvent`、`SessionListResponse`）
+  - **查询缓存**：所有数据库查询自动利用 `SqliteManager` 的查询缓存（容量 100，TTL 5分钟）
+  - **转换工具**：
+    - `parse_proxy_session(row)` - 将 QueryRow 转换为 ProxySession（处理 13 个字段 + NULL 值）
+    - `parse_count(row)` - 提取计数查询结果
+    - `parse_session_config(row)` - 提取三元组配置 (config_name, url, api_key)
+  - **后台任务**：
+    - 批量写入任务：每 100ms 或缓冲区满 10 条时批量 upsert 会话
+    - 定期清理任务：每小时清理 30 天未活跃会话和超过 1000 条的旧会话
+  - **测试覆盖**：10 个单元测试（5 个 db_utils 转换测试 + 2 个 models 测试 + 3 个 manager 集成测试）
+  - **代码减少**：从 366 行（db.rs）减少到 ~320 行（manager.rs 250 行 + db_utils.rs 70 行工具函数）
+- 前端透明代理页面：`TransparentProxyPage` 通过 `SESSION_MANAGER` 记录每个代理会话的 endpoint/API Key，支持按工具启停代理、查看历史并启用「会话级 Endpoint 配置」开关。页面内的 `ProxyControlBar`、`ProxySettingsDialog`、`ProxyConfigDialog` 负责代理启停、配置切换、工具级设置并内建缺失配置提示。
 - **余额监控页面（BalancePage）**：
   - 后端提供通用 `fetch_api` 命令（位于 `commands/api_commands.rs`），支持 GET/POST、自定义 headers、超时控制
   - 前端使用 JavaScript `Function` 构造器执行用户自定义的 extractor 脚本（位于 `utils/extractor.ts`）

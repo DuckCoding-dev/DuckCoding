@@ -11,7 +11,8 @@ pub enum ProfileInput {
     Gemini {
         api_key: String,
         base_url: String,
-        model: String,
+        #[serde(default)]
+        model: Option<String>,
     },
     Codex {
         api_key: String,
@@ -119,7 +120,7 @@ pub async fn pm_save_profile(
                 model,
             } = input
             {
-                manager.save_gemini_profile(&name, api_key, base_url, Some(model))
+                manager.save_gemini_profile(&name, api_key, base_url, model)
             } else {
                 Err(anyhow::anyhow!("Gemini CLI 需要 Gemini Profile 数据"))
             }

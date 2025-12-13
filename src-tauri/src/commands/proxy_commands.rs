@@ -349,32 +349,79 @@ pub async fn start_tool_proxy(
     tool_id: String,
     manager_state: State<'_, ProxyManagerState>,
 ) -> Result<String, String> {
-    // 从 ProxyConfigManager 读取配置
+    use ::duckcoding::services::profile_manager::ProfileManager;
+
+    let profile_mgr = ProfileManager::new().map_err(|e| e.to_string())?;
     let proxy_config_mgr = ProxyConfigManager::new().map_err(|e| e.to_string())?;
-    let tool_config = proxy_config_mgr
+
+    // 读取当前配置
+    let mut tool_config = proxy_config_mgr
         .get_config(&tool_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("工具 {} 的代理配置不存在", tool_id))?;
 
-    // 检查是否启用
-    if !tool_config.enabled {
-        return Err(format!("{} 的透明代理未启用", tool_id));
+    // 检查是否已在运行
+    if manager_state.manager.is_running(&tool_id).await {
+        return Err(format!("{} 代理已在运行", tool_id));
     }
 
     // 检查必要字段
+    if !tool_config.enabled {
+        return Err(format!("{} 的透明代理未启用", tool_id));
+    }
     if tool_config.local_api_key.is_none() {
         return Err("透明代理保护密钥未设置".to_string());
     }
-    if tool_config.real_api_key.is_none() {
-        return Err("真实 API Key 未设置".to_string());
+    if tool_config.real_api_key.is_none() || tool_config.real_base_url.is_none() {
+        return Err("真实 API Key 或 Base URL 未设置".to_string());
     }
-    if tool_config.real_base_url.is_none() {
-        return Err("真实 Base URL 未设置".to_string());
+
+    // ========== Profile 切换逻辑 ==========
+
+    // 1. 读取当前激活的 Profile 名称
+    let original_profile = profile_mgr
+        .get_active_profile_name(&tool_id)
+        .map_err(|e| e.to_string())?;
+
+    // 2. 保存到 ToolProxyConfig
+    tool_config.original_active_profile = original_profile.clone();
+    proxy_config_mgr
+        .update_config(&tool_id, tool_config.clone())
+        .map_err(|e| e.to_string())?;
+
+    // 3. 验证内置 Profile 是否存在
+    let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
+
+    let profile_exists = match tool_id.as_str() {
+        "claude-code" => profile_mgr.get_claude_profile(&proxy_profile_name).is_ok(),
+        "codex" => profile_mgr.get_codex_profile(&proxy_profile_name).is_ok(),
+        "gemini-cli" => profile_mgr.get_gemini_profile(&proxy_profile_name).is_ok(),
+        _ => false,
+    };
+
+    if !profile_exists {
+        return Err(format!(
+            "内置 Profile 不存在，请先保存代理配置: {}",
+            proxy_profile_name
+        ));
     }
+
+    // 4. 激活内置 Profile（这会自动同步到原生配置文件）
+    profile_mgr
+        .activate_profile(&tool_id, &proxy_profile_name)
+        .map_err(|e| format!("激活内置 Profile 失败: {}", e))?;
+
+    tracing::info!(
+        tool_id = %tool_id,
+        original_profile = ?original_profile,
+        proxy_profile = %proxy_profile_name,
+        "已切换到代理 Profile"
+    );
+
+    // ========== 启动代理 ==========
 
     let proxy_port = tool_config.port;
 
-    // 启动代理
     manager_state
         .manager
         .start_proxy(&tool_id, tool_config)
@@ -382,7 +429,7 @@ pub async fn start_tool_proxy(
         .map_err(|e| format!("启动代理失败: {}", e))?;
 
     Ok(format!(
-        "✅ {} 透明代理已启动\n监听端口: {}\n请求将自动转发",
+        "✅ {} 透明代理已启动\n监听端口: {}\n已切换到代理配置",
         tool_id, proxy_port
     ))
 }
@@ -393,30 +440,59 @@ pub async fn stop_tool_proxy(
     tool_id: String,
     manager_state: State<'_, ProxyManagerState>,
 ) -> Result<String, String> {
-    // 读取全局配置
-    let config = get_global_config()
-        .await
-        .map_err(|e| format!("读取配置失败: {e}"))?
-        .ok_or_else(|| "全局配置不存在".to_string())?;
+    use ::duckcoding::services::profile_manager::ProfileManager;
 
-    // 停止代理
+    let profile_mgr = ProfileManager::new().map_err(|e| e.to_string())?;
+    let proxy_config_mgr = ProxyConfigManager::new().map_err(|e| e.to_string())?;
+
+    // 读取代理配置
+    let mut tool_config = proxy_config_mgr
+        .get_config(&tool_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("工具 {} 的代理配置不存在", tool_id))?;
+
+    // ========== 停止代理 ==========
+
     manager_state
         .manager
         .stop_proxy(&tool_id)
         .await
         .map_err(|e| format!("停止代理失败: {e}"))?;
 
-    // 恢复工具配置
-    if let Some(tool_config) = config.get_proxy_config(&tool_id) {
-        if tool_config.real_api_key.is_some() {
-            let tool = Tool::by_id(&tool_id).ok_or_else(|| format!("未知工具: {tool_id}"))?;
+    // ========== Profile 还原逻辑 ==========
 
-            TransparentProxyConfigService::disable_transparent_proxy(&tool, &config)
-                .map_err(|e| format!("恢复配置失败: {e}"))?;
-        }
+    let original_profile = tool_config.original_active_profile.take();
+
+    if let Some(profile_name) = original_profile {
+        // 有原始 Profile，切回去
+        profile_mgr
+            .activate_profile(&tool_id, &profile_name)
+            .map_err(|e| format!("还原 Profile 失败: {}", e))?;
+
+        tracing::info!(
+            tool_id = %tool_id,
+            restored_profile = %profile_name,
+            "已还原到原始 Profile"
+        );
+
+        // 清空 original_active_profile 字段
+        proxy_config_mgr
+            .update_config(&tool_id, tool_config)
+            .map_err(|e| e.to_string())?;
+
+        Ok(format!(
+            "✅ {tool_id} 透明代理已停止\n已还原到 Profile: {profile_name}"
+        ))
+    } else {
+        // 没有原始 Profile（启动代理前用户就没激活任何 Profile）
+        // 按需求：不做任何操作，保持当前状态
+        tracing::info!(
+            tool_id = %tool_id,
+            "启动代理前无激活 Profile，保持当前状态"
+        );
+
+        Ok(format!("✅ {tool_id} 透明代理已停止"))
     }
-
-    Ok(format!("✅ {tool_id} 透明代理已停止\n配置已恢复"))
 }
 
 /// 获取所有工具的透明代理状态
@@ -531,11 +607,72 @@ pub async fn get_proxy_config(
 pub async fn update_proxy_config(
     tool_id: String,
     config: ::duckcoding::models::proxy_config::ToolProxyConfig,
+    manager_state: State<'_, ProxyManagerState>,
 ) -> Result<(), String> {
+    use ::duckcoding::services::profile_manager::ProfileManager;
+
+    // ========== 运行时保护检查 ==========
+    if manager_state.manager.is_running(&tool_id).await {
+        return Err(format!("{} 代理正在运行，请先停止代理再修改配置", tool_id));
+    }
+
+    // ========== 更新配置到全局配置文件 ==========
     let proxy_mgr = ProxyConfigManager::new().map_err(|e| e.to_string())?;
     proxy_mgr
-        .update_config(&tool_id, config)
-        .map_err(|e| e.to_string())
+        .update_config(&tool_id, config.clone())
+        .map_err(|e| e.to_string())?;
+
+    // ========== 同步创建/更新内置 Profile ==========
+
+    // 只有在配置完整时才创建内置 Profile
+    if config.enabled
+        && config.local_api_key.is_some()
+        && config.real_api_key.is_some()
+        && config.real_base_url.is_some()
+    {
+        let profile_mgr = ProfileManager::new().map_err(|e| e.to_string())?;
+        let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
+        let proxy_endpoint = format!("http://127.0.0.1:{}", config.port);
+        let proxy_key = config.local_api_key.unwrap();
+
+        match tool_id.as_str() {
+            "claude-code" => {
+                profile_mgr
+                    .save_claude_profile_internal(&proxy_profile_name, proxy_key, proxy_endpoint)
+                    .map_err(|e| format!("同步内置 Profile 失败: {}", e))?;
+            }
+            "codex" => {
+                profile_mgr
+                    .save_codex_profile_internal(
+                        &proxy_profile_name,
+                        proxy_key,
+                        proxy_endpoint,
+                        Some("responses".to_string()),
+                    )
+                    .map_err(|e| format!("同步内置 Profile 失败: {}", e))?;
+            }
+            "gemini-cli" => {
+                profile_mgr
+                    .save_gemini_profile_internal(
+                        &proxy_profile_name,
+                        proxy_key,
+                        proxy_endpoint,
+                        None, // 不设置 model，保留用户原有配置
+                    )
+                    .map_err(|e| format!("同步内置 Profile 失败: {}", e))?;
+            }
+            _ => return Err(format!("不支持的工具: {}", tool_id)),
+        }
+
+        tracing::info!(
+            tool_id = %tool_id,
+            proxy_profile = %proxy_profile_name,
+            port = config.port,
+            "已同步更新内置 Profile"
+        );
+    }
+
+    Ok(())
 }
 
 /// 获取所有工具的代理配置

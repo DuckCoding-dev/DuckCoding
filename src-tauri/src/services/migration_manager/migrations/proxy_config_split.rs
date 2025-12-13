@@ -278,5 +278,9 @@ fn parse_old_config(value: &Value) -> Result<ToolProxyConfig> {
             .get("auto_start")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        original_active_profile: obj
+            .get("original_active_profile")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
     })
 }

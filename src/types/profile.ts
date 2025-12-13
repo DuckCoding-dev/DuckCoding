@@ -27,7 +27,7 @@ export interface CodexProfilePayload {
 export interface GeminiProfilePayload {
   api_key: string;
   base_url: string;
-  model: string; // 必须
+  model?: string; // 可选，不填则不修改原生配置
 }
 
 /**

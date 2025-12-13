@@ -361,7 +361,7 @@ impl ProfileV2Migration {
 
             let mut api_key = String::new();
             let mut base_url = String::new();
-            let mut model = "gemini-2.0-flash-exp".to_string();
+            let mut model: Option<String> = None; // 默认为空，只有文件中有值才设置
             let raw_env = fs::read_to_string(&path).ok();
 
             if let Some(ref content) = raw_env {
@@ -374,7 +374,7 @@ impl ProfileV2Migration {
                         match key.trim() {
                             "GEMINI_API_KEY" => api_key = value.trim().to_string(),
                             "GOOGLE_GEMINI_BASE_URL" => base_url = value.trim().to_string(),
-                            "GEMINI_MODEL" => model = value.trim().to_string(),
+                            "GEMINI_MODEL" => model = Some(value.trim().to_string()),
                             _ => {}
                         }
                     }
@@ -389,7 +389,7 @@ impl ProfileV2Migration {
                 let profile = GeminiProfile {
                     api_key,
                     base_url,
-                    model,
+                    model, // 保留从文件读取的值（可能是 None）
                     created_at: Utc::now(),
                     updated_at: Utc::now(),
                     raw_settings: None,
@@ -543,8 +543,7 @@ impl ProfileV2Migration {
                         let model = value
                             .get("model")
                             .and_then(|v| v.as_str())
-                            .unwrap_or("gemini-2.0-flash-exp")
-                            .to_string();
+                            .map(|s| s.to_string()); // 只有存在时才设置，否则为 None
                         let raw_settings = value.get("raw_settings").cloned();
                         let raw_env = value
                             .get("raw_env")
@@ -557,7 +556,7 @@ impl ProfileV2Migration {
                             GeminiProfile {
                                 api_key,
                                 base_url,
-                                model,
+                                model, // 直接使用 Option<String>
                                 created_at: descriptor.created_at.unwrap_or_else(Utc::now),
                                 updated_at: descriptor.updated_at.unwrap_or_else(Utc::now),
                                 raw_settings,
@@ -880,7 +879,7 @@ impl GeminiProfile {
         Self {
             api_key: String::new(),
             base_url: String::new(),
-            model: "gemini-2.0-flash-exp".to_string(),
+            model: None, // 默认不设置 model
             created_at: Utc::now(),
             updated_at: Utc::now(),
             raw_settings: None,

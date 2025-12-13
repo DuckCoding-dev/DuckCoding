@@ -53,7 +53,7 @@ export function ProfileEditor({
     api_key: '',
     base_url: getDefaultBaseUrl(toolId),
     wire_api: toolId === 'codex' ? 'responses' : undefined,
-    model: toolId === 'gemini-cli' ? 'gemini-2.0-flash-exp' : undefined,
+    model: undefined, // Gemini 默认不设置 model
   });
   const [loading, setLoading] = useState(false);
   const [generatingKey, setGeneratingKey] = useState(false);
@@ -73,7 +73,7 @@ export function ProfileEditor({
         api_key: '',
         base_url: getDefaultBaseUrl(toolId, apiProvider),
         wire_api: defaultWireApi,
-        model: toolId === 'gemini-cli' ? 'gemini-2.0-flash-exp' : undefined,
+        model: undefined, // Gemini 默认不设置 model
       });
     }
   }, [initialData, toolId, open, apiProvider]);
@@ -310,20 +310,24 @@ export function ProfileEditor({
             {/* Gemini 特定：Model */}
             {toolId === 'gemini-cli' && (
               <div className="grid gap-2">
-                <Label htmlFor="model">模型</Label>
+                <Label htmlFor="model">模型 (可选)</Label>
                 <Select
-                  value={formData.model}
-                  onValueChange={(value) => handleChange('model', value)}
+                  value={formData.model || 'none'}
+                  onValueChange={(value) => handleChange('model', value === 'none' ? '' : value)}
                 >
                   <SelectTrigger id="model">
-                    <SelectValue placeholder="选择模型" />
+                    <SelectValue placeholder="不设置 (保留原有配置)" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">不设置 (保留原有配置)</SelectItem>
                     <SelectItem value="gemini-2.0-flash-exp">Gemini 2.0 Flash (Exp)</SelectItem>
                     <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                     <SelectItem value="gemini-1.5-flash">Gemini 1.5 Flash</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  不设置时，将保留工具原生配置文件中的模型设置
+                </p>
               </div>
             )}
           </div>

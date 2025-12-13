@@ -1,6 +1,6 @@
 // 会话管理服务模块
 
-pub mod db;
+mod db_utils;
 pub mod manager;
 pub mod models;
 

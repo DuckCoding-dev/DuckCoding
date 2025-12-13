@@ -268,9 +268,11 @@ fn apply_gemini_native(tool: &Tool, profile: &GeminiProfile) -> Result<()> {
     manager
         .env()
         .set(&env_path, "GOOGLE_GEMINI_BASE_URL", &profile.base_url)?;
-    manager
-        .env()
-        .set(&env_path, "GEMINI_MODEL", &profile.model)?;
+
+    // 只在 model 有值时才写入
+    if let Some(ref model) = profile.model {
+        manager.env().set(&env_path, "GEMINI_MODEL", model)?;
+    }
 
     Ok(())
 }
