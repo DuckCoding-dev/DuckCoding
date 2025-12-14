@@ -133,12 +133,11 @@ pub async fn test_proxy_request(
 }
 
 // ==================== 多工具代理命令（新架构） ====================
-/// 启动指定工具的透明代理
-#[tauri::command]
-pub async fn start_tool_proxy(
-    tool_id: String,
-    manager_state: State<'_, ProxyManagerState>,
-) -> Result<String, String> {
+/// 内部实现：尝试启动代理（支持回滚）
+async fn try_start_proxy_internal(
+    tool_id: &str,
+    manager_state: &ProxyManagerState,
+) -> Result<(String, u16), String> {
     use ::duckcoding::services::profile_manager::ProfileManager;
 
     let profile_mgr = ProfileManager::new().map_err(|e| e.to_string())?;
@@ -146,12 +145,12 @@ pub async fn start_tool_proxy(
 
     // 读取当前配置
     let mut tool_config = proxy_config_mgr
-        .get_config(&tool_id)
+        .get_config(tool_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("工具 {} 的代理配置不存在", tool_id))?;
 
     // 检查是否已在运行
-    if manager_state.manager.is_running(&tool_id).await {
+    if manager_state.manager.is_running(tool_id).await {
         return Err(format!("{} 代理已在运行", tool_id));
     }
 
@@ -170,19 +169,19 @@ pub async fn start_tool_proxy(
 
     // 1. 读取当前激活的 Profile 名称
     let original_profile = profile_mgr
-        .get_active_profile_name(&tool_id)
+        .get_active_profile_name(tool_id)
         .map_err(|e| e.to_string())?;
 
     // 2. 保存到 ToolProxyConfig
     tool_config.original_active_profile = original_profile.clone();
     proxy_config_mgr
-        .update_config(&tool_id, tool_config.clone())
+        .update_config(tool_id, tool_config.clone())
         .map_err(|e| e.to_string())?;
 
     // 3. 验证内置 Profile 是否存在
     let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
 
-    let profile_exists = match tool_id.as_str() {
+    let profile_exists = match tool_id {
         "claude-code" => profile_mgr.get_claude_profile(&proxy_profile_name).is_ok(),
         "codex" => profile_mgr.get_codex_profile(&proxy_profile_name).is_ok(),
         "gemini-cli" => profile_mgr.get_gemini_profile(&proxy_profile_name).is_ok(),
@@ -198,7 +197,7 @@ pub async fn start_tool_proxy(
 
     // 4. 激活内置 Profile（这会自动同步到原生配置文件）
     profile_mgr
-        .activate_profile(&tool_id, &proxy_profile_name)
+        .activate_profile(tool_id, &proxy_profile_name)
         .map_err(|e| format!("激活内置 Profile 失败: {}", e))?;
 
     tracing::info!(
@@ -214,14 +213,63 @@ pub async fn start_tool_proxy(
 
     manager_state
         .manager
-        .start_proxy(&tool_id, tool_config)
+        .start_proxy(tool_id, tool_config)
         .await
         .map_err(|e| format!("启动代理失败: {}", e))?;
 
-    Ok(format!(
-        "✅ {} 透明代理已启动\n监听端口: {}\n已切换到代理配置",
-        tool_id, proxy_port
-    ))
+    Ok((tool_id.to_string(), proxy_port))
+}
+
+/// 启动指定工具的透明代理（带事务回滚）
+#[tauri::command]
+pub async fn start_tool_proxy(
+    tool_id: String,
+    manager_state: State<'_, ProxyManagerState>,
+) -> Result<String, String> {
+    use ::duckcoding::services::profile_manager::ProfileManager;
+
+    // 备份当前状态（用于回滚）
+    let profile_mgr = ProfileManager::new().map_err(|e| e.to_string())?;
+    let proxy_config_mgr = ProxyConfigManager::new().map_err(|e| e.to_string())?;
+
+    let backup_config = proxy_config_mgr
+        .get_config(&tool_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("工具 {} 的代理配置不存在", tool_id))?;
+
+    let backup_profile = profile_mgr
+        .get_active_profile_name(&tool_id)
+        .map_err(|e| e.to_string())?;
+
+    // 执行启动操作
+    match try_start_proxy_internal(&tool_id, &manager_state).await {
+        Ok((tool_id, proxy_port)) => Ok(format!(
+            "✅ {} 透明代理已启动\n监听端口: {}\n已切换到代理配置",
+            tool_id, proxy_port
+        )),
+        Err(e) => {
+            // 启动失败，开始回滚
+            tracing::warn!("代理启动失败，开始回滚: {}", e);
+
+            // 回滚代理配置
+            if let Err(rollback_err) = proxy_config_mgr.update_config(&tool_id, backup_config) {
+                tracing::error!("回滚代理配置失败: {}", rollback_err);
+            } else {
+                tracing::info!("已回滚代理配置");
+            }
+
+            // 回滚 Profile 激活状态
+            if let Some(name) = backup_profile {
+                if let Err(rollback_err) = profile_mgr.activate_profile(&tool_id, &name) {
+                    tracing::error!("回滚 Profile 失败: {}", rollback_err);
+                } else {
+                    tracing::info!("已回滚 Profile 到: {}", name);
+                }
+            }
+
+            Err(e)
+        }
+    }
 }
 
 /// 停止指定工具的透明代理
@@ -425,7 +473,13 @@ pub async fn update_proxy_config(
         let profile_mgr = ProfileManager::new().map_err(|e| e.to_string())?;
         let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
         let proxy_endpoint = format!("http://127.0.0.1:{}", config.port);
-        let proxy_key = config.local_api_key.unwrap();
+
+        // 安全获取代理密钥，避免 panic
+        let proxy_key = config
+            .local_api_key
+            .as_ref()
+            .ok_or_else(|| format!("工具 {} 缺少代理密钥配置", tool_id))?
+            .clone();
 
         match tool_id.as_str() {
             "claude-code" => {

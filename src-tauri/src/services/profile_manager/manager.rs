@@ -4,6 +4,8 @@ use super::types::*;
 use crate::data::DataManager;
 use anyhow::{anyhow, Context, Result};
 use chrono::Utc;
+use fs2::FileExt;
+use std::fs::File;
 use std::path::PathBuf;
 
 /// 系统保留的 Profile 名称前缀
@@ -48,11 +50,21 @@ impl ProfileManager {
     }
 
     fn save_profiles_store(&self, store: &ProfilesStore) -> Result<()> {
+        // 创建锁文件（与 profiles.json 同目录）
+        let lock_path = self.profiles_path.with_extension("lock");
+        let lock_file = File::create(&lock_path).context("创建锁文件失败")?;
+
+        // 获取排他锁（阻塞等待其他写操作完成）
+        lock_file.lock_exclusive().context("获取文件锁失败")?;
+
+        // 执行写入（受锁保护）
         let value = serde_json::to_value(store)?;
         self.data_manager
             .json()
-            .write(&self.profiles_path, &value)
-            .map_err(Into::into)
+            .write(&self.profiles_path, &value)?;
+
+        // 锁在 lock_file drop 时自动释放
+        Ok(())
     }
 
     pub fn load_active_store(&self) -> Result<ActiveStore> {
@@ -64,11 +76,19 @@ impl ProfileManager {
     }
 
     pub fn save_active_store(&self, store: &ActiveStore) -> Result<()> {
+        // 创建锁文件（与 active.json 同目录）
+        let lock_path = self.active_path.with_extension("lock");
+        let lock_file = File::create(&lock_path).context("创建锁文件失败")?;
+
+        // 获取排他锁（阻塞等待其他写操作完成）
+        lock_file.lock_exclusive().context("获取文件锁失败")?;
+
+        // 执行写入（受锁保护）
         let value = serde_json::to_value(store)?;
-        self.data_manager
-            .json()
-            .write(&self.active_path, &value)
-            .map_err(Into::into)
+        self.data_manager.json().write(&self.active_path, &value)?;
+
+        // 锁在 lock_file drop 时自动释放
+        Ok(())
     }
 
     // ==================== Claude Code ====================
