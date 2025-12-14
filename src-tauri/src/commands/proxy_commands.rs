@@ -3,28 +3,19 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
-use tokio::sync::Mutex as TokioMutex;
 
-use ::duckcoding::services::proxy::{
-    ProxyManager, TransparentProxyConfigService, TransparentProxyService,
-};
+use ::duckcoding::services::proxy::ProxyManager;
 use ::duckcoding::services::proxy_config_manager::ProxyConfigManager;
-use ::duckcoding::utils::config::{read_global_config, write_global_config};
-use ::duckcoding::{GlobalConfig, ProxyConfig, Tool};
+use ::duckcoding::utils::config::read_global_config;
 
 // ==================== 类型定义 ====================
-
-// 透明代理全局状态（旧架构，保持兼容）
-pub struct TransparentProxyState {
-    pub service: Arc<TokioMutex<TransparentProxyService>>,
-}
 
 // 代理管理器状态（新架构）
 pub struct ProxyManagerState {
     pub manager: Arc<ProxyManager>,
 }
 
-// 透明代理相关的 Tauri Commands
+// 透明代理状态（用于新架构的多工具状态返回）
 #[derive(serde::Serialize)]
 pub struct TransparentProxyStatus {
     running: bool,
@@ -49,207 +40,6 @@ pub struct TestProxyResult {
     error: Option<String>,
 }
 
-// ==================== 辅助函数 ====================
-
-// Tauri命令：读取全局配置
-async fn get_global_config() -> Result<Option<GlobalConfig>, String> {
-    read_global_config()
-}
-
-// Tauri命令：保存全局配置
-async fn save_global_config(config: GlobalConfig) -> Result<(), String> {
-    write_global_config(&config)
-}
-#[tauri::command]
-pub async fn start_transparent_proxy(
-    state: State<'_, TransparentProxyState>,
-) -> Result<String, String> {
-    // 读取全局配置
-    let mut config = get_global_config()
-        .await
-        .map_err(|e| format!("读取配置失败: {e}"))?
-        .ok_or_else(|| "全局配置不存在，请先配置用户信息".to_string())?;
-    let original_config = config.clone();
-
-    if !config.transparent_proxy_enabled {
-        return Err("透明代理未启用，请先在设置中启用".to_string());
-    }
-
-    let local_api_key = config
-        .transparent_proxy_api_key
-        .clone()
-        .ok_or_else(|| "透明代理保护密钥未设置".to_string())?;
-
-    let proxy_port = config.transparent_proxy_port;
-
-    let tool = Tool::claude_code();
-
-    // 每次启动都检查并确保配置正确设置
-    // 如果还没有备份过真实配置，先备份
-    if config.transparent_proxy_real_api_key.is_none() {
-        // 启用透明代理（保存真实配置并修改 ClaudeCode 配置）
-        TransparentProxyConfigService::enable_transparent_proxy(
-            &tool,
-            &mut config,
-            proxy_port,
-            &local_api_key,
-        )
-        .map_err(|e| format!("启用透明代理失败: {e}"))?;
-    } else {
-        // 已经备份过配置，只需确保当前配置指向本地代理
-        TransparentProxyConfigService::update_config_to_proxy(&tool, proxy_port, &local_api_key)
-            .map_err(|e| format!("更新代理配置失败: {e}"))?;
-    }
-
-    // 从全局配置获取真实的 API 配置
-    let (target_api_key, target_base_url) = TransparentProxyConfigService::get_real_config(&config)
-        .map_err(|e| format!("获取真实配置失败: {e}"))?;
-
-    tracing::debug!(
-        api_key_prefix = &target_api_key[..4.min(target_api_key.len())],
-        base_url = %target_base_url,
-        "真实 API 配置"
-    );
-
-    // 创建代理配置
-    let proxy_config = ProxyConfig {
-        target_api_key,
-        target_base_url,
-        local_api_key,
-    };
-
-    // 启动代理服务
-    let service = state.service.lock().await;
-    let allow_public = config.transparent_proxy_allow_public;
-    if let Err(start_err) = service.start(proxy_config, allow_public).await {
-        if let Err(disable_err) =
-            TransparentProxyConfigService::disable_transparent_proxy(&tool, &config)
-        {
-            tracing::error!(
-                error = ?disable_err,
-                "恢复 ClaudeCode 配置失败（代理启动错误后）"
-            );
-        }
-        if let Err(save_err) = save_global_config(original_config).await {
-            tracing::error!(
-                error = ?save_err,
-                "恢复全局配置失败（代理启动错误后）"
-            );
-        }
-        return Err(format!("启动透明代理服务失败: {start_err}"));
-    }
-
-    // 保存更新后的全局配置
-    save_global_config(config.clone())
-        .await
-        .map_err(|e| format!("保存配置失败: {e}"))?;
-
-    Ok(format!(
-        "✅ 透明代理已启动\n监听端口: {proxy_port}\nClaudeCode 请求将自动转发"
-    ))
-}
-
-#[tauri::command]
-pub async fn stop_transparent_proxy(
-    state: State<'_, TransparentProxyState>,
-) -> Result<String, String> {
-    // 读取全局配置
-    let config = get_global_config()
-        .await
-        .map_err(|e| format!("读取配置失败: {e}"))?
-        .ok_or_else(|| "全局配置不存在".to_string())?;
-
-    // 停止代理服务
-    let service = state.service.lock().await;
-    service
-        .stop()
-        .await
-        .map_err(|e| format!("停止透明代理服务失败: {e}"))?;
-
-    // 恢复 ClaudeCode 配置
-    if config.transparent_proxy_real_api_key.is_some() {
-        let tool = Tool::claude_code();
-        TransparentProxyConfigService::disable_transparent_proxy(&tool, &config)
-            .map_err(|e| format!("恢复配置失败: {e}"))?;
-    }
-
-    Ok("✅ 透明代理已停止\nClaudeCode 配置已恢复".to_string())
-}
-
-#[tauri::command]
-pub async fn get_transparent_proxy_status(
-    state: State<'_, TransparentProxyState>,
-) -> Result<TransparentProxyStatus, String> {
-    let config = get_global_config().await.ok().flatten();
-    let port = config
-        .as_ref()
-        .map(|c| c.transparent_proxy_port)
-        .unwrap_or(8787);
-
-    let service = state.service.lock().await;
-    let running = service.is_running().await;
-
-    Ok(TransparentProxyStatus { running, port })
-}
-
-#[tauri::command]
-pub async fn update_transparent_proxy_config(
-    state: State<'_, TransparentProxyState>,
-    new_api_key: String,
-    new_base_url: String,
-) -> Result<String, String> {
-    // 读取全局配置
-    let mut config = get_global_config()
-        .await
-        .map_err(|e| format!("读取配置失败: {e}"))?
-        .ok_or_else(|| "全局配置不存在".to_string())?;
-
-    if !config.transparent_proxy_enabled {
-        return Err("透明代理未启用".to_string());
-    }
-
-    let local_api_key = config
-        .transparent_proxy_api_key
-        .clone()
-        .ok_or_else(|| "透明代理保护密钥未设置".to_string())?;
-
-    // 更新全局配置中的真实配置
-    let tool = Tool::claude_code();
-    TransparentProxyConfigService::update_real_config(
-        &tool,
-        &mut config,
-        &new_api_key,
-        &new_base_url,
-    )
-    .map_err(|e| format!("更新配置失败: {e}"))?;
-
-    // 保存更新后的全局配置
-    save_global_config(config.clone())
-        .await
-        .map_err(|e| format!("保存配置失败: {e}"))?;
-
-    // 创建新的代理配置
-    let proxy_config = ProxyConfig {
-        target_api_key: new_api_key.clone(),
-        target_base_url: new_base_url.clone(),
-        local_api_key,
-    };
-
-    // 更新代理服务的配置
-    let service = state.service.lock().await;
-    service
-        .update_config(proxy_config)
-        .await
-        .map_err(|e| format!("更新代理配置失败: {e}"))?;
-
-    tracing::info!(
-        api_key_prefix = &new_api_key[..4.min(new_api_key.len())],
-        base_url = %new_base_url,
-        "透明代理配置已更新"
-    );
-
-    Ok("✅ 透明代理配置已更新，无需重启".to_string())
-}
 #[tauri::command]
 pub fn get_current_proxy() -> Result<Option<String>, String> {
     Ok(::duckcoding::ProxyService::get_current_proxy())
@@ -500,14 +290,16 @@ pub async fn stop_tool_proxy(
 pub async fn get_all_proxy_status(
     manager_state: State<'_, ProxyManagerState>,
 ) -> Result<HashMap<String, TransparentProxyStatus>, String> {
-    let config = get_global_config().await.ok().flatten();
+    let proxy_config_mgr = ProxyConfigManager::new().map_err(|e| e.to_string())?;
+    let proxy_store = proxy_config_mgr
+        .load_proxy_store()
+        .map_err(|e| e.to_string())?;
 
     let mut status_map = HashMap::new();
 
     for tool_id in &["claude-code", "codex", "gemini-cli"] {
-        let port = config
-            .as_ref()
-            .and_then(|c| c.get_proxy_config(tool_id))
+        let port = proxy_store
+            .get_config(tool_id)
             .map(|tc| tc.port)
             .unwrap_or_else(|| match *tool_id {
                 "claude-code" => 8787,

@@ -2,47 +2,7 @@
 // 负责透明代理的启动、停止、状态查询和配置管理
 
 import { invoke } from '@tauri-apps/api/core';
-import type { TransparentProxyStatus, AllProxyStatus, ToolProxyConfig, ToolId } from './types';
-
-// ==================== 旧版单工具代理 API（兼容性保留）====================
-
-/**
- * 启动透明代理（旧版，使用 claude-code 工具）
- * @deprecated 请使用 startToolProxy
- */
-export async function startTransparentProxy(): Promise<string> {
-  return await invoke<string>('start_transparent_proxy');
-}
-
-/**
- * 停止透明代理（旧版，使用 claude-code 工具）
- * @deprecated 请使用 stopToolProxy
- */
-export async function stopTransparentProxy(): Promise<string> {
-  return await invoke<string>('stop_transparent_proxy');
-}
-
-/**
- * 获取透明代理状态（旧版，使用 claude-code 工具）
- * @deprecated 请使用 getAllProxyStatus
- */
-export async function getTransparentProxyStatus(): Promise<TransparentProxyStatus> {
-  return await invoke<TransparentProxyStatus>('get_transparent_proxy_status');
-}
-
-/**
- * 更新透明代理配置（旧版，使用 claude-code 工具）
- * @deprecated 请使用 updateProxyConfig
- */
-export async function updateTransparentProxyConfig(
-  newApiKey: string,
-  newBaseUrl: string,
-): Promise<string> {
-  return await invoke<string>('update_transparent_proxy_config', {
-    newApiKey,
-    newBaseUrl,
-  });
-}
+import type { AllProxyStatus, ToolProxyConfig, ToolId } from './types';
 
 // ==================== 多工具透明代理 API（新架构）====================
 

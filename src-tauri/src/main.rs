@@ -18,7 +18,6 @@ use commands::*;
 // 导入透明代理服务
 use duckcoding::services::config::{NotifyWatcherManager, EXTERNAL_CHANGE_EVENT};
 use duckcoding::ProxyManager;
-use duckcoding::TransparentProxyService;
 use std::sync::Arc;
 use tokio::sync::Mutex as TokioMutex;
 
@@ -222,12 +221,6 @@ fn main() {
         tracing::warn!(error = ?e, "初始化内置 Profile 失败");
     }
 
-    // 创建透明代理服务实例（旧架构，保持兼容）
-    let transparent_proxy_port = 8787; // 默认端口,实际会从配置读取
-    let transparent_proxy_service = TransparentProxyService::new(transparent_proxy_port);
-    let transparent_proxy_state = TransparentProxyState {
-        service: Arc::new(TokioMutex::new(transparent_proxy_service)),
-    };
     let watcher_state = ExternalWatcherState {
         manager: Mutex::new(None),
     };
@@ -300,7 +293,6 @@ fn main() {
     );
 
     let builder = tauri::Builder::default()
-        .manage(transparent_proxy_state)
         .manage(proxy_manager_state)
         .manage(watcher_state)
         .manage(update_service_state)
@@ -554,11 +546,6 @@ fn main() {
         get_gemini_settings,
         save_gemini_settings,
         get_gemini_schema,
-        // 透明代理相关命令
-        start_transparent_proxy,
-        stop_transparent_proxy,
-        get_transparent_proxy_status,
-        update_transparent_proxy_config,
         // 多工具透明代理命令（新架构）
         start_tool_proxy,
         stop_tool_proxy,

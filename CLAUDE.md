@@ -163,11 +163,14 @@ last-updated: 2025-12-07
 - **透明代理已重构为多工具架构**：
   - `ProxyManager` 统一管理三个工具（Claude Code、Codex、Gemini CLI）的代理实例
   - `HeadersProcessor` trait 定义工具特定的 headers 处理逻辑（位于 `services/proxy/headers/`）
-  - `ToolProxyConfig` 存储在 `GlobalConfig.proxy_configs` HashMap 中，每个工具独立配置
+  - `ToolProxyConfig` 存储在 `ProxyConfigManager` 管理的 `~/.duckcoding/proxy.json` 中，每个工具独立配置
   - 支持三个代理同时运行，端口由用户配置（默认: claude-code=8787, codex=8788, gemini-cli=8789）
   - 旧的 `transparent_proxy_*` 字段会在读取配置时自动迁移到新结构
-  - 新命令：`start_tool_proxy`、`stop_tool_proxy`、`get_all_proxy_status`
-  - 旧命令保持兼容，内部使用新架构实现
+  - **命令层（2025-12-14 清理遗留代码）**：
+    - 新架构命令：`start_tool_proxy`、`stop_tool_proxy`、`get_all_proxy_status`、`update_proxy_config`、`get_proxy_config`、`get_all_proxy_configs`
+    - 旧命令已完全删除：`start_transparent_proxy`、`stop_transparent_proxy`、`get_transparent_proxy_status`、`update_transparent_proxy_config`
+    - 已删除遗留服务：`TransparentProxyConfigService`（原 `services/proxy/transparent_proxy_config.rs`，563行）
+    - 已删除前端遗留代码：`useTransparentProxy.ts` hook 和旧 API 包装器
   - **配置管理机制（2025-12-12）**：
     - 代理启动时自动创建内置 Profile（`dc_proxy_*`），通过 `ProfileManager` 切换配置
     - 内置 Profile 在 UI 中不可见（列表查询时过滤 `dc_proxy_` 前缀）

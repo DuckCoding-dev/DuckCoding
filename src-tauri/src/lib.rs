@@ -15,7 +15,6 @@ pub use services::downloader::FileDownloader;
 pub use services::installer::InstallerService;
 pub use services::proxy::ProxyService;
 pub use services::transparent_proxy::{ProxyConfig, TransparentProxyService};
-pub use services::transparent_proxy_config::TransparentProxyConfigService;
 pub use services::update::UpdateService;
 pub use services::version::VersionService;
 // Re-export tool registry (unified tool management)
