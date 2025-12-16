@@ -6,6 +6,9 @@ authors = ["DuckCoding"]
 edition = "2021"
 default-run = "duckcoding"
 
+[lib]
+doctest = false
+
 [package.metadata.cargo-llvm-cov]
 # 默认行覆盖率阈值，配合 npm run coverage:rs 使用
 fail-under-lines = 90
