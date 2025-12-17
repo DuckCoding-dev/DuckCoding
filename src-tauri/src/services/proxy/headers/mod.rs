@@ -120,13 +120,15 @@ mod tests {
 
     #[test]
     fn test_create_request_processor() {
-        let claude = create_request_processor("claude-code").expect("should create claude processor");
+        let claude =
+            create_request_processor("claude-code").expect("should create claude processor");
         assert_eq!(claude.tool_id(), "claude-code");
 
         let codex = create_request_processor("codex").expect("should create codex processor");
         assert_eq!(codex.tool_id(), "codex");
 
-        let gemini = create_request_processor("gemini-cli").expect("should create gemini processor");
+        let gemini =
+            create_request_processor("gemini-cli").expect("should create gemini processor");
         assert_eq!(gemini.tool_id(), "gemini-cli");
     }
 

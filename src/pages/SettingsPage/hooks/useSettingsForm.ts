@@ -117,14 +117,10 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     onConfigChange,
   ]);
 
-  // 生成代理 API Key
+  // 生成代理 API Key（已废弃，透明代理功能已移除）
   const generateProxyKey = useCallback(() => {
-    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = 'dc-proxy-';
-    for (let i = 0; i < 32; i++) {
-      result += charset.charAt(Math.floor(Math.random() * charset.length));
-    }
-    setTransparentProxyApiKey(result);
+    // 功能已移除
+    console.warn('generateProxyKey 功能已废弃');
   }, []);
 
   // 测试代理连接
@@ -231,12 +227,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     setProxyTestUrl,
     proxyBypassUrls,
     setProxyBypassUrls,
-
-    // Transparent proxy settings
-    setTransparentProxyEnabled,
-    setTransparentProxyPort,
-    setTransparentProxyApiKey,
-    setTransparentProxyAllowPublic,
 
     // State
     globalConfig,
