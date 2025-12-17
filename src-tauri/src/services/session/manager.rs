@@ -8,10 +8,15 @@ use crate::services::session::db_utils::{
 use crate::services::session::models::{ProxySession, SessionEvent, SessionListResponse};
 use anyhow::Result;
 use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::sync::CancellationToken;
 use tokio::time::{interval, Duration};
+
+/// 全局取消令牌，用于优雅关闭后台任务
+static CANCELLATION_TOKEN: Lazy<CancellationToken> = Lazy::new(CancellationToken::new);
 
 /// 会话管理器单例
 pub struct SessionManager {
@@ -75,6 +80,15 @@ impl SessionManager {
 
             loop {
                 tokio::select! {
+                    _ = CANCELLATION_TOKEN.cancelled() => {
+                        // 应用关闭，刷盘缓冲区
+                        if !buffer.is_empty() {
+                            Self::flush_events(&manager, &db_path, &mut buffer);
+                            tracing::info!("Session 事件已刷盘: {} 条", buffer.len());
+                        }
+                        tracing::info!("Session 批量写入任务已停止");
+                        break;
+                    }
                     // 接收事件
                     Some(event) = event_receiver.recv() => {
                         buffer.push(event);
@@ -101,17 +115,23 @@ impl SessionManager {
             let mut cleanup_interval = interval(Duration::from_secs(3600));
 
             loop {
-                cleanup_interval.tick().await;
-
-                // 清理三个工具的过期会话
-                for tool_id in &["claude-code", "codex", "gemini-cli"] {
-                    let _ = Self::cleanup_old_sessions_internal(
-                        &manager_clone,
-                        &db_path_clone,
-                        tool_id,
-                        1000,
-                        30,
-                    );
+                tokio::select! {
+                    _ = CANCELLATION_TOKEN.cancelled() => {
+                        tracing::info!("Session 清理任务已停止");
+                        break;
+                    }
+                    _ = cleanup_interval.tick() => {
+                        // 清理三个工具的过期会话
+                        for tool_id in &["claude-code", "codex", "gemini-cli"] {
+                            let _ = Self::cleanup_old_sessions_internal(
+                                &manager_clone,
+                                &db_path_clone,
+                                tool_id,
+                                1000,
+                                30,
+                            );
+                        }
+                    }
                 }
             }
         });
@@ -467,4 +487,12 @@ mod tests {
         assert_eq!(session.url, "https://api.test.com");
         assert_eq!(session.api_key, "sk-test");
     }
+}
+
+/// 关闭 SessionManager 后台任务
+///
+/// 在应用关闭时调用，优雅地停止所有后台任务并刷盘缓冲区数据
+pub fn shutdown_session_manager() {
+    tracing::info!("SessionManager 关闭信号已发送");
+    CANCELLATION_TOKEN.cancel();
 }
