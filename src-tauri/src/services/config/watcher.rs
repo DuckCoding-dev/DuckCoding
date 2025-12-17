@@ -7,7 +7,7 @@
 use super::types::{ExternalConfigChange, ImportExternalChangeResult};
 use crate::models::Tool;
 use crate::services::profile_manager::ProfileManager;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use notify::{
     Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
@@ -157,7 +157,7 @@ pub fn detect_external_changes() -> Result<Vec<ExternalConfigChange>> {
         }
 
         let current_checksum = compute_native_checksum(&tool);
-        let active = active_opt.unwrap();
+        let active = active_opt.ok_or_else(|| anyhow!("工具 {} 无激活 Profile", tool.id))?;
         let last_checksum = active.native_checksum.clone();
 
         if last_checksum.as_ref() != current_checksum.as_ref() {

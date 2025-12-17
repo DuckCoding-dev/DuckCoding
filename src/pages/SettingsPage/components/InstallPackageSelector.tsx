@@ -20,12 +20,21 @@ interface PackageOption {
   recommended?: boolean;
 }
 
+import type { UpdateInfo } from '@/lib/tauri-commands/types';
+
+interface PlatformInfo {
+  is_windows: boolean;
+  is_macos: boolean;
+  is_linux: boolean;
+  arch: string;
+}
+
 interface InstallPackageSelectorProps {
   isOpen: boolean;
   onClose: () => void;
-  updateInfo: any;
+  updateInfo: UpdateInfo;
   onDownloadSelected: (url: string) => void;
-  platformInfo: any;
+  platformInfo: PlatformInfo;
 }
 
 export function InstallPackageSelector({

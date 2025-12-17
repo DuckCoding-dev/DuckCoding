@@ -4,7 +4,7 @@
 
 use super::ToolRegistry;
 use crate::models::{InstallMethod, Tool, ToolInstance, ToolType};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 impl ToolRegistry {
     /// 检测本地工具并持久化到数据库（并行检测，用于新手引导）
