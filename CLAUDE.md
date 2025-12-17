@@ -1,6 +1,6 @@
 ---
 agents: Codex, Claude-Code, Gemini-Cli
-last-updated: 2025-12-07
+last-updated: 2025-12-16
 ---
 
 # DuckCoding 开发协作规范
@@ -184,6 +184,20 @@ last-updated: 2025-12-07
     - 旧命令已完全删除：`start_transparent_proxy`、`stop_transparent_proxy`、`get_transparent_proxy_status`、`update_transparent_proxy_config`
     - 已删除遗留服务：`TransparentProxyConfigService`（原 `services/proxy/transparent_proxy_config.rs`，563行）
     - 已删除前端遗留代码：`useTransparentProxy.ts` hook 和旧 API 包装器
+  - **代理工具模块化重构（2025-12-16）**：
+    - **问题**：旧架构 `TransparentProxyService` (454行) 完全未使用，`proxy_instance.rs` (421行) 包含大量重复代码
+    - **解决方案**：删除旧架构 + 提取通用工具到 `services/proxy/utils/`
+    - **已删除文件**：
+      - `services/proxy/transparent_proxy.rs` (454行)：单代理实例旧实现（已被 ProxyManager 替代）
+    - **新建 utils 模块**（位于 `services/proxy/utils/`，消除重复代码 152 行）：
+      - `body.rs` (48行)：统一 `BoxBody` 类型定义和 `box_body()` 工厂函数
+      - `loop_detector.rs` (45行)：代理回环检测（`is_proxy_loop` 防止配置指向自身）
+      - `error_responses.rs` (63行)：统一 JSON 错误响应模板（配置缺失、回环检测、未授权、内部错误）
+      - `mod.rs` (10行)：模块导出和常用类型重导出
+    - **proxy_instance.rs 简化**：从 421 行减少到 269 行（-36%），删除重复的类型定义和错误响应构建逻辑
+    - **GlobalConfig 清理**：删除 6 个废弃字段（`transparent_proxy_enabled`、`transparent_proxy_port`、`transparent_proxy_api_key`、`transparent_proxy_allow_public`、`transparent_proxy_real_api_key`、`transparent_proxy_real_base_url`）
+    - **迁移逻辑**：`migrations/proxy_config.rs` 使用 `serde_json::Value` 手动操作 JSON，保持向后兼容
+    - **代码质量**：遵循 DRY 原则，所有检查通过（Clippy + fmt + ESLint + Prettier），测试 199 通过
   - **配置管理机制（2025-12-12）**：
     - 代理启动时自动创建内置 Profile（`dc_proxy_*`），通过 `ProfileManager` 切换配置
     - 内置 Profile 在 UI 中不可见（列表查询时过滤 `dc_proxy_` 前缀）

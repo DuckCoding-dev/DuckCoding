@@ -54,14 +54,6 @@ export interface GlobalConfig {
   proxy_username?: string;
   proxy_password?: string;
   proxy_bypass_urls?: string[]; // 代理过滤URL列表
-  // 透明代理功能 (实验性)
-  transparent_proxy_enabled?: boolean;
-  transparent_proxy_port?: number;
-  transparent_proxy_api_key?: string;
-  transparent_proxy_allow_public?: boolean;
-  // 保存真实的 API 配置
-  transparent_proxy_real_api_key?: string;
-  transparent_proxy_real_base_url?: string;
   // 多工具透明代理配置（新架构）
   proxy_configs?: Record<string, ToolProxyConfig>;
   // 会话级端点配置开关（默认关闭）

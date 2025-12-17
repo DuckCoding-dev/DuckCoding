@@ -8,21 +8,20 @@
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use http_body_util::BodyExt;
-use hyper::body::{Body, Frame, Incoming};
+use hyper::body::{Frame, Incoming};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
-use pin_project_lite::pin_project;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context as TaskContext, Poll};
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 
 use super::headers::RequestProcessor;
+use super::utils::body::{box_body, BoxBody};
+use super::utils::{error_responses, loop_detector};
 use crate::models::proxy_config::ToolProxyConfig;
 
 /// 单个代理实例
@@ -196,12 +195,7 @@ async fn handle_request(
                 error = ?e,
                 "请求处理失败"
             );
-            Ok(Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(box_body(http_body_util::Full::new(Bytes::from(format!(
-                    "代理错误: {e}"
-                )))))
-                .unwrap())
+            Ok(error_responses::internal_error(&e.to_string()))
         }
     }
 }
@@ -217,17 +211,7 @@ async fn handle_request_inner(
     let proxy_config = {
         let cfg = config.read().await;
         if cfg.real_api_key.is_none() || cfg.real_base_url.is_none() {
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .header("content-type", "application/json")
-                .body(box_body(http_body_util::Full::new(Bytes::from(format!(
-                    r#"{{
-  "error": "CONFIGURATION_MISSING",
-  "message": "{tool_id} 透明代理配置不完整",
-  "details": "请先配置有效的 API Key 和 Base URL"
-}}"#
-                )))))
-                .unwrap());
+            return Ok(error_responses::configuration_missing(tool_id));
         }
         cfg.clone()
     };
@@ -250,12 +234,7 @@ async fn handle_request_inner(
 
     if let Some(local_key) = &proxy_config.local_api_key {
         if provided_key != local_key {
-            return Ok(Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body(box_body(http_body_util::Full::new(Bytes::from(
-                    "Unauthorized: Invalid API Key",
-                ))))
-                .unwrap());
+            return Ok(error_responses::unauthorized());
         }
     }
 
@@ -292,27 +271,8 @@ async fn handle_request_inner(
         .context("处理出站请求失败")?;
 
     // 回环检测
-    let loop_urls = vec![
-        format!("http://127.0.0.1:{}", own_port),
-        format!("https://127.0.0.1:{}", own_port),
-        format!("http://localhost:{}", own_port),
-        format!("https://localhost:{}", own_port),
-    ];
-
-    for loop_url in &loop_urls {
-        if processed.target_url.starts_with(loop_url) {
-            return Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .header("content-type", "application/json")
-                .body(box_body(http_body_util::Full::new(Bytes::from(format!(
-                    r#"{{
-  "error": "PROXY_LOOP_DETECTED",
-  "message": "{tool_id} 透明代理配置错误导致回环",
-  "details": "请检查代理配置，确保 Base URL 不指向本地代理端口"
-}}"#
-                )))))
-                .unwrap());
-        }
+    if loop_detector::is_proxy_loop(&processed.target_url, own_port) {
+        return Ok(error_responses::proxy_loop_detected(tool_id));
     }
 
     tracing::debug!(
@@ -377,44 +337,5 @@ async fn handle_request_inner(
         Ok(response
             .body(box_body(http_body_util::Full::new(body_bytes)))
             .unwrap())
-    }
-}
-
-// Body 类型定义
-pin_project! {
-    pub struct BoxBody {
-        #[pin]
-        inner: Pin<Box<dyn Body<Data = Bytes, Error = Box<dyn std::error::Error + Send + Sync>> + Send>>,
-    }
-}
-
-impl Body for BoxBody {
-    type Data = Bytes;
-    type Error = Box<dyn std::error::Error + Send + Sync>;
-
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        cx: &mut TaskContext<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        self.project().inner.poll_frame(cx)
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.inner.is_end_stream()
-    }
-
-    fn size_hint(&self) -> hyper::body::SizeHint {
-        self.inner.size_hint()
-    }
-}
-
-// 辅助函数：创建 BoxBody
-fn box_body<B>(body: B) -> BoxBody
-where
-    B: Body<Data = Bytes> + Send + 'static,
-    B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
-{
-    BoxBody {
-        inner: Box::pin(body.map_err(Into::into)),
     }
 }

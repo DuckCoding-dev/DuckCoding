@@ -152,21 +152,6 @@ pub struct GlobalConfig {
     pub proxy_password: Option<String>,
     #[serde(default)]
     pub proxy_bypass_urls: Vec<String>, // 代理过滤URL列表
-    // 透明代理功能 (实验性)
-    #[serde(default)]
-    pub transparent_proxy_enabled: bool,
-    #[serde(default = "default_transparent_proxy_port")]
-    pub transparent_proxy_port: u16,
-    #[serde(default)]
-    pub transparent_proxy_api_key: Option<String>, // 用于保护本地代理的 API Key
-    // 保存真实的 ClaudeCode API 配置（透明代理启用时使用）
-    #[serde(default)]
-    pub transparent_proxy_real_api_key: Option<String>,
-    #[serde(default)]
-    pub transparent_proxy_real_base_url: Option<String>,
-    // 允许局域网访问透明代理（默认仅本地访问）
-    #[serde(default)]
-    pub transparent_proxy_allow_public: bool,
     // 多工具透明代理配置（新架构）
     #[serde(default = "default_proxy_configs")]
     pub proxy_configs: HashMap<String, ToolProxyConfig>,
@@ -194,10 +179,6 @@ pub struct GlobalConfig {
     /// 单实例模式开关（默认启用，仅生产环境生效）
     #[serde(default = "default_single_instance_enabled")]
     pub single_instance_enabled: bool,
-}
-
-fn default_transparent_proxy_port() -> u16 {
-    8787
 }
 
 fn default_proxy_configs() -> HashMap<String, ToolProxyConfig> {
