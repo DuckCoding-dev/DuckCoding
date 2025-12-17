@@ -496,3 +496,14 @@ mod tests {
         assert_eq!(session.api_key, "sk-test");
     }
 }
+
+/// 关闭 SessionManager 后台任务
+///
+/// 在应用关闭时调用，优雅地停止所有后台任务并刷盘缓冲区数据
+pub fn shutdown_session_manager() {
+    tracing::info!("SessionManager 关闭信号已发送");
+    CANCELLATION_TOKEN.cancel();
+
+    // 等待一小段时间让任务完成
+    std::thread::sleep(std::time::Duration::from_millis(200));
+}
