@@ -1,5 +1,6 @@
 pub mod balance_commands;
 pub mod config_commands;
+pub mod error; // 错误处理统一模块
 pub mod log_commands;
 pub mod onboarding;
 pub mod profile_commands; // Profile 管理命令（v2.0）
