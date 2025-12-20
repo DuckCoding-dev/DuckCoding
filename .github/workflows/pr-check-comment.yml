@@ -1,0 +1,223 @@
+name: PR Check Comment
+
+on:
+  workflow_run:
+    workflows: ["PR Check"]
+    types:
+      - completed
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    name: Update PR Comment
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+
+    steps:
+      - name: Download artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // 获取所有 artifacts
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id,
+            });
+
+            console.log(`Found ${artifacts.data.artifacts.length} artifacts`);
+
+            // 下载所有平台的状态文件
+            for (const artifact of artifacts.data.artifacts) {
+              if (artifact.name.startsWith('pr-check-state-')) {
+                console.log(`Downloading artifact: ${artifact.name}`);
+
+                const download = await github.rest.actions.downloadArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id,
+                  archive_format: 'zip',
+                });
+
+                fs.writeFileSync(`${artifact.name}.zip`, Buffer.from(download.data));
+              }
+            }
+
+      - name: Extract artifacts
+        run: |
+          mkdir -p states
+          for zip in pr-check-state-*.zip; do
+            if [ -f "$zip" ]; then
+              unzip -o "$zip" -d states/
+            fi
+          done
+          ls -la states/ || true
+
+      - name: Update PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const marker = '<!-- duckcoding-pr-check -->';
+            const stateMarker = '<!-- duckcoding-pr-check-state:';
+            const platforms = ['ubuntu-22.04', 'windows-latest', 'macos-arm64', 'macos-x64'];
+
+            // 获取 PR 编号
+            const prNumber = context.payload.workflow_run.pull_requests[0]?.number;
+            if (!prNumber) {
+              console.log('No PR number found, skipping comment update');
+              return;
+            }
+
+            console.log(`Updating comment for PR #${prNumber}`);
+
+            // 读取所有平台的状态
+            const defaultState = () =>
+              Object.fromEntries(
+                platforms.map((p) => [
+                  p,
+                  {
+                    platform: p,
+                    status: 'pending',
+                    check: 'pending',
+                    fix: 'pending',
+                    recheck: 'pending',
+                    artifact: '',
+                    run_url: ''
+                  }
+                ])
+              );
+
+            let state = defaultState();
+
+            // 从 artifact 中读取各平台状态
+            const statesDir = 'states';
+            if (fs.existsSync(statesDir)) {
+              for (const platform of platforms) {
+                const stateFile = path.join(statesDir, `${platform}.json`);
+                if (fs.existsSync(stateFile)) {
+                  try {
+                    const platformState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+                    state[platform] = platformState;
+                    console.log(`Loaded state for ${platform}:`, platformState);
+                  } catch (e) {
+                    console.error(`Failed to parse state for ${platform}:`, e);
+                  }
+                }
+              }
+            }
+
+            const statusLabelZh = (entry) => {
+              if (entry.status === 'pending') return '⏳ 运行中...';
+              if (entry.status === 'success') return '✅ 直接通过';
+              if (entry.status === 'fix_pass') return '🟡 自动修复后通过（请本地提交修复）';
+              return '❌ 仍未通过';
+            };
+
+            const statusLabelEn = (entry) => {
+              if (entry.status === 'pending') return '⏳ In progress...';
+              if (entry.status === 'success') return '✅ Passed';
+              if (entry.status === 'fix_pass') return '🟡 Passed after auto-fix (commit locally)';
+              return '❌ Still failing';
+            };
+
+            const detail = (entry) =>
+              entry.status === 'pending'
+                ? '-'
+                : `check=${entry.check} / fix=${entry.fix} / recheck=${entry.recheck}`;
+
+            const linkOrDash = (entry) => (entry.run_url ? `[日志](${entry.run_url})` : '-');
+            const artifactOrDash = (entry) => (entry.status === 'pending' ? '-' : entry.artifact || '-');
+
+            const pLabel = (p) => {
+              if (p === 'ubuntu-22.04') return 'ubuntu-22.04';
+              if (p === 'windows-latest') return 'windows-latest';
+              if (p === 'macos-arm64') return 'macos-14 (arm64)';
+              if (p === 'macos-x64') return 'macos-15 (x64)';
+              return p;
+            };
+
+            const renderTable = (labelFn, header) => {
+              const rows = platforms
+                .map((p) => {
+                  const e = state[p] || defaultState()[p];
+                  return `| ${pLabel(p)} | ${labelFn(e)} | ${detail(e)} | ${artifactOrDash(e)} | ${linkOrDash(e)} |`;
+                })
+                .join('\n');
+              return [
+                `| ${header.platform} | ${header.status} | ${header.detail} | ${header.artifact} | ${header.link} |`,
+                '| --- | --- | --- | --- | --- |',
+                rows
+              ].join('\n');
+            };
+
+            const tableZh = renderTable(statusLabelZh, {
+              platform: '平台',
+              status: '结果',
+              detail: '明细',
+              artifact: '日志包',
+              link: '运行链接'
+            });
+
+            const tableEn = renderTable(statusLabelEn, {
+              platform: 'Platform',
+              status: 'Status',
+              detail: 'Detail',
+              artifact: 'Artifact',
+              link: 'Run'
+            });
+
+            const body = [
+              '本评论会随各平台任务完成自动更新：',
+              '如首轮 `npm run check` 失败，请在本地执行 `npm run check:fix` → `npm run check` 并提交修复 commit。',
+              '如 fix 仍失败，请在本地排查并确保 `npm run check` 通过后再提交。',
+              '跨平台差异若无法复现，请复制日志交给 AI 获取排查建议。',
+              '',
+              tableZh,
+              '',
+              '---',
+              '',
+              'This comment auto-updates as each platform finishes:',
+              'If the first `npm run check` fails, run locally: `npm run check:fix` → `npm run check` and commit the fix.',
+              'If fix still fails, investigate locally and ensure `npm run check` passes before committing.',
+              'If cross-platform issues can't be reproduced, copy logs to an AI for hints.',
+              '',
+              tableEn,
+              marker,
+              `${stateMarker}${JSON.stringify(state)} -->`
+            ].join('\n');
+
+            // 查找现有评论
+            const { data: comments } = await github.rest.issues.listComments({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+
+            const existing = comments.find((c) => c.body.includes(marker));
+
+            if (existing) {
+              console.log(`Updating existing comment #${existing.id}`);
+              await github.rest.issues.updateComment({
+                comment_id: existing.id,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            } else {
+              console.log('Creating new comment');
+              await github.rest.issues.createComment({
+                issue_number: prNumber,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            }
