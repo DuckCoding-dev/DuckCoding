@@ -882,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "duckcoding"
-version = "1.4.8"
+version = "1.4.11"
 dependencies = [
  "anyhow",
  "async-trait",
