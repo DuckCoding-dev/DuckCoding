@@ -191,6 +191,41 @@ DuckCoding 要求每个工具使用对应的专用分组令牌：
 
 欢迎提交 Issue 和 Pull Request！
 
+### 🚀 本地开发
+
+#### 环境要求
+
+- **Node.js** 18+
+- **Rust** 1.70+
+- **系统依赖**:
+  - macOS: Xcode Command Line Tools
+  - Windows: Microsoft C++ Build Tools
+  - Linux: `build-essential` `libwebkit2gtk-4.0-dev` `libssl-dev`
+
+#### 快速开始
+
+```bash
+# 克隆项目
+git clone https://github.com/DuckCoding-dev/DuckCoding.git
+cd DuckCoding
+
+# 安装依赖
+npm install
+
+# 启动开发环境
+npm run tauri:dev
+```
+
+#### 开发命令
+
+```bash
+npm run dev          # 仅启动前端开发服务器
+npm run tauri:dev    # 启动完整桌面应用开发环境
+npm run tauri:build  # 构建生产版本
+npm run lint         # 代码检查
+npm run fmt          # 代码格式化
+```
+
 ## 🙌 致谢贡献者
 
 感谢所有为 DuckCoding 做出贡献的朋友！  
