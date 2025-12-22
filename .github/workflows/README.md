@@ -2,7 +2,7 @@
 
 本项目使用两步 workflow 实现跨仓库 PR 的评论功能。
 
-> 测试评论功能：验证 PR Check Comment workflow 是否正常工作。
+> 最终测试：验证从 artifact 提取 PR 号的评论功能。
 
 ## Workflows
 
