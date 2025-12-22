@@ -23,7 +23,7 @@ jobs:
           - name: macos-arm64
             os: macos-14
           - name: macos-x64
-            os: macos-13
+            os: macos-15
 
     steps:
       - name: Checkout repository
@@ -133,175 +133,29 @@ jobs:
             check-fix.log
             check-recheck.log
 
-      - name: Update PR comment
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        continue-on-error: true
-        uses: actions/github-script@v7
-        env:
-          MATRIX_NAME: ${{ matrix.name }}
-          RUN_ID: ${{ github.run_id }}
-          JOB_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          CHECK_OUTCOME: ${{ steps.check.outcome }}
-          FIX_OUTCOME: ${{ steps.check_fix.outcome }}
-          RECHECK_OUTCOME: ${{ steps.recheck.outcome }}
-          ARTIFACT_NAME: pr-check-${{ matrix.name }}
+      - name: Save state for comment
+        if: always()
+        shell: bash
+        run: |
+          cat > state.json <<'EOF'
+          {
+            "platform": "${{ matrix.name }}",
+            "check": "${{ steps.check.outcome }}",
+            "fix": "${{ steps.check_fix.outcome }}",
+            "recheck": "${{ steps.recheck.outcome }}",
+            "artifact": "pr-check-${{ matrix.name }}",
+            "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "status": "${{ steps.check.outcome == 'success' && 'success' || (steps.check.outcome == 'failure' && steps.recheck.outcome == 'success' && 'fix_pass' || 'failed') }}"
+          }
+          EOF
+          cat state.json
+
+      - name: Upload state
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const marker = '<!-- duckcoding-pr-check -->';
-            const stateMarker = '<!-- duckcoding-pr-check-state:';
-            const platforms = ['ubuntu-22.04', 'windows-latest', 'macos-arm64', 'macos-x64'];
-
-            const defaultState = () =>
-              Object.fromEntries(
-                platforms.map((p) => [
-                  p,
-                  {
-                    platform: p,
-                    status: 'pending',
-                    check: 'pending',
-                    fix: 'pending',
-                    recheck: 'pending',
-                    artifact: '',
-                    run_url: ''
-                  }
-                ])
-              );
-
-            const newEntry = {
-              platform: process.env.MATRIX_NAME,
-              check: process.env.CHECK_OUTCOME || 'skipped',
-              fix: process.env.FIX_OUTCOME || 'skipped',
-              recheck: process.env.RECHECK_OUTCOME || 'skipped',
-              artifact: process.env.ARTIFACT_NAME,
-              run_url: process.env.JOB_URL
-            };
-
-            if (newEntry.check === 'success') newEntry.status = 'success';
-            else if (newEntry.check === 'failure' && newEntry.recheck === 'success') newEntry.status = 'fix_pass';
-            else if (newEntry.check === 'failure') newEntry.status = 'failed';
-            else newEntry.status = 'pending';
-
-            const statusLabelZh = (entry) => {
-              if (entry.status === 'pending') return '⏳ 运行中...';
-              if (entry.status === 'success') return '✅ 直接通过';
-              if (entry.status === 'fix_pass') return '🟡 自动修复后通过（请本地提交修复）';
-              return '❌ 仍未通过';
-            };
-
-            const statusLabelEn = (entry) => {
-              if (entry.status === 'pending') return '⏳ In progress...';
-              if (entry.status === 'success') return '✅ Passed';
-              if (entry.status === 'fix_pass') return '🟡 Passed after auto-fix (commit locally)';
-              return '❌ Still failing';
-            };
-
-            const detail = (entry) =>
-              entry.status === 'pending'
-                ? '-'
-                : `check=${entry.check} / fix=${entry.fix} / recheck=${entry.recheck}`;
-
-            const linkOrDash = (entry) => (entry.run_url ? `[日志](${entry.run_url})` : '-');
-            const artifactOrDash = (entry) => (entry.status === 'pending' ? '-' : entry.artifact || '-');
-
-            const renderTable = (labelFn, header) => {
-              const h = header || {
-                platform: '平台/Platform',
-                status: '结果/Status',
-                detail: '明细/Detail',
-                artifact: '日志包',
-                link: '运行链接'
-              };
-              const rows = platforms
-                .map((p) => {
-                  const e = state[p] || defaultState()[p];
-                  return `| ${pLabel(p)} | ${labelFn(e)} | ${detail(e)} | ${artifactOrDash(e)} | ${linkOrDash(e)} |`;
-                })
-                .join('\n');
-              return [
-                `| ${h.platform} | ${h.status} | ${h.detail} | ${h.artifact} | ${h.link} |`,
-                '| --- | --- | --- | --- | --- |',
-                rows
-              ].join('\n');
-            };
-
-            const pLabel = (p) => {
-              if (p === 'ubuntu-22.04') return 'ubuntu-22.04';
-              if (p === 'windows-latest') return 'windows-latest';
-              if (p === 'macos-arm64') return 'macos-14 (arm64)';
-              if (p === 'macos-x64') return 'macos-13 (x64)';
-              return p;
-            };
-
-            // Fetch existing comment with marker
-            const { data: comments } = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
-            const existing = comments.find((c) => c.body.includes(marker));
-
-            let state = defaultState();
-            if (existing) {
-              const match = existing.body.match(/<!-- duckcoding-pr-check-state:(.*?)-->/s);
-              if (match) {
-                try {
-                  state = { ...state, ...JSON.parse(match[1]) };
-                } catch {}
-              }
-            }
-            state[newEntry.platform] = newEntry;
-
-            const tableZh = renderTable(statusLabelZh, {
-              platform: '平台',
-              status: '结果',
-              detail: '明细',
-              artifact: '日志包',
-              link: '运行链接'
-            });
-            const tableEn = renderTable(statusLabelEn, {
-              platform: 'Platform',
-              status: 'Status',
-              detail: 'Detail',
-              artifact: 'Artifact',
-              link: 'Run'
-            });
-
-            const body = [
-              '本评论会随各平台任务完成自动更新：',
-              '如首轮 `npm run check` 失败，请在本地执行 `npm run check:fix` → `npm run check` 并提交修复 commit。',
-              '如 fix 仍失败，请在本地排查并确保 `npm run check` 通过后再提交。',
-              '跨平台差异若无法复现，请复制日志交给 AI 获取排查建议。',
-              '',
-              tableZh,
-              '',
-              '---',
-              '',
-              'This comment auto-updates as each platform finishes:',
-              'If the first `npm run check` fails, run locally: `npm run check:fix` → `npm run check` and commit the fix.',
-              'If fix still fails, investigate locally and ensure `npm run check` passes before committing.',
-              'If cross-platform issues can’t be reproduced, copy logs to an AI for hints.',
-              '',
-              tableEn,
-              marker,
-              `${stateMarker}${JSON.stringify(state)} -->`
-            ].join('\n');
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                comment_id: existing.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body
-              });
-            } else {
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body
-              });
-            }
+          name: pr-check-state-${{ matrix.name }}
+          path: state.json
 
       - name: Fail if initial check failed
         if: steps.check.outcome == 'failure'
