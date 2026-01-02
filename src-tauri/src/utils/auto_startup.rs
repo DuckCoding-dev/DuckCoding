@@ -30,7 +30,7 @@ pub fn enable_auto_startup() -> Result<(), AppError> {
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
-        Err(AppError::GenericError {
+        Err(AppError::Internal {
             message: "当前平台不支持自启动功能".to_string(),
         })
     }
@@ -55,7 +55,7 @@ pub fn disable_auto_startup() -> Result<(), AppError> {
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
-        Err(AppError::GenericError {
+        Err(AppError::Internal {
             message: "当前平台不支持自启动功能".to_string(),
         })
     }
@@ -166,7 +166,7 @@ fn is_windows_startup_enabled() -> Result<bool, AppError> {
 
 #[cfg(target_os = "macos")]
 fn get_macos_plist_path() -> Result<PathBuf, AppError> {
-    let home = dirs::home_dir().ok_or_else(|| AppError::GenericError {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal {
         message: "无法获取用户主目录".to_string(),
     })?;
 
@@ -187,7 +187,7 @@ fn enable_macos_startup() -> Result<(), AppError> {
 
     // 确保目录存在
     if let Some(parent) = plist_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| AppError::GenericError {
+        fs::create_dir_all(parent).map_err(|e| AppError::Internal {
             message: format!("无法创建 LaunchAgents 目录: {}", e),
         })?;
     }
@@ -210,7 +210,7 @@ fn enable_macos_startup() -> Result<(), AppError> {
         exe_path_str
     );
 
-    fs::write(&plist_path, plist_content).map_err(|e| AppError::GenericError {
+    fs::write(&plist_path, plist_content).map_err(|e| AppError::Internal {
         message: format!("无法写入 plist 文件: {}", e),
     })?;
 
@@ -225,7 +225,7 @@ fn disable_macos_startup() -> Result<(), AppError> {
 
     // 如果文件存在则删除，不存在则忽略
     if plist_path.exists() {
-        fs::remove_file(&plist_path).map_err(|e| AppError::GenericError {
+        fs::remove_file(&plist_path).map_err(|e| AppError::Internal {
             message: format!("无法删除 plist 文件: {}", e),
         })?;
     }
@@ -243,7 +243,7 @@ fn is_macos_startup_enabled() -> Result<bool, AppError> {
 
 #[cfg(target_os = "linux")]
 fn get_linux_desktop_path() -> Result<PathBuf, AppError> {
-    let home = dirs::home_dir().ok_or_else(|| AppError::GenericError {
+    let home = dirs::home_dir().ok_or_else(|| AppError::Internal {
         message: "无法获取用户主目录".to_string(),
     })?;
 
@@ -264,7 +264,7 @@ fn enable_linux_startup() -> Result<(), AppError> {
 
     // 确保目录存在
     if let Some(parent) = desktop_path.parent() {
-        fs::create_dir_all(parent).map_err(|e| AppError::GenericError {
+        fs::create_dir_all(parent).map_err(|e| AppError::Internal {
             message: format!("无法创建 autostart 目录: {}", e),
         })?;
     }
@@ -282,7 +282,7 @@ Comment=DuckCoding AI Tools Configuration Manager
         exe_path_str
     );
 
-    fs::write(&desktop_path, desktop_content).map_err(|e| AppError::GenericError {
+    fs::write(&desktop_path, desktop_content).map_err(|e| AppError::Internal {
         message: format!("无法写入 desktop 文件: {}", e),
     })?;
 
@@ -297,7 +297,7 @@ fn disable_linux_startup() -> Result<(), AppError> {
 
     // 如果文件存在则删除，不存在则忽略
     if desktop_path.exists() {
-        fs::remove_file(&desktop_path).map_err(|e| AppError::GenericError {
+        fs::remove_file(&desktop_path).map_err(|e| AppError::Internal {
             message: format!("无法删除 desktop 文件: {}", e),
         })?;
     }
