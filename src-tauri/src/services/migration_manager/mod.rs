@@ -9,8 +9,8 @@ mod migrations;
 pub use manager::MigrationManager;
 pub use migration_trait::{Migration, MigrationResult};
 pub use migrations::{
-    BalanceLocalstorageToJsonMigration, ProfileV2Migration, ProxyConfigMigration,
-    ProxyConfigSplitMigration, SessionConfigMigration, SqliteToJsonMigration,
+    BalanceLocalstorageToJsonMigration, GlobalConfigToProvidersMigration, ProfileV2Migration,
+    ProxyConfigMigration, ProxyConfigSplitMigration, SessionConfigMigration, SqliteToJsonMigration,
 };
 
 use std::sync::Arc;
@@ -24,6 +24,7 @@ use std::sync::Arc;
 /// - ProfileV2Migration (1.4.0) - Profile v2.0 双文件系统迁移
 /// - ProxyConfigSplitMigration (1.4.0) - 透明代理配置拆分到 proxy.json
 /// - BalanceLocalstorageToJsonMigration (1.4.1) - 余额监控 LocalStorage → JSON 迁移
+/// - GlobalConfigToProvidersMigration (1.5.0) - GlobalConfig 用户信息迁移到 Providers
 pub fn create_migration_manager() -> MigrationManager {
     let mut manager = MigrationManager::new();
 
@@ -34,6 +35,7 @@ pub fn create_migration_manager() -> MigrationManager {
     manager.register(Arc::new(ProfileV2Migration::new()));
     manager.register(Arc::new(ProxyConfigSplitMigration::new()));
     manager.register(Arc::new(BalanceLocalstorageToJsonMigration::new()));
+    manager.register(Arc::new(GlobalConfigToProvidersMigration::new()));
 
     tracing::debug!(
         "迁移管理器初始化完成，已注册 {} 个迁移",

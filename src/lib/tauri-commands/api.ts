@@ -13,16 +13,18 @@ export async function generateApiKeyForTool(tool: string): Promise<GenerateApiKe
 
 /**
  * 获取使用统计
+ * @param providerId - 供应商 ID
  */
-export async function getUsageStats(): Promise<UsageStatsResult> {
-  return await invoke<UsageStatsResult>('get_usage_stats');
+export async function getUsageStats(providerId: string): Promise<UsageStatsResult> {
+  return await invoke<UsageStatsResult>('get_usage_stats', { providerId });
 }
 
 /**
  * 获取用户配额
+ * @param providerId - 供应商 ID
  */
-export async function getUserQuota(): Promise<UserQuotaResult> {
-  return await invoke<UserQuotaResult>('get_user_quota');
+export async function getUserQuota(providerId: string): Promise<UserQuotaResult> {
+  return await invoke<UserQuotaResult>('get_user_quota', { providerId });
 }
 
 /**

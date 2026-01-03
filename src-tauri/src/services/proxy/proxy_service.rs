@@ -211,8 +211,8 @@ mod tests {
     fn test_build_proxy_url_basic() {
         let config = GlobalConfig {
             version: None,
-            user_id: String::new(),
-            system_token: String::new(),
+            user_id: Some(String::new()),
+            system_token: Some(String::new()),
             proxy_enabled: true,
             proxy_type: Some("http".to_string()),
             proxy_host: Some("127.0.0.1".to_string()),
@@ -229,6 +229,7 @@ mod tests {
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
             single_instance_enabled: true,
+            startup_enabled: false,
         };
 
         let url = ProxyService::build_proxy_url(&config);
@@ -239,8 +240,8 @@ mod tests {
     fn test_build_proxy_url_with_auth() {
         let config = GlobalConfig {
             version: None,
-            user_id: String::new(),
-            system_token: String::new(),
+            user_id: Some(String::new()),
+            system_token: Some(String::new()),
             proxy_enabled: true,
             proxy_type: Some("http".to_string()),
             proxy_host: Some("proxy.example.com".to_string()),
@@ -257,6 +258,7 @@ mod tests {
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
             single_instance_enabled: true,
+            startup_enabled: false,
         };
 
         let url = ProxyService::build_proxy_url(&config);
@@ -270,8 +272,8 @@ mod tests {
     fn test_build_proxy_url_socks5() {
         let config = GlobalConfig {
             version: None,
-            user_id: String::new(),
-            system_token: String::new(),
+            user_id: Some(String::new()),
+            system_token: Some(String::new()),
             proxy_enabled: true,
             proxy_type: Some("socks5".to_string()),
             proxy_host: Some("127.0.0.1".to_string()),
@@ -288,6 +290,7 @@ mod tests {
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
             single_instance_enabled: true,
+            startup_enabled: false,
         };
 
         let url = ProxyService::build_proxy_url(&config);

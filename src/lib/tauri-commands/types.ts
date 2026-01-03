@@ -3,12 +3,21 @@
 
 import type { SSHConfig } from '@/types/tool-management';
 import type { ProfileData, ProfileDescriptor, ProfilePayload, ToolId } from '@/types/profile';
+import type {
+  Provider,
+  ProviderStore,
+  _ProviderFormData,
+  ProviderValidationResult,
+} from '@/types/provider';
 
 // 重新导出 Profile 相关类型供其他模块使用
 export type { ProfileData, ProfileDescriptor, ProfilePayload, ToolId };
 
 // 重新导出工具管理类型
 export type { SSHConfig };
+
+// 重新导出供应商管理类型
+export type { Provider, ProviderStore, _ProviderFormData, ProviderValidationResult };
 
 export interface ToolStatus {
   mirrorIsStale: boolean;
@@ -45,8 +54,8 @@ export interface ActiveConfig {
 }
 
 export interface GlobalConfig {
-  user_id: string;
-  system_token: string;
+  user_id?: string; // 已废弃，由供应商系统管理
+  system_token?: string; // 已废弃，由供应商系统管理
   proxy_enabled?: boolean;
   proxy_type?: 'http' | 'https' | 'socks5';
   proxy_host?: string;

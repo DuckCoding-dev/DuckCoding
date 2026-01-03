@@ -145,7 +145,8 @@ jobs:
             "recheck": "${{ steps.recheck.outcome }}",
             "artifact": "pr-check-${{ matrix.name }}",
             "run_url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}",
-            "status": "${{ steps.check.outcome == 'success' && 'success' || (steps.check.outcome == 'failure' && steps.recheck.outcome == 'success' && 'fix_pass' || 'failed') }}"
+            "status": "${{ steps.check.outcome == 'success' && 'success' || (steps.check.outcome == 'failure' && steps.recheck.outcome == 'success' && 'fix_pass' || 'failed') }}",
+            "pr_number": "${{ github.event.pull_request.number }}"
           }
           EOF
           cat state.json

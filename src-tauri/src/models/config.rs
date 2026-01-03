@@ -136,8 +136,12 @@ pub struct GlobalConfig {
     /// 默认值为 "0.0.0"，迁移后更新为对应的应用版本号
     #[serde(default)]
     pub version: Option<String>,
-    pub user_id: String,
-    pub system_token: String,
+    /// 已废弃，由供应商系统管理
+    #[serde(default)]
+    pub user_id: Option<String>,
+    /// 已废弃，由供应商系统管理
+    #[serde(default)]
+    pub system_token: Option<String>,
     #[serde(default)]
     pub proxy_enabled: bool,
     #[serde(default)]
@@ -179,6 +183,9 @@ pub struct GlobalConfig {
     /// 单实例模式开关（默认启用，仅生产环境生效）
     #[serde(default = "default_single_instance_enabled")]
     pub single_instance_enabled: bool,
+    /// 开机自启动开关（默认关闭）
+    #[serde(default)]
+    pub startup_enabled: bool,
 }
 
 fn default_proxy_configs() -> HashMap<String, ToolProxyConfig> {

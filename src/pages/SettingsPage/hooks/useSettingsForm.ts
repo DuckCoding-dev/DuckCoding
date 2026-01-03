@@ -13,10 +13,6 @@ interface UseSettingsFormProps {
 }
 
 export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFormProps) {
-  // 基本设置状态
-  const [userId, setUserId] = useState('');
-  const [systemToken, setSystemToken] = useState('');
-
   // 代理设置状态
   const [proxyEnabled, setProxyEnabled] = useState(false);
   const [proxyType, setProxyType] = useState<'http' | 'https' | 'socks5'>('http');
@@ -47,8 +43,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
       setGlobalConfig(initialConfig);
 
       // 填充表单
-      setUserId(initialConfig.user_id || '');
-      setSystemToken(initialConfig.system_token || '');
       setProxyEnabled(initialConfig.proxy_enabled || false);
       setProxyType(initialConfig.proxy_type || 'http');
       setProxyHost(initialConfig.proxy_host || '');
@@ -70,13 +64,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
 
   // 保存配置
   const saveSettings = useCallback(async (): Promise<void> => {
-    const trimmedUserId = userId.trim();
-    const trimmedToken = systemToken.trim();
-
-    if (!trimmedUserId || !trimmedToken) {
-      throw new Error('用户ID和系统访问令牌不能为空');
-    }
-
     const proxyPortNumber = proxyPort ? parseInt(proxyPort) : 0;
     if (proxyEnabled && (!proxyHost.trim() || proxyPortNumber <= 0)) {
       throw new Error('代理地址和端口不能为空');
@@ -85,8 +72,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     setSavingSettings(true);
     try {
       const configToSave: GlobalConfig = {
-        user_id: trimmedUserId,
-        system_token: trimmedToken,
         proxy_enabled: proxyEnabled,
         proxy_type: proxyType,
         proxy_host: proxyHost.trim(),
@@ -104,8 +89,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
       setSavingSettings(false);
     }
   }, [
-    userId,
-    systemToken,
     proxyEnabled,
     proxyType,
     proxyHost,
@@ -203,12 +186,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
   }, [proxyEnabled, proxyType, proxyHost, proxyPort, proxyUsername, proxyPassword, proxyTestUrl]);
 
   return {
-    // Basic settings
-    userId,
-    setUserId,
-    systemToken,
-    setSystemToken,
-
     // Proxy settings
     proxyEnabled,
     setProxyEnabled,

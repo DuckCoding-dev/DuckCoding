@@ -6,7 +6,6 @@ import { PageContainer } from '@/components/layout/PageContainer';
 import { useToast } from '@/hooks/use-toast';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
-import { ApplicationSettingsTab } from './components/ApplicationSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { LogSettingsTab } from './components/LogSettingsTab';
 import { AboutTab } from './components/AboutTab';
@@ -49,10 +48,6 @@ export function SettingsPage({
 
   // 使用自定义 Hooks
   const {
-    userId,
-    setUserId,
-    systemToken,
-    setSystemToken,
     proxyEnabled,
     setProxyEnabled,
     proxyType,
@@ -165,13 +160,7 @@ export function SettingsPage({
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>
           <TabsTrigger value="basic" disabled={!!restrictToTab && restrictToTab !== 'basic'}>
-            基本设置
-          </TabsTrigger>
-          <TabsTrigger
-            value="application"
-            disabled={!!restrictToTab && restrictToTab !== 'application'}
-          >
-            应用设置
+            系统设置
           </TabsTrigger>
           <TabsTrigger
             value="config-management"
@@ -190,19 +179,9 @@ export function SettingsPage({
           </TabsTrigger>
         </TabsList>
 
-        {/* 基本设置 */}
+        {/* 系统设置 */}
         <TabsContent value="basic" className="space-y-6">
-          <BasicSettingsTab
-            userId={userId}
-            setUserId={setUserId}
-            systemToken={systemToken}
-            setSystemToken={setSystemToken}
-          />
-        </TabsContent>
-
-        {/* 应用设置 */}
-        <TabsContent value="application" className="space-y-6">
-          <ApplicationSettingsTab />
+          <BasicSettingsTab />
         </TabsContent>
 
         {/* 代理设置 */}
@@ -245,8 +224,8 @@ export function SettingsPage({
         </TabsContent>
       </Tabs>
 
-      {/* 保存按钮 - 仅在基本设置和代理设置时显示 */}
-      {(activeTab === 'basic' || activeTab === 'proxy') && (
+      {/* 保存按钮 - 仅在代理设置时显示 */}
+      {activeTab === 'proxy' && (
         <div className="flex justify-end mt-6">
           <Button
             onClick={handleSaveSettings}

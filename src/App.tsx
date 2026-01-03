@@ -4,10 +4,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { CloseActionDialog } from '@/components/dialogs/CloseActionDialog';
 import { UpdateDialog } from '@/components/dialogs/UpdateDialog';
-import { StatisticsPage } from '@/pages/StatisticsPage';
 import { InstallationPage } from '@/pages/InstallationPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import ProfileManagementPage from '@/pages/ProfileManagementPage';
+import { ProviderManagementPage } from '@/pages/ProviderManagementPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { TransparentProxyPage } from '@/pages/TransparentProxyPage';
 import { ToolManagementPage } from '@/pages/ToolManagementPage';
@@ -28,13 +28,9 @@ import {
   checkInstallations,
   checkForAppUpdates,
   getGlobalConfig,
-  getUserQuota,
-  getUsageStats,
   type CloseAction,
   type ToolStatus,
   type GlobalConfig,
-  type UserQuotaResult,
-  type UsageStatsResult,
   type UpdateInfo,
 } from '@/lib/tauri-commands';
 
@@ -43,9 +39,9 @@ type TabType =
   | 'tool-management'
   | 'install'
   | 'profile-management'
-  | 'statistics'
   | 'balance'
   | 'transparent-proxy'
+  | 'provider-management'
   | 'settings'
   | 'help';
 
@@ -67,16 +63,9 @@ function App() {
   const [tools, setTools] = useState<ToolStatus[]>([]);
   const [toolsLoading, setToolsLoading] = useState(true);
 
-  // 全局配置缓存（供 StatisticsPage 和 SettingsPage 共享）
+  // 全局配置缓存（供 SettingsPage 使用）
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(null);
   const [configLoading, setConfigLoading] = useState(false);
-
-  // 统计数据缓存
-  const [usageStats, setUsageStats] = useState<UsageStatsResult | null>(null);
-  const [userQuota, setUserQuota] = useState<UserQuotaResult | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsLoadFailed, setStatsLoadFailed] = useState(false); // 新增：记录加载失败状态
-  const [statsError, setStatsError] = useState<string | null>(null);
 
   // 更新检查状态
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
@@ -108,37 +97,6 @@ function App() {
       setConfigLoading(false);
     }
   }, []);
-
-  // 加载统计数据（仅在需要时调用）
-  const loadStatistics = useCallback(async () => {
-    if (!globalConfig?.user_id || !globalConfig?.system_token) {
-      return;
-    }
-
-    try {
-      setStatsLoading(true);
-      setStatsLoadFailed(false);
-      setStatsError(null);
-      const [quota, stats] = await Promise.all([getUserQuota(), getUsageStats()]);
-      setUserQuota(quota);
-      setUsageStats(stats);
-      setStatsLoadFailed(false);
-    } catch (error) {
-      console.error('Failed to load statistics:', error);
-      setStatsLoadFailed(true);
-      const message = error instanceof Error ? error.message : '请检查网络连接后重试';
-      setStatsError(message);
-
-      toast({
-        title: '加载统计数据失败',
-        description: message,
-        variant: 'destructive',
-        duration: 5000,
-      });
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [globalConfig?.user_id, globalConfig?.system_token, toast]);
 
   // 检查应用更新
   const checkAppUpdates = useCallback(
@@ -240,12 +198,6 @@ function App() {
     return () => clearTimeout(timer);
   }, [checkAppUpdates]);
 
-  // 当凭证变更时，重置统计状态以便重新加载
-  useEffect(() => {
-    setStatsLoadFailed(false);
-    setStatsError(null);
-  }, [globalConfig?.user_id, globalConfig?.system_token]);
-
   // 监听后端推送的更新事件
   useEffect(() => {
     // 监听后端主动推送的更新可用事件
@@ -332,27 +284,6 @@ function App() {
     };
   }, [toast]);
 
-  // 智能预加载：只要有凭证就立即预加载统计数据
-  useEffect(() => {
-    // 条件：配置已加载 + 有凭证 + 还没有统计数据 + 不在加载中 + 没有失败过
-    if (
-      globalConfig?.user_id &&
-      globalConfig?.system_token &&
-      !usageStats &&
-      !statsLoading &&
-      !statsLoadFailed
-    ) {
-      loadStatistics();
-    }
-  }, [
-    globalConfig?.user_id,
-    globalConfig?.system_token,
-    usageStats,
-    statsLoading,
-    statsLoadFailed,
-    loadStatistics,
-  ]);
-
   // 使用关闭动作 Hook
   const {
     closeDialogOpen,
@@ -380,6 +311,11 @@ function App() {
       });
     },
     onNavigateToInstall: () => setActiveTab('install'),
+    onNavigateToList: () => setActiveTab('tool-management'),
+    onNavigateToConfig: (_detail) => {
+      setActiveTab('profile-management');
+      // TODO: 如果需要滚动到指定工具,可以通过 _detail.toolId 实现
+    },
     onNavigateToSettings: (detail) => {
       setSettingsInitialTab(detail?.tab ?? 'basic');
       setActiveTab('settings');
@@ -429,17 +365,6 @@ function App() {
           {activeTab === 'install' && <InstallationPage tools={tools} loading={toolsLoading} />}
           {activeTab === 'balance' && <BalancePage />}
           {activeTab === 'profile-management' && <ProfileManagementPage />}
-          {activeTab === 'statistics' && (
-            <StatisticsPage
-              globalConfig={globalConfig}
-              usageStats={usageStats}
-              userQuota={userQuota}
-              statsLoading={statsLoading}
-              statsLoadFailed={statsLoadFailed}
-              statsError={statsError}
-              onLoadStatistics={loadStatistics}
-            />
-          )}
           {activeTab === 'transparent-proxy' && (
             <TransparentProxyPage selectedToolId={selectedProxyToolId} />
           )}
@@ -458,6 +383,7 @@ function App() {
               }}
             />
           )}
+          {activeTab === 'provider-management' && <ProviderManagementPage />}
           {activeTab === 'help' && <HelpPage onShowOnboarding={handleShowOnboarding} />}
         </main>
 

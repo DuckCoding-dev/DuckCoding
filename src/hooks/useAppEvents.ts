@@ -28,6 +28,8 @@ interface AppEventsOptions {
   onCloseRequest: () => void;
   onSingleInstance: (message: string) => void;
   onNavigateToInstall: () => void;
+  onNavigateToList: () => void;
+  onNavigateToConfig: (detail?: { toolId?: string }) => void;
   onNavigateToSettings: (detail?: { tab?: string }) => void;
   onNavigateToTransparentProxy: (detail?: { toolId?: string }) => void;
   onRefreshTools: () => void;
@@ -39,6 +41,8 @@ export function useAppEvents(options: AppEventsOptions) {
     onCloseRequest,
     onSingleInstance,
     onNavigateToInstall,
+    onNavigateToList,
+    onNavigateToConfig,
     onNavigateToSettings,
     onNavigateToTransparentProxy,
     onRefreshTools,
@@ -128,6 +132,11 @@ export function useAppEvents(options: AppEventsOptions) {
 
   // 监听页面导航事件
   useEffect(() => {
+    const handleNavigateToConfig = (event: Event) => {
+      const customEvent = event as CustomEvent<{ toolId?: string }>;
+      onNavigateToConfig(customEvent.detail);
+    };
+
     const handleNavigateToTransparentProxy = (event: Event) => {
       const customEvent = event as CustomEvent<{ toolId?: string }>;
       onNavigateToTransparentProxy(customEvent.detail);
@@ -139,15 +148,25 @@ export function useAppEvents(options: AppEventsOptions) {
     };
 
     window.addEventListener('navigate-to-install', onNavigateToInstall);
+    window.addEventListener('navigate-to-config', handleNavigateToConfig);
+    window.addEventListener('navigate-to-list', onNavigateToList);
     window.addEventListener('navigate-to-settings', handleNavigateToSettings);
     window.addEventListener('navigate-to-transparent-proxy', handleNavigateToTransparentProxy);
     window.addEventListener('refresh-tools', onRefreshTools);
 
     return () => {
       window.removeEventListener('navigate-to-install', onNavigateToInstall);
+      window.removeEventListener('navigate-to-config', handleNavigateToConfig);
+      window.removeEventListener('navigate-to-list', onNavigateToList);
       window.removeEventListener('navigate-to-settings', handleNavigateToSettings);
       window.removeEventListener('navigate-to-transparent-proxy', handleNavigateToTransparentProxy);
       window.removeEventListener('refresh-tools', onRefreshTools);
     };
-  }, [onNavigateToInstall, onNavigateToSettings, onNavigateToTransparentProxy, onRefreshTools]);
+  }, [
+    onNavigateToInstall,
+    onNavigateToConfig,
+    onNavigateToSettings,
+    onNavigateToTransparentProxy,
+    onRefreshTools,
+  ]);
 }

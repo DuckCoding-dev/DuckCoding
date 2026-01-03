@@ -2,9 +2,10 @@
 //
 // 包含用量统计、用户额度查询等功能
 
+use crate::commands::provider_commands::ProviderManagerState;
 use ::duckcoding::services::proxy::config::apply_global_proxy;
-use ::duckcoding::utils::config::read_global_config;
 use serde::Serialize;
+use tauri::State;
 
 /// 用量统计数据结构
 #[derive(serde::Deserialize, Serialize, Debug, Clone)]
@@ -64,10 +65,28 @@ fn build_reqwest_client() -> Result<reqwest::Client, String> {
 }
 
 #[tauri::command]
-pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
+pub async fn get_usage_stats(
+    provider_id: String,
+    provider_state: State<'_, ProviderManagerState>,
+) -> Result<UsageStatsResult, String> {
     apply_global_proxy().ok();
-    let global_config =
-        read_global_config()?.ok_or_else(|| "请先配置用户ID和系统访问令牌".to_string())?;
+
+    // 根据 provider_id 获取供应商
+    let providers = provider_state
+        .manager
+        .list_providers()
+        .map_err(|e| format!("获取供应商列表失败: {}", e))?;
+
+    let provider = providers
+        .iter()
+        .find(|p| p.id == provider_id)
+        .ok_or_else(|| format!("未找到供应商: {}", provider_id))?;
+
+    // 验证供应商凭证
+    if provider.user_id.is_empty() || provider.access_token.is_empty() {
+        return Err("请先配置供应商的用户ID和访问令牌".to_string());
+    }
+
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -77,9 +96,13 @@ pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
     let start_timestamp = today_end - 30 * 86400;
     let end_timestamp = today_end;
     let client = build_reqwest_client().map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
+
+    // 使用供应商的 website_url
     let url = format!(
-        "https://duckcoding.com/api/data/self?start_timestamp={start_timestamp}&end_timestamp={end_timestamp}"
+        "{}/api/data/self?start_timestamp={start_timestamp}&end_timestamp={end_timestamp}",
+        provider.website_url.trim_end_matches('/')
     );
+
     let response = client
         .get(&url)
         .header(
@@ -88,13 +111,10 @@ pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
         )
         .header("Accept", "application/json, text/plain, */*")
         .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-        .header("Referer", "https://duckcoding.com/")
-        .header("Origin", "https://duckcoding.com")
-        .header(
-            "Authorization",
-            format!("Bearer {}", global_config.system_token),
-        )
-        .header("New-Api-User", &global_config.user_id)
+        .header("Referer", &provider.website_url)
+        .header("Origin", &provider.website_url)
+        .header("Authorization", format!("Bearer {}", provider.access_token))
+        .header("New-Api-User", &provider.user_id)
         .send()
         .await
         .map_err(|e| format!("获取用量统计失败: {e}"))?;
@@ -139,27 +159,48 @@ pub async fn get_usage_stats() -> Result<UsageStatsResult, String> {
 }
 
 #[tauri::command]
-pub async fn get_user_quota() -> Result<UserQuotaResult, String> {
+pub async fn get_user_quota(
+    provider_id: String,
+    provider_state: State<'_, ProviderManagerState>,
+) -> Result<UserQuotaResult, String> {
     apply_global_proxy().ok();
-    let global_config =
-        read_global_config()?.ok_or_else(|| "请先配置用户ID和系统访问令牌".to_string())?;
+
+    // 根据 provider_id 获取供应商
+    let providers = provider_state
+        .manager
+        .list_providers()
+        .map_err(|e| format!("获取供应商列表失败: {}", e))?;
+
+    let provider = providers
+        .iter()
+        .find(|p| p.id == provider_id)
+        .ok_or_else(|| format!("未找到供应商: {}", provider_id))?;
+
+    // 验证供应商凭证
+    if provider.user_id.is_empty() || provider.access_token.is_empty() {
+        return Err("请先配置供应商的用户ID和访问令牌".to_string());
+    }
+
     let client = build_reqwest_client().map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
-    let url = "https://duckcoding.com/api/user/self";
+
+    // 使用供应商的 website_url
+    let url = format!(
+        "{}/api/user/self",
+        provider.website_url.trim_end_matches('/')
+    );
+
     let response = client
-        .get(url)
+        .get(&url)
         .header(
             "User-Agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         )
         .header("Accept", "application/json, text/plain, */*")
         .header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-        .header("Referer", "https://duckcoding.com/")
-        .header("Origin", "https://duckcoding.com")
-        .header(
-            "Authorization",
-            format!("Bearer {}", global_config.system_token),
-        )
-        .header("New-Api-User", &global_config.user_id)
+        .header("Referer", &provider.website_url)
+        .header("Origin", &provider.website_url)
+        .header("Authorization", format!("Bearer {}", provider.access_token))
+        .header("New-Api-User", &provider.user_id)
         .send()
         .await
         .map_err(|e| format!("获取用户信息失败: {e}"))?;

@@ -6,11 +6,11 @@ import {
   LayoutDashboard,
   Wrench,
   Settings2,
-  BarChart3,
   Wallet,
   Radio,
   Settings as SettingsIcon,
   HelpCircle,
+  Building2,
   ChevronsLeft,
   ChevronsRight,
   Sun,
@@ -45,12 +45,12 @@ const navigationItems = [
   { id: 'dashboard', label: '仪表板', icon: LayoutDashboard },
   { id: 'tool-management', label: '工具管理', icon: Wrench },
   { id: 'profile-management', label: '配置管理', icon: Settings2 },
-  { id: 'statistics', label: '用量统计', icon: BarChart3 },
   { id: 'balance', label: '余额查询', icon: Wallet },
   { id: 'transparent-proxy', label: '透明代理', icon: Radio },
 ];
 
 const secondaryItems = [
+  { id: 'provider-management', label: '供应商管理', icon: Building2 },
   { id: 'help', label: '帮助', icon: HelpCircle },
   { id: 'settings', label: '设置', icon: SettingsIcon },
 ];

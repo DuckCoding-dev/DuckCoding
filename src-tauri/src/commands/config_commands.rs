@@ -94,6 +94,16 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
         .await?
         .ok_or("请先配置用户ID和系统访问令牌")?;
 
+    // 检查已废弃的用户凭证（现由 Provider 系统管理）
+    let user_id = global_config
+        .user_id
+        .as_ref()
+        .ok_or("请先配置用户ID（已废弃，建议使用供应商管理功能）")?;
+    let system_token = global_config
+        .system_token
+        .as_ref()
+        .ok_or("请先配置系统访问令牌（已废弃，建议使用供应商管理功能）")?;
+
     // 根据工具名称获取配置
     let (name, group) = match tool.as_str() {
         "claude-code" => ("Claude Code一键创建", "Claude Code专用"),
@@ -119,11 +129,8 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
 
     let create_response = client
         .post(create_url)
-        .header(
-            "Authorization",
-            format!("Bearer {}", global_config.system_token),
-        )
-        .header("New-Api-User", &global_config.user_id)
+        .header("Authorization", format!("Bearer {}", system_token))
+        .header("New-Api-User", user_id)
         .header("Content-Type", "application/json")
         .json(&create_body)
         .send()
@@ -151,11 +158,8 @@ pub async fn generate_api_key_for_tool(tool: String) -> Result<GenerateApiKeyRes
 
     let search_response = client
         .get(&search_url)
-        .header(
-            "Authorization",
-            format!("Bearer {}", global_config.system_token),
-        )
-        .header("New-Api-User", &global_config.user_id)
+        .header("Authorization", format!("Bearer {}", system_token))
+        .header("New-Api-User", user_id)
         .header("Content-Type", "application/json")
         .send()
         .await

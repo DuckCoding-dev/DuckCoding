@@ -16,6 +16,12 @@ export * from './proxy';
 // Profile 管理
 export * from './profile';
 
+// 供应商管理
+export * from './provider';
+
+// Dashboard 管理
+export * from './dashboard';
+
 // 会话管理
 export * from './session';
 

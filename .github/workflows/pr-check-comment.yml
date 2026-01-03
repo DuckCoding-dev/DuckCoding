@@ -21,21 +21,18 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
 
-            // 获取所有 artifacts
             const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
               owner: context.repo.owner,
               repo: context.repo.repo,
               run_id: context.payload.workflow_run.id,
             });
 
-            console.log(`Found ${artifacts.data.artifacts.length} artifacts`);
+            console.log('Found artifacts:', artifacts.data.artifacts.length);
 
-            // 下载所有平台的状态文件
             for (const artifact of artifacts.data.artifacts) {
               if (artifact.name.startsWith('pr-check-state-')) {
-                console.log(`Downloading artifact: ${artifact.name}`);
+                console.log('Downloading:', artifact.name);
 
                 const download = await github.rest.actions.downloadArtifact({
                   owner: context.repo.owner,
@@ -44,7 +41,7 @@ jobs:
                   archive_format: 'zip',
                 });
 
-                fs.writeFileSync(`${artifact.name}.zip`, Buffer.from(download.data));
+                fs.writeFileSync(artifact.name + '.zip', Buffer.from(download.data));
               }
             }
 
@@ -53,7 +50,12 @@ jobs:
           mkdir -p states
           for zip in pr-check-state-*.zip; do
             if [ -f "$zip" ]; then
+              # Extract platform name from zip filename (e.g., pr-check-state-ubuntu-22.04.zip -> ubuntu-22.04)
+              platform="${zip#pr-check-state-}"
+              platform="${platform%.zip}"
+              # Unzip and rename to platform-specific filename
               unzip -o "$zip" -d states/
+              mv states/state.json "states/${platform}.json"
             fi
           done
           ls -la states/ || true
@@ -66,52 +68,54 @@ jobs:
             const path = require('path');
 
             const marker = '<!-- duckcoding-pr-check -->';
-            const stateMarker = '<!-- duckcoding-pr-check-state:';
             const platforms = ['ubuntu-22.04', 'windows-latest', 'macos-arm64', 'macos-x64'];
 
-            // 获取 PR 编号
-            const prNumber = context.payload.workflow_run.pull_requests[0]?.number;
+            let prNumber = context.payload.workflow_run.pull_requests[0]?.number;
+
             if (!prNumber) {
-              console.log('No PR number found, skipping comment update');
-              return;
+              console.log('PR number not in workflow_run payload, trying to extract from artifacts...');
             }
 
-            console.log(`Updating comment for PR #${prNumber}`);
+            console.log('Updating comment for PR', prNumber || '(to be determined)');
 
-            // 读取所有平台的状态
-            const defaultState = () =>
-              Object.fromEntries(
-                platforms.map((p) => [
-                  p,
-                  {
-                    platform: p,
-                    status: 'pending',
-                    check: 'pending',
-                    fix: 'pending',
-                    recheck: 'pending',
-                    artifact: '',
-                    run_url: ''
-                  }
-                ])
-              );
+            const defaultState = () => Object.fromEntries(
+              platforms.map(p => [p, {
+                platform: p,
+                status: 'pending',
+                check: 'pending',
+                fix: 'pending',
+                recheck: 'pending',
+                artifact: '',
+                run_url: ''
+              }])
+            );
 
             let state = defaultState();
 
-            // 从 artifact 中读取各平台状态
             const statesDir = 'states';
             if (fs.existsSync(statesDir)) {
               for (const platform of platforms) {
-                const stateFile = path.join(statesDir, `${platform}.json`);
+                const stateFile = path.join(statesDir, platform + '.json');
                 if (fs.existsSync(stateFile)) {
                   try {
                     const platformState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
                     state[platform] = platformState;
-                    console.log(`Loaded state for ${platform}:`, platformState);
+                    console.log('Loaded state for', platform);
+
+                    if (!prNumber && platformState.pr_number) {
+                      prNumber = parseInt(platformState.pr_number, 10);
+                      console.log('Extracted PR number from artifact:', prNumber);
+                    }
                   } catch (e) {
-                    console.error(`Failed to parse state for ${platform}:`, e);
+                    console.error('Failed to parse state for', platform, e);
                   }
                 }
               }
+            }
+
+            if (!prNumber) {
+              console.log('No PR number found in payload or artifacts');
+              return;
             }
 
             const statusLabelZh = (entry) => {
@@ -128,13 +132,11 @@ jobs:
               return '❌ Still failing';
             };
 
-            const detail = (entry) =>
-              entry.status === 'pending'
-                ? '-'
-                : `check=${entry.check} / fix=${entry.fix} / recheck=${entry.recheck}`;
+            const detail = (entry) => entry.status === 'pending' ? '-' :
+              'check=' + entry.check + ' / fix=' + entry.fix + ' / recheck=' + entry.recheck;
 
-            const linkOrDash = (entry) => (entry.run_url ? `[日志](${entry.run_url})` : '-');
-            const artifactOrDash = (entry) => (entry.status === 'pending' ? '-' : entry.artifact || '-');
+            const linkOrDash = (entry) => entry.run_url ? '[日志](' + entry.run_url + ')' : '-';
+            const artifactOrDash = (entry) => entry.status === 'pending' ? '-' : (entry.artifact || '-');
 
             const pLabel = (p) => {
               if (p === 'ubuntu-22.04') return 'ubuntu-22.04';
@@ -145,14 +147,13 @@ jobs:
             };
 
             const renderTable = (labelFn, header) => {
-              const rows = platforms
-                .map((p) => {
-                  const e = state[p] || defaultState()[p];
-                  return `| ${pLabel(p)} | ${labelFn(e)} | ${detail(e)} | ${artifactOrDash(e)} | ${linkOrDash(e)} |`;
-                })
-                .join('\n');
+              const rows = platforms.map(p => {
+                const e = state[p] || defaultState()[p];
+                return '| ' + pLabel(p) + ' | ' + labelFn(e) + ' | ' + detail(e) + ' | ' + artifactOrDash(e) + ' | ' + linkOrDash(e) + ' |';
+              }).join('\n');
+
               return [
-                `| ${header.platform} | ${header.status} | ${header.detail} | ${header.artifact} | ${header.link} |`,
+                '| ' + header.platform + ' | ' + header.status + ' | ' + header.detail + ' | ' + header.artifact + ' | ' + header.link + ' |',
                 '| --- | --- | --- | --- | --- |',
                 rows
               ].join('\n');
@@ -187,14 +188,13 @@ jobs:
               'This comment auto-updates as each platform finishes:',
               'If the first `npm run check` fails, run locally: `npm run check:fix` → `npm run check` and commit the fix.',
               'If fix still fails, investigate locally and ensure `npm run check` passes before committing.',
-              'If cross-platform issues can't be reproduced, copy logs to an AI for hints.',
+              'If cross-platform issues can\'t be reproduced, copy logs to an AI for hints.',
               '',
               tableEn,
               marker,
-              `${stateMarker}${JSON.stringify(state)} -->`
+              '<!-- duckcoding-pr-check-state:' + JSON.stringify(state) + ' -->'
             ].join('\n');
 
-            // 查找现有评论
             const { data: comments } = await github.rest.issues.listComments({
               issue_number: prNumber,
               owner: context.repo.owner,
@@ -202,10 +202,10 @@ jobs:
               per_page: 100
             });
 
-            const existing = comments.find((c) => c.body.includes(marker));
+            const existing = comments.find(c => c.body.includes(marker));
 
             if (existing) {
-              console.log(`Updating existing comment #${existing.id}`);
+              console.log('Updating existing comment', existing.id);
               await github.rest.issues.updateComment({
                 comment_id: existing.id,
                 owner: context.repo.owner,

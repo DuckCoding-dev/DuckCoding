@@ -2,6 +2,8 @@
 
 本项目使用两步 workflow 实现跨仓库 PR 的评论功能。
 
+> 🎯 终极测试：验证所有修复（语法 + PR 号提取 + 文件重命名）后的完整评论功能。
+
 ## Workflows
 
 ### 1. PR Check (`pr-check.yml`)

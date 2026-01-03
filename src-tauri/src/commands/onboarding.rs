@@ -9,8 +9,8 @@ use tracing::{error, info};
 fn create_minimal_config() -> GlobalConfig {
     GlobalConfig {
         version: Some("0.0.0".to_string()),
-        user_id: String::new(),
-        system_token: String::new(),
+        user_id: Some(String::new()),
+        system_token: Some(String::new()),
         proxy_enabled: false,
         proxy_type: None,
         proxy_host: None,
@@ -27,6 +27,7 @@ fn create_minimal_config() -> GlobalConfig {
         external_watch_enabled: true,
         external_poll_interval_ms: 5000,
         single_instance_enabled: true,
+        startup_enabled: false,
     }
 }
 
