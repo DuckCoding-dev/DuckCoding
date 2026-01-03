@@ -179,6 +179,9 @@ pub struct GlobalConfig {
     /// 单实例模式开关（默认启用，仅生产环境生效）
     #[serde(default = "default_single_instance_enabled")]
     pub single_instance_enabled: bool,
+    /// 开机自启动开关（默认关闭）
+    #[serde(default)]
+    pub startup_enabled: bool,
 }
 
 fn default_proxy_configs() -> HashMap<String, ToolProxyConfig> {

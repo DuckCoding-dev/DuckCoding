@@ -6,6 +6,7 @@ pub mod onboarding;
 pub mod profile_commands; // Profile 管理命令（v2.0）
 pub mod proxy_commands;
 pub mod session_commands;
+pub mod startup_commands; // 开机自启动管理命令
 pub mod stats_commands;
 pub mod tool_commands;
 pub mod tool_management;
@@ -22,6 +23,7 @@ pub use onboarding::*;
 pub use profile_commands::*; // Profile 管理命令（v2.0）
 pub use proxy_commands::*;
 pub use session_commands::*;
+pub use startup_commands::*; // 开机自启动管理命令
 pub use stats_commands::*;
 pub use tool_commands::*;
 pub use tool_management::*;

@@ -351,6 +351,9 @@ fn main() {
         // 单实例模式配置命令
         get_single_instance_config,
         update_single_instance_config,
+        // 开机自启动管理命令
+        get_startup_config,
+        update_startup_config,
         // Profile 管理命令（v2.0）
         pm_list_all_profiles,
         pm_list_tool_profiles,

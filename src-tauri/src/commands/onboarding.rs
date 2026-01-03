@@ -27,6 +27,7 @@ fn create_minimal_config() -> GlobalConfig {
         external_watch_enabled: true,
         external_poll_interval_ms: 5000,
         single_instance_enabled: true,
+        startup_enabled: false,
     }
 }
 

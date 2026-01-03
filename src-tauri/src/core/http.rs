@@ -113,6 +113,7 @@ mod tests {
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
             single_instance_enabled: true,
+            startup_enabled: false,
         };
 
         let url = build_proxy_url(&config).unwrap();
@@ -141,6 +142,7 @@ mod tests {
             external_watch_enabled: true,
             external_poll_interval_ms: 5000,
             single_instance_enabled: true,
+            startup_enabled: false,
         };
 
         let url = build_proxy_url(&config).unwrap();

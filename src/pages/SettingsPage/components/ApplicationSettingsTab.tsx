@@ -5,10 +5,16 @@ import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Settings as SettingsIcon, Info, RefreshCw, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getSingleInstanceConfig, updateSingleInstanceConfig } from '@/lib/tauri-commands';
+import {
+  getSingleInstanceConfig,
+  updateSingleInstanceConfig,
+  getStartupConfig,
+  updateStartupConfig,
+} from '@/lib/tauri-commands';
 
 export function ApplicationSettingsTab() {
   const [singleInstanceEnabled, setSingleInstanceEnabled] = useState(true);
+  const [startupEnabled, setStartupEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -18,10 +24,14 @@ export function ApplicationSettingsTab() {
     const loadConfig = async () => {
       setLoading(true);
       try {
-        const enabled = await getSingleInstanceConfig();
-        setSingleInstanceEnabled(enabled);
+        const [singleInstance, startup] = await Promise.all([
+          getSingleInstanceConfig(),
+          getStartupConfig(),
+        ]);
+        setSingleInstanceEnabled(singleInstance);
+        setStartupEnabled(startup);
       } catch (error) {
-        console.error('加载单实例配置失败:', error);
+        console.error('加载配置失败:', error);
         toast({
           title: '加载失败',
           description: String(error),
@@ -35,8 +45,8 @@ export function ApplicationSettingsTab() {
     loadConfig();
   }, [toast]);
 
-  // 保存配置
-  const handleToggle = async (checked: boolean) => {
+  // 保存单实例配置
+  const handleSingleInstanceToggle = async (checked: boolean) => {
     setSaving(true);
     try {
       await updateSingleInstanceConfig(checked);
@@ -70,6 +80,28 @@ export function ApplicationSettingsTab() {
     }
   };
 
+  // 保存开机自启动配置
+  const handleStartupToggle = async (checked: boolean) => {
+    setSaving(true);
+    try {
+      await updateStartupConfig(checked);
+      setStartupEnabled(checked);
+      toast({
+        title: '设置已保存',
+        description: checked ? '已启用开机自启动' : '已禁用开机自启动',
+      });
+    } catch (error) {
+      console.error('保存开机自启动配置失败:', error);
+      toast({
+        title: '保存失败',
+        description: String(error),
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4 rounded-lg border p-6">
       <div className="flex items-center gap-2">
@@ -89,7 +121,7 @@ export function ApplicationSettingsTab() {
           <Switch
             id="single-instance"
             checked={singleInstanceEnabled}
-            onCheckedChange={handleToggle}
+            onCheckedChange={handleSingleInstanceToggle}
             disabled={loading || saving}
           />
         </div>
@@ -111,6 +143,44 @@ export function ApplicationSettingsTab() {
                 </li>
                 <li>
                   <strong>生效方式：</strong>更改后需要重启应用才能生效
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <Label htmlFor="startup">开机自启动</Label>
+            <p className="text-sm text-muted-foreground">开机时自动启动 DuckCoding 应用</p>
+          </div>
+          <Switch
+            id="startup"
+            checked={startupEnabled}
+            onCheckedChange={handleStartupToggle}
+            disabled={loading || saving}
+          />
+        </div>
+
+        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-4">
+          <div className="flex items-start gap-2">
+            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="text-sm space-y-2">
+              <p className="font-semibold text-blue-800 dark:text-blue-200">关于开机自启动</p>
+              <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
+                <li>
+                  <strong>启用：</strong>系统启动时自动运行应用，方便快速访问
+                </li>
+                <li>
+                  <strong>禁用：</strong>需要手动启动应用
+                </li>
+                <li>
+                  <strong>跨平台支持：</strong>Windows、macOS、Linux 均支持此功能
+                </li>
+                <li>
+                  <strong>生效方式：</strong>更改后立即生效，无需重启应用
                 </li>
               </ul>
             </div>

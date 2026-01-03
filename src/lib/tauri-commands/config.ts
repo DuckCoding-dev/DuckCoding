@@ -252,3 +252,21 @@ export async function getSingleInstanceConfig(): Promise<boolean> {
 export async function updateSingleInstanceConfig(enabled: boolean): Promise<void> {
   return await invoke<void>('update_single_instance_config', { enabled });
 }
+
+// ==================== 开机自启动配置 ====================
+
+/**
+ * 获取开机自启动配置状态
+ * @returns 开机自启动是否启用
+ */
+export async function getStartupConfig(): Promise<boolean> {
+  return await invoke<boolean>('get_startup_config');
+}
+
+/**
+ * 更新开机自启动配置
+ * @param enabled - 是否启用开机自启动
+ */
+export async function updateStartupConfig(enabled: boolean): Promise<void> {
+  return await invoke<void>('update_startup_config', { enabled });
+}

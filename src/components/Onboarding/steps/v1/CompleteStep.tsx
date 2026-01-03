@@ -62,6 +62,7 @@ export default function CompleteStep({ onNext, onPrevious, isFirst }: StepProps)
         <div className="helpful-tips">
           <h3>温馨提示</h3>
           <ul>
+            <li>推荐在「设置 → 应用设置」中启用开机自启动，方便快速访问</li>
             <li>您可以随时在「设置」中修改全局代理配置</li>
             <li>在「使用统计」页面查看 API 使用量和配额</li>
             <li>遇到问题？查看「帮助」或访问我们的 GitHub 仓库</li>
