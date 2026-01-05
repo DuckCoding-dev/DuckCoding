@@ -73,12 +73,20 @@ pub struct RemoteTokenGroup {
 pub struct CreateRemoteTokenRequest {
     /// 令牌名称
     pub name: String,
-    /// 分组 ID
-    pub group_id: String,
-    /// 初始额度（-1 表示无限）
-    pub quota: i64,
-    /// 过期天数（0 表示永不过期）
-    pub expire_days: i32,
+    /// 分组名称
+    pub group: String,
+    /// 初始额度（token，500000 = 基准值）
+    pub remain_quota: i64,
+    /// 是否无限额度
+    pub unlimited_quota: bool,
+    /// 过期时间（Unix 时间戳，-1 表示永不过期）
+    pub expired_time: i64,
+    /// 是否启用模型限制
+    pub model_limits_enabled: bool,
+    /// 模型限制（逗号分隔的模型列表）
+    pub model_limits: String,
+    /// 允许的 IP 地址（逗号分隔）
+    pub allow_ips: String,
 }
 
 /// NEW API 通用响应结构
@@ -135,13 +143,19 @@ mod tests {
     fn test_create_request_serialization() {
         let request = CreateRemoteTokenRequest {
             name: "New Token".to_string(),
-            group_id: "group1".to_string(),
-            quota: -1,
-            expire_days: 30,
+            group: "group1".to_string(),
+            remain_quota: 500000,
+            unlimited_quota: false,
+            expired_time: 1735200000,
+            model_limits_enabled: false,
+            model_limits: String::new(),
+            allow_ips: String::new(),
         };
 
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("\"name\":\"New Token\""));
-        assert!(json.contains("\"quota\":-1"));
+        assert!(json.contains("\"unlimited_quota\":false"));
+        assert!(json.contains("\"remain_quota\":500000"));
+        assert!(json.contains("\"group\":\"group1\""));
     }
 }

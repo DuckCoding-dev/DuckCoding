@@ -131,14 +131,20 @@ impl NewApiClient {
         Ok(groups)
     }
 
-    /// 创建新的远程令牌
-    pub async fn create_token(&self, request: CreateRemoteTokenRequest) -> Result<RemoteToken> {
+    /// 创建新的远程令牌（返回值仅包含成功状态，不返回令牌对象）
+    pub async fn create_token(&self, request: CreateRemoteTokenRequest) -> Result<()> {
         let url = format!("{}/api/token", self.base_url());
+
+        // 构建请求体（所有字段都是必需的）
         let body = json!({
             "name": request.name,
-            "group_id": request.group_id,
-            "quota": request.quota,
-            "expire_days": request.expire_days,
+            "group": request.group,
+            "remain_quota": request.remain_quota,
+            "unlimited_quota": request.unlimited_quota,
+            "expired_time": request.expired_time,
+            "model_limits_enabled": request.model_limits_enabled,
+            "model_limits": request.model_limits,
+            "allow_ips": request.allow_ips,
         });
 
         let response = self
@@ -157,7 +163,8 @@ impl NewApiClient {
             ));
         }
 
-        let api_response: NewApiResponse<RemoteToken> = response
+        // API 只返回 { success: true, message: "" }，不返回令牌对象
+        let api_response: NewApiResponse<()> = response
             .json()
             .await
             .map_err(|e| anyhow!("解析响应失败: {}", e))?;
@@ -171,9 +178,7 @@ impl NewApiClient {
             ));
         }
 
-        api_response
-            .data
-            .ok_or_else(|| anyhow!("API 未返回令牌数据"))
+        Ok(())
     }
 
     /// 删除远程令牌

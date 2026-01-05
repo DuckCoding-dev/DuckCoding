@@ -10,7 +10,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Building2, Plus, Pencil, Trash2, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import type { Provider } from '@/lib/tauri-commands';
 import { useToast } from '@/hooks/use-toast';
 import { useProviderManagement } from './hooks/useProviderManagement';
@@ -162,8 +162,8 @@ export function ProviderManagementPage() {
                 {providers.map((provider) => {
                   const isExpanded = expandedProviderId === provider.id;
                   return (
-                    <>
-                      <TableRow key={provider.id}>
+                    <Fragment key={provider.id}>
+                      <TableRow>
                         {/* 展开按钮 */}
                         <TableCell>
                           <Button
@@ -232,7 +232,7 @@ export function ProviderManagementPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>

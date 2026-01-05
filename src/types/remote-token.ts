@@ -38,9 +38,13 @@ export interface RemoteTokenGroup {
  */
 export interface CreateRemoteTokenRequest {
   name: string;
-  group_id: string;
-  quota: number;
-  expire_days: number;
+  group: string; // 分组名称（不是 group_id）
+  remain_quota: number; // 初始额度（token，500000 = 基准值），所有情况都需要传
+  unlimited_quota: boolean; // 是否无限额度
+  expired_time: number; // Unix 时间戳，-1 表示永不过期
+  model_limits_enabled: boolean; // 是否启用模型限制
+  model_limits: string; // 模型限制（逗号分隔）
+  allow_ips: string; // 允许的 IP 地址（逗号分隔）
 }
 
 /**

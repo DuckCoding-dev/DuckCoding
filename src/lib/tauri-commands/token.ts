@@ -21,13 +21,13 @@ export async function fetchProviderGroups(provider: Provider): Promise<RemoteTok
 }
 
 /**
- * 在供应商创建新的远程令牌
+ * 在供应商创建新的远程令牌（仅返回成功状态）
  */
 export async function createProviderToken(
   provider: Provider,
   request: CreateRemoteTokenRequest,
-): Promise<RemoteToken> {
-  return invoke<RemoteToken>('create_provider_token', { provider, request });
+): Promise<void> {
+  return invoke<void>('create_provider_token', { provider, request });
 }
 
 /**

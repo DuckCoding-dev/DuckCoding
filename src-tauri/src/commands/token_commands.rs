@@ -25,12 +25,12 @@ pub async fn fetch_provider_groups(provider: Provider) -> Result<Vec<RemoteToken
     client.list_groups().await.map_err(|e| e.to_string())
 }
 
-/// 在供应商创建新的远程令牌
+/// 在供应商创建新的远程令牌（仅返回成功状态）
 #[tauri::command]
 pub async fn create_provider_token(
     provider: Provider,
     request: CreateRemoteTokenRequest,
-) -> Result<RemoteToken, String> {
+) -> Result<(), String> {
     let client = NewApiClient::new(provider).map_err(|e| e.to_string())?;
     client
         .create_token(request)
