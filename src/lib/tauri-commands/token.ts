@@ -4,7 +4,12 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { Provider } from '@/types/provider';
-import type { CreateRemoteTokenRequest, RemoteToken, RemoteTokenGroup } from '@/types/remote-token';
+import type {
+  CreateRemoteTokenRequest,
+  RemoteToken,
+  RemoteTokenGroup,
+  UpdateRemoteTokenRequest,
+} from '@/types/remote-token';
 
 /**
  * 获取指定供应商的远程令牌列表
@@ -46,6 +51,17 @@ export async function updateProviderToken(
   name: string,
 ): Promise<RemoteToken> {
   return invoke<RemoteToken>('update_provider_token', { provider, tokenId, name });
+}
+
+/**
+ * 更新供应商的远程令牌（完整版本，支持所有字段）
+ */
+export async function updateProviderTokenFull(
+  provider: Provider,
+  tokenId: number,
+  request: UpdateRemoteTokenRequest,
+): Promise<RemoteToken> {
+  return invoke<RemoteToken>('update_provider_token_full', { provider, tokenId, request });
 }
 
 /**

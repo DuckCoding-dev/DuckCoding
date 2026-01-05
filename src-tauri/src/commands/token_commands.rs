@@ -3,7 +3,9 @@
 // NEW API 令牌管理相关命令
 
 use ::duckcoding::models::provider::Provider;
-use ::duckcoding::models::remote_token::{CreateRemoteTokenRequest, RemoteToken, RemoteTokenGroup};
+use ::duckcoding::models::remote_token::{
+    CreateRemoteTokenRequest, RemoteToken, RemoteTokenGroup, UpdateRemoteTokenRequest,
+};
 use ::duckcoding::services::{
     ClaudeProfile, CodexProfile, GeminiProfile, NewApiClient, ProfileSource,
 };
@@ -58,6 +60,20 @@ pub async fn update_provider_token(
     let client = NewApiClient::new(provider).map_err(|e| e.to_string())?;
     client
         .update_token(token_id, name)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 更新供应商的远程令牌（完整版本，支持所有字段）
+#[tauri::command]
+pub async fn update_provider_token_full(
+    provider: Provider,
+    token_id: i64,
+    request: UpdateRemoteTokenRequest,
+) -> Result<RemoteToken, String> {
+    let client = NewApiClient::new(provider).map_err(|e| e.to_string())?;
+    client
+        .update_token_full(token_id, request)
         .await
         .map_err(|e| e.to_string())
 }

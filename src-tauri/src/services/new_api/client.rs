@@ -5,7 +5,7 @@
 use crate::models::provider::Provider;
 use crate::models::remote_token::{
     CreateRemoteTokenRequest, NewApiResponse, RemoteToken, RemoteTokenGroup, RemoteTokenGroupInfo,
-    TokenListData,
+    TokenListData, UpdateRemoteTokenRequest,
 };
 use anyhow::{anyhow, Result};
 use reqwest::Client;
@@ -216,11 +216,66 @@ impl NewApiClient {
         Ok(())
     }
 
-    /// 更新远程令牌信息
+    /// 更新远程令牌信息（仅名称）
     pub async fn update_token(&self, token_id: i64, name: String) -> Result<RemoteToken> {
         let url = format!("{}/api/token/{}", self.base_url(), token_id);
         let body = json!({
             "name": name,
+        });
+
+        let response = self
+            .client
+            .patch(&url)
+            .headers(self.build_headers())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| anyhow!("请求失败: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "API 请求失败，状态码: {}",
+                response.status().as_u16()
+            ));
+        }
+
+        let api_response: NewApiResponse<RemoteToken> = response
+            .json()
+            .await
+            .map_err(|e| anyhow!("解析响应失败: {}", e))?;
+
+        if !api_response.success {
+            return Err(anyhow!(
+                "API 返回错误: {}",
+                api_response
+                    .message
+                    .unwrap_or_else(|| "未知错误".to_string())
+            ));
+        }
+
+        api_response
+            .data
+            .ok_or_else(|| anyhow!("API 未返回令牌数据"))
+    }
+
+    /// 更新远程令牌信息（完整版本，支持所有字段）
+    pub async fn update_token_full(
+        &self,
+        token_id: i64,
+        request: UpdateRemoteTokenRequest,
+    ) -> Result<RemoteToken> {
+        let url = format!("{}/api/token/{}", self.base_url(), token_id);
+
+        // 构建请求体（所有字段）
+        let body = json!({
+            "name": request.name,
+            "group": request.group,
+            "remain_quota": request.remain_quota,
+            "unlimited_quota": request.unlimited_quota,
+            "expired_time": request.expired_time,
+            "model_limits_enabled": request.model_limits_enabled,
+            "model_limits": request.model_limits,
+            "allow_ips": request.allow_ips,
         });
 
         let response = self

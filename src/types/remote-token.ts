@@ -48,6 +48,20 @@ export interface CreateRemoteTokenRequest {
 }
 
 /**
+ * 更新远程令牌请求（支持完整字段更新）
+ */
+export interface UpdateRemoteTokenRequest {
+  name: string;
+  group: string; // 分组名称（不是 group_id）
+  remain_quota: number; // 剩余额度（token，500000 = 基准值）
+  unlimited_quota: boolean; // 是否无限额度
+  expired_time: number; // Unix 时间戳，-1 表示永不过期
+  model_limits_enabled: boolean; // 是否启用模型限制
+  model_limits: string; // 模型限制（逗号分隔）
+  allow_ips: string; // 允许的 IP 地址（换行符分隔，支持 CIDR 表达式）
+}
+
+/**
  * 导入令牌为 Profile 请求
  */
 export interface ImportTokenAsProfileRequest {

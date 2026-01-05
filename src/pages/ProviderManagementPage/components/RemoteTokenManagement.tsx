@@ -13,14 +13,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Loader2, Plus, Download, Trash2, RefreshCw } from 'lucide-react';
+import { Loader2, Plus, Download, Trash2, RefreshCw, Pencil } from 'lucide-react';
 import type { Provider } from '@/types/provider';
-import type { RemoteToken } from '@/types/remote-token';
+import type { RemoteToken, RemoteTokenGroup } from '@/types/remote-token';
 import { TOKEN_STATUS_TEXT, TOKEN_STATUS_VARIANT, TokenStatus } from '@/types/remote-token';
-import { fetchProviderTokens, deleteProviderToken } from '@/lib/tauri-commands/token';
+import {
+  fetchProviderTokens,
+  deleteProviderToken,
+  fetchProviderGroups,
+  updateProviderTokenFull,
+} from '@/lib/tauri-commands/token';
 import { useToast } from '@/hooks/use-toast';
 import { CreateRemoteTokenDialog } from './CreateRemoteTokenDialog';
 import { ImportTokenDialog } from './ImportTokenDialog';
+import { EditTokenDialog } from './EditTokenDialog';
 
 interface RemoteTokenManagementProps {
   provider: Provider;
@@ -37,16 +43,23 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState<RemoteToken | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingToken, setEditingToken] = useState<RemoteToken | null>(null);
+  const [tokenGroups, setTokenGroups] = useState<RemoteTokenGroup[]>([]);
 
   /**
-   * 加载令牌列表
+   * 加载令牌列表和分组
    */
   const loadTokens = async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchProviderTokens(provider);
-      setTokens(result);
+      const [tokensResult, groupsResult] = await Promise.all([
+        fetchProviderTokens(provider),
+        fetchProviderGroups(provider),
+      ]);
+      setTokens(tokensResult);
+      setTokenGroups(groupsResult);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       setError(errorMsg);
@@ -87,6 +100,14 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
   const handleImport = (token: RemoteToken) => {
     setSelectedToken(token);
     setImportDialogOpen(true);
+  };
+
+  /**
+   * 打开编辑对话框
+   */
+  const handleEdit = (token: RemoteToken) => {
+    setEditingToken(token);
+    setEditDialogOpen(true);
   };
 
   /**
@@ -191,6 +212,14 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
                       <Button
                         size="sm"
                         variant="ghost"
+                        onClick={() => handleEdit(token)}
+                        title="编辑令牌"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={() => handleImport(token)}
                         title="导入为 Profile"
                       >
@@ -232,6 +261,19 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
             setImportDialogOpen(false);
             setSelectedToken(null);
           }}
+        />
+      )}
+
+      {/* 编辑令牌对话框 */}
+      {editingToken && (
+        <EditTokenDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          provider={provider}
+          token={editingToken}
+          tokenGroups={tokenGroups}
+          onSuccess={loadTokens}
+          onUpdate={updateProviderTokenFull}
         />
       )}
     </div>

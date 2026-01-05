@@ -382,6 +382,7 @@ fn main() {
         create_provider_token,
         delete_provider_token,
         update_provider_token,
+        update_provider_token_full,
         import_token_as_profile,
         create_custom_profile,
         // Dashboard 管理命令

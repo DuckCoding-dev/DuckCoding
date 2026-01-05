@@ -89,6 +89,27 @@ pub struct CreateRemoteTokenRequest {
     pub allow_ips: String,
 }
 
+/// 更新远程令牌请求（支持完整字段更新）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateRemoteTokenRequest {
+    /// 令牌名称
+    pub name: String,
+    /// 分组名称
+    pub group: String,
+    /// 剩余额度（token，500000 = 基准值）
+    pub remain_quota: i64,
+    /// 是否无限额度
+    pub unlimited_quota: bool,
+    /// 过期时间（Unix 时间戳，-1 表示永不过期）
+    pub expired_time: i64,
+    /// 是否启用模型限制
+    pub model_limits_enabled: bool,
+    /// 模型限制（逗号分隔的模型列表）
+    pub model_limits: String,
+    /// 允许的 IP 地址（换行符分隔，支持 CIDR 表达式）
+    pub allow_ips: String,
+}
+
 /// NEW API 通用响应结构
 #[derive(Debug, Deserialize)]
 pub struct NewApiResponse<T> {
