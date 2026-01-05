@@ -1,6 +1,7 @@
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
   TableBody,
@@ -9,14 +10,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Building2, Plus, Pencil, Trash2, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
-import { useState, Fragment } from 'react';
+import { Building2, Plus, Pencil, Trash2, Loader2, Coins } from 'lucide-react';
+import { useState } from 'react';
 import type { Provider } from '@/lib/tauri-commands';
 import { useToast } from '@/hooks/use-toast';
 import { useProviderManagement } from './hooks/useProviderManagement';
 import { ProviderFormDialog } from './components/ProviderFormDialog';
 import { DeleteConfirmDialog } from './components/DeleteConfirmDialog';
-import { RemoteTokenManagement } from './components/RemoteTokenManagement';
+import { TokenManagementTab } from './components/TokenManagementTab';
 
 /**
  * 供应商管理页面
@@ -32,7 +33,8 @@ export function ProviderManagementPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingProvider, setDeletingProvider] = useState<Provider | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'providers' | 'tokens'>('providers');
+  const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
 
   /**
    * 打开新增对话框
@@ -105,10 +107,11 @@ export function ProviderManagementPage() {
   };
 
   /**
-   * 切换展开/折叠
+   * 查看供应商的令牌（切换到令牌管理 Tab）
    */
-  const toggleExpand = (providerId: string) => {
-    setExpandedProviderId((prev) => (prev === providerId ? null : providerId));
+  const handleViewTokens = (providerId: string) => {
+    setSelectedProviderId(providerId);
+    setActiveTab('tokens');
   };
 
   return (
@@ -118,68 +121,69 @@ export function ProviderManagementPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
-            <h3 className="text-lg font-semibold">供应商管理</h3>
+            <h3 className="text-lg font-semibold">供应商</h3>
           </div>
-          <Button onClick={handleAdd} size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            新增供应商
-          </Button>
         </div>
         <Separator />
 
-        {/* 错误提示 */}
-        {error && (
-          <div className="rounded-md border border-destructive bg-destructive/10 p-4">
-            <p className="text-sm text-destructive">加载失败: {error}</p>
-          </div>
-        )}
+        {/* Tabs 组件 */}
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => setActiveTab(value as 'providers' | 'tokens')}
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="providers">
+              <Building2 className="mr-2 h-4 w-4" />
+              供应商管理
+            </TabsTrigger>
+            <TabsTrigger value="tokens">
+              <Coins className="mr-2 h-4 w-4" />
+              令牌管理
+            </TabsTrigger>
+          </TabsList>
 
-        {/* 加载状态 */}
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
-          </div>
-        ) : providers.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Building2 className="h-12 w-12 mx-auto mb-2 opacity-20" />
-            <p className="text-sm">暂无供应商，请点击「新增供应商」按钮添加</p>
-          </div>
-        ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12"></TableHead>
-                  <TableHead>名称</TableHead>
-                  <TableHead>官网地址</TableHead>
-                  <TableHead>用户名</TableHead>
-                  <TableHead>更新时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {providers.map((provider) => {
-                  const isExpanded = expandedProviderId === provider.id;
-                  return (
-                    <Fragment key={provider.id}>
-                      <TableRow>
-                        {/* 展开按钮 */}
-                        <TableCell>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => toggleExpand(provider.id)}
-                            className="h-6 w-6 p-0"
-                          >
-                            {isExpanded ? (
-                              <ChevronDown className="h-4 w-4" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
+          {/* Tab 1: 供应商管理 */}
+          <TabsContent value="providers" className="mt-4 space-y-4">
+            <div className="flex items-center justify-end">
+              <Button onClick={handleAdd} size="sm">
+                <Plus className="mr-2 h-4 w-4" />
+                新增供应商
+              </Button>
+            </div>
 
+            {/* 错误提示 */}
+            {error && (
+              <div className="rounded-md border border-destructive bg-destructive/10 p-4">
+                <p className="text-sm text-destructive">加载失败: {error}</p>
+              </div>
+            )}
+
+            {/* 加载状态 */}
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">加载中...</span>
+              </div>
+            ) : providers.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Building2 className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">暂无供应商，请点击「新增供应商」按钮添加</p>
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>名称</TableHead>
+                      <TableHead>官网地址</TableHead>
+                      <TableHead>用户名</TableHead>
+                      <TableHead>更新时间</TableHead>
+                      <TableHead className="text-right">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {providers.map((provider) => (
+                      <TableRow key={provider.id}>
                         {/* 名称 */}
                         <TableCell className="font-medium">{provider.name}</TableCell>
 
@@ -206,6 +210,14 @@ export function ProviderManagementPage() {
                         {/* 操作 */}
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleViewTokens(provider.id)}
+                            >
+                              <Coins className="mr-2 h-4 w-4" />
+                              查看令牌
+                            </Button>
                             <Button size="sm" variant="ghost" onClick={() => handleEdit(provider)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -223,22 +235,22 @@ export function ProviderManagementPage() {
                           </div>
                         </TableCell>
                       </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </TabsContent>
 
-                      {/* 展开内容：令牌管理 */}
-                      {isExpanded && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="bg-muted/30 p-6">
-                            <RemoteTokenManagement provider={provider} />
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+          {/* Tab 2: 令牌管理 */}
+          <TabsContent value="tokens" className="mt-4">
+            <TokenManagementTab
+              providers={providers}
+              selectedProviderId={selectedProviderId}
+              onProviderChange={setSelectedProviderId}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* 表单对话框 */}

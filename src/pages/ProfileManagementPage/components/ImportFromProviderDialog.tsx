@@ -761,9 +761,7 @@ export const ImportFromProviderDialog = forwardRef<
                   placeholder="例如: 100"
                   disabled={unlimitedQuota}
                 />
-                <p className="text-xs text-muted-foreground">
-                  设置令牌的使用限额
-                </p>
+                <p className="text-xs text-muted-foreground">设置令牌的使用限额</p>
               </div>
 
               {/* 有效期设置 */}
