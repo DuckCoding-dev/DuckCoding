@@ -242,6 +242,23 @@ fn default_proxy_configs() -> HashMap<String, ToolProxyConfig> {
         },
     );
 
+    configs.insert(
+        "amp-code".to_string(),
+        ToolProxyConfig {
+            enabled: false,
+            port: 8790,
+            local_api_key: None,
+            real_api_key: None,
+            real_base_url: None,
+            real_model_provider: None,
+            real_profile_name: None,
+            allow_public: false,
+            session_endpoint_config_enabled: false,
+            auto_start: false,
+            original_active_profile: None,
+        },
+    );
+
     configs
 }
 

@@ -6,10 +6,12 @@ use bytes::Bytes;
 use hyper::HeaderMap as HyperHeaderMap;
 use reqwest::header::HeaderMap as ReqwestHeaderMap;
 
+mod amp_processor;
 mod claude_processor;
 mod codex_processor;
 mod gemini_processor;
 
+pub use amp_processor::AmpHeadersProcessor;
 pub use claude_processor::ClaudeHeadersProcessor;
 pub use codex_processor::CodexHeadersProcessor;
 pub use gemini_processor::GeminiHeadersProcessor;
@@ -101,6 +103,7 @@ pub trait RequestProcessor: Send + Sync + std::fmt::Debug {
 /// - `Err`: 当 tool_id 不被支持时返回错误
 pub fn create_request_processor(tool_id: &str) -> Result<Box<dyn RequestProcessor>> {
     match tool_id {
+        "amp-code" => Ok(Box::new(AmpHeadersProcessor)),
         "claude-code" => Ok(Box::new(ClaudeHeadersProcessor)),
         "codex" => Ok(Box::new(CodexHeadersProcessor)),
         "gemini-cli" => Ok(Box::new(GeminiHeadersProcessor)),

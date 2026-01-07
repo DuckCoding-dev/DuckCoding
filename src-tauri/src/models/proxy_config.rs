@@ -50,6 +50,7 @@ impl ToolProxyConfig {
             "claude-code" => 8787,
             "codex" => 8788,
             "gemini-cli" => 8789,
+            "amp-code" => 8790,
             _ => 8787,
         }
     }
@@ -64,7 +65,13 @@ pub struct ProxyStore {
     pub codex: ToolProxyConfig,
     #[serde(rename = "gemini-cli")]
     pub gemini_cli: ToolProxyConfig,
+    #[serde(rename = "amp-code", default = "default_amp_config")]
+    pub amp_code: ToolProxyConfig,
     pub metadata: ProxyMetadata,
+}
+
+fn default_amp_config() -> ToolProxyConfig {
+    ToolProxyConfig::new(8790)
 }
 
 impl ProxyStore {
@@ -74,6 +81,7 @@ impl ProxyStore {
             claude_code: ToolProxyConfig::new(8787),
             codex: ToolProxyConfig::new(8788),
             gemini_cli: ToolProxyConfig::new(8789),
+            amp_code: ToolProxyConfig::new(8790),
             metadata: ProxyMetadata {
                 last_updated: Utc::now(),
             },
@@ -86,6 +94,7 @@ impl ProxyStore {
             "claude-code" => Some(&self.claude_code),
             "codex" => Some(&self.codex),
             "gemini-cli" => Some(&self.gemini_cli),
+            "amp-code" => Some(&self.amp_code),
             _ => None,
         }
     }
@@ -96,6 +105,7 @@ impl ProxyStore {
             "claude-code" => Some(&mut self.claude_code),
             "codex" => Some(&mut self.codex),
             "gemini-cli" => Some(&mut self.gemini_cli),
+            "amp-code" => Some(&mut self.amp_code),
             _ => None,
         }
     }
@@ -106,6 +116,7 @@ impl ProxyStore {
             "claude-code" => self.claude_code = config,
             "codex" => self.codex = config,
             "gemini-cli" => self.gemini_cli = config,
+            "amp-code" => self.amp_code = config,
             _ => {}
         }
         self.metadata.last_updated = Utc::now();

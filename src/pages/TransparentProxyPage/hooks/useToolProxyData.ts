@@ -56,6 +56,7 @@ export function useToolProxyData() {
         loadToolConfig('claude-code'),
         loadToolConfig('codex'),
         loadToolConfig('gemini-cli'),
+        loadToolConfig('amp-code'),
       ]);
     } finally {
       setConfigLoading(false);
@@ -92,7 +93,7 @@ export function useToolProxyData() {
    * 获取所有工具的数据
    */
   const getAllToolsData = useCallback((): ToolData[] => {
-    const toolIds: ToolId[] = ['claude-code', 'codex', 'gemini-cli'];
+    const toolIds: ToolId[] = ['claude-code', 'codex', 'gemini-cli', 'amp-code'];
     return toolIds.map((toolId) => getToolData(toolId));
   }, [getToolData]);
 
@@ -103,7 +104,16 @@ export function useToolProxyData() {
     async (toolId: ToolId, updates: Partial<ToolProxyConfig>): Promise<void> => {
       const currentConfig = configs.get(toolId) || {
         enabled: false,
-        port: toolId === 'claude-code' ? 8787 : toolId === 'codex' ? 8788 : 8789,
+        port:
+          toolId === 'claude-code'
+            ? 8787
+            : toolId === 'codex'
+              ? 8788
+              : toolId === 'gemini-cli'
+                ? 8789
+                : toolId === 'amp-code'
+                  ? 8790
+                  : 8791,
         local_api_key: null,
         real_api_key: null,
         real_base_url: null,

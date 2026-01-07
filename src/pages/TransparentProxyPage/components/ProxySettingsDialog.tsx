@@ -20,6 +20,22 @@ import { useToast } from '@/hooks/use-toast';
 import type { ToolProxyConfig } from '@/lib/tauri-commands';
 import type { ToolId } from '../types/proxy-history';
 
+// 工具默认端口映射
+function getDefaultPort(toolId: ToolId): number {
+  switch (toolId) {
+    case 'claude-code':
+      return 8787;
+    case 'codex':
+      return 8788;
+    case 'gemini-cli':
+      return 8789;
+    case 'amp-code':
+      return 8790;
+    default:
+      return 8787;
+  }
+}
+
 interface ProxySettingsDialogProps {
   /** 弹窗开关状态 */
   open: boolean;
@@ -60,7 +76,7 @@ export function ProxySettingsDialog({
 
   // 表单状态
   const [enabled, setEnabled] = useState(config?.enabled ?? false);
-  const [port, setPort] = useState(config?.port ?? 8787);
+  const [port, setPort] = useState(config?.port ?? getDefaultPort(toolId));
   const [localApiKey, setLocalApiKey] = useState(config?.local_api_key ?? '');
   const [allowPublic, setAllowPublic] = useState(config?.allow_public ?? false);
   const [sessionEndpointEnabled, setSessionEndpointEnabled] = useState(
@@ -188,7 +204,7 @@ export function ProxySettingsDialog({
                   min={1024}
                   max={65535}
                   value={port}
-                  onChange={(e) => setPort(parseInt(e.target.value) || 8787)}
+                  onChange={(e) => setPort(parseInt(e.target.value) || getDefaultPort(toolId))}
                   disabled={isRunning}
                   className="w-full"
                 />

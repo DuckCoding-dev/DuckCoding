@@ -161,51 +161,75 @@ async fn try_start_proxy_internal(
     if tool_config.local_api_key.is_none() {
         return Err("透明代理保护密钥未设置".to_string());
     }
-    if tool_config.real_api_key.is_none() || tool_config.real_base_url.is_none() {
-        return Err("真实 API Key 或 Base URL 未设置".to_string());
+
+    // amp-code 验证：检查是否至少配置了一个工具的 Profile
+    if tool_id == "amp-code" {
+        let (claude, codex, gemini) = profile_mgr
+            .resolve_amp_selection()
+            .map_err(|e| format!("读取 AMP Code Profile 选择失败: {}", e))?;
+
+        if claude.is_none() && codex.is_none() && gemini.is_none() {
+            return Err(
+                "AMP Code 未配置任何 Profile，请先在 Profile 管理页面选择至少一个工具的配置"
+                    .to_string(),
+            );
+        }
+    } else {
+        // 其他工具需要 real_api_key/real_base_url
+        if tool_config.real_api_key.is_none() || tool_config.real_base_url.is_none() {
+            return Err("真实 API Key 或 Base URL 未设置".to_string());
+        }
     }
 
-    // ========== Profile 切换逻辑 ==========
+    // ========== Profile 切换逻辑（amp-code 跳过，因为它动态路由到其他工具的 Profile） ==========
 
-    // 1. 读取当前激活的 Profile 名称
-    let original_profile = profile_mgr
-        .get_active_profile_name(tool_id)
-        .map_err(|e| e.to_string())?;
+    if tool_id != "amp-code" {
+        // 1. 读取当前激活的 Profile 名称
+        let original_profile = profile_mgr
+            .get_active_profile_name(tool_id)
+            .map_err(|e| e.to_string())?;
 
-    // 2. 保存到 ToolProxyConfig
-    tool_config.original_active_profile = original_profile.clone();
-    proxy_config_mgr
-        .update_config(tool_id, tool_config.clone())
-        .map_err(|e| e.to_string())?;
+        // 2. 保存到 ToolProxyConfig
+        tool_config.original_active_profile = original_profile.clone();
+        proxy_config_mgr
+            .update_config(tool_id, tool_config.clone())
+            .map_err(|e| e.to_string())?;
 
-    // 3. 验证内置 Profile 是否存在
-    let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
+        // 3. 验证内置 Profile 是否存在
+        let proxy_profile_name = format!("dc_proxy_{}", tool_id.replace("-", "_"));
 
-    let profile_exists = match tool_id {
-        "claude-code" => profile_mgr.get_claude_profile(&proxy_profile_name).is_ok(),
-        "codex" => profile_mgr.get_codex_profile(&proxy_profile_name).is_ok(),
-        "gemini-cli" => profile_mgr.get_gemini_profile(&proxy_profile_name).is_ok(),
-        _ => false,
-    };
+        let profile_exists = match tool_id {
+            "claude-code" => profile_mgr.get_claude_profile(&proxy_profile_name).is_ok(),
+            "codex" => profile_mgr.get_codex_profile(&proxy_profile_name).is_ok(),
+            "gemini-cli" => profile_mgr.get_gemini_profile(&proxy_profile_name).is_ok(),
+            _ => false,
+        };
 
-    if !profile_exists {
-        return Err(format!(
-            "内置 Profile 不存在，请先保存代理配置: {}",
-            proxy_profile_name
-        ));
+        if !profile_exists {
+            return Err(format!(
+                "内置 Profile 不存在，请先保存代理配置: {}",
+                proxy_profile_name
+            ));
+        }
+
+        // 4. 激活内置 Profile（这会自动同步到原生配置文件）
+        profile_mgr
+            .activate_profile(tool_id, &proxy_profile_name)
+            .map_err(|e| format!("激活内置 Profile 失败: {}", e))?;
+
+        tracing::info!(
+            tool_id = %tool_id,
+            original_profile = ?original_profile,
+            proxy_profile = %proxy_profile_name,
+            "已切换到代理 Profile"
+        );
+    } else {
+        // amp-code 使用 resolve_amp_selection 动态获取配置，无需 Profile 切换
+        tracing::info!(
+            tool_id = %tool_id,
+            "Amp Code 代理启动，将动态路由到用户选择的 Profile"
+        );
     }
-
-    // 4. 激活内置 Profile（这会自动同步到原生配置文件）
-    profile_mgr
-        .activate_profile(tool_id, &proxy_profile_name)
-        .map_err(|e| format!("激活内置 Profile 失败: {}", e))?;
-
-    tracing::info!(
-        tool_id = %tool_id,
-        original_profile = ?original_profile,
-        proxy_profile = %proxy_profile_name,
-        "已切换到代理 Profile"
-    );
 
     // ========== 启动代理 ==========
 
@@ -345,7 +369,7 @@ pub async fn get_all_proxy_status(
 
     let mut status_map = HashMap::new();
 
-    for tool_id in &["claude-code", "codex", "gemini-cli"] {
+    for tool_id in &["claude-code", "codex", "gemini-cli", "amp-code"] {
         let port = proxy_store
             .get_config(tool_id)
             .map(|tc| tc.port)
@@ -353,6 +377,7 @@ pub async fn get_all_proxy_status(
                 "claude-code" => 8787,
                 "codex" => 8788,
                 "gemini-cli" => 8789,
+                "amp-code" => 8790,
                 _ => 8790,
             });
 

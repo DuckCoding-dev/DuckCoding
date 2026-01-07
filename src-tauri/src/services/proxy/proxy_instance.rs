@@ -208,9 +208,12 @@ async fn handle_request_inner(
     tool_id: &str,
 ) -> Result<Response<BoxBody>> {
     // 获取配置
+    // amp-code 使用 amp_selection 动态路由，不需要 real_api_key/real_base_url
     let proxy_config = {
         let cfg = config.read().await;
-        if cfg.real_api_key.is_none() || cfg.real_base_url.is_none() {
+        if tool_id != "amp-code"
+            && (cfg.real_api_key.is_none() || cfg.real_base_url.is_none())
+        {
             return Ok(error_responses::configuration_missing(tool_id));
         }
         cfg.clone()
@@ -244,11 +247,12 @@ async fn handle_request_inner(
     let method = req.method().clone();
     let headers = req.headers().clone();
 
+    // amp-code 在 processor 内部获取配置，这里传占位符
     let base = proxy_config
         .real_base_url
-        .as_ref()
-        .unwrap()
-        .trim_end_matches('/');
+        .as_deref()
+        .map(|s| s.trim_end_matches('/'))
+        .unwrap_or("");
 
     // 读取请求体（消费 req）
     let body_bytes = if method != Method::GET && method != Method::HEAD {
@@ -258,10 +262,11 @@ async fn handle_request_inner(
     };
 
     // 使用 RequestProcessor 统一处理请求（URL + headers + body）
+    // amp-code 忽略传入的 base/api_key，在内部通过 amp_selection 获取
     let processed = processor
         .process_outgoing_request(
             base,
-            proxy_config.real_api_key.as_ref().unwrap(),
+            proxy_config.real_api_key.as_deref().unwrap_or(""),
             &path,
             query.as_deref(),
             &headers,
