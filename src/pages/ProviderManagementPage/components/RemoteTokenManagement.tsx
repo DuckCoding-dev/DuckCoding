@@ -2,7 +2,7 @@
 //
 // 远程令牌管理组件 - 显示和管理供应商的远程令牌
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -56,7 +56,7 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
   /**
    * 加载令牌列表
    */
-  const loadTokens = async () => {
+  const loadTokens = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -73,7 +73,7 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
     } finally {
       setLoading(false);
     }
-  };
+  }, [provider, toast]);
 
   /**
    * 打开删除确认对话框
@@ -158,7 +158,7 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
    */
   useEffect(() => {
     loadTokens();
-  }, [provider.id]);
+  }, [loadTokens]);
 
   return (
     <div className="space-y-4">

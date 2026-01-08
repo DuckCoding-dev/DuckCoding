@@ -98,7 +98,7 @@ export function ImportTokenDialog({
       setProfileName('');
       setToolId('claude-code');
     }
-  }, [open, token.id, provider.id]); // 移除 profileName 和 toolId 避免循环依赖
+  }, [open, token.id, token.name, provider.id, profileName, toolId, toast]);
 
   /**
    * 提交导入
