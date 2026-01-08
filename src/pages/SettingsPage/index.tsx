@@ -9,21 +9,26 @@ import { BasicSettingsTab } from './components/BasicSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { LogSettingsTab } from './components/LogSettingsTab';
 import { ConfigGuardTab } from './components/ConfigGuardTab';
-import type { GlobalConfig } from '@/lib/tauri-commands';
+import { UpdateTab } from './components/UpdateTab';
+import type { GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
 
 interface SettingsPageProps {
   globalConfig: GlobalConfig | null;
   configLoading: boolean;
   onConfigChange: () => void;
+  updateInfo: UpdateInfo | null;
   initialTab?: string;
   restrictToTab?: string; // 限制只能访问特定 tab
+  onUpdateCheck: () => void;
 }
 
 export function SettingsPage({
   globalConfig,
   onConfigChange,
+  updateInfo,
   initialTab = 'basic',
   restrictToTab,
+  onUpdateCheck,
 }: SettingsPageProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -153,6 +158,9 @@ export function SettingsPage({
           <TabsTrigger value="log" disabled={!!restrictToTab && restrictToTab !== 'log'}>
             日志配置
           </TabsTrigger>
+          <TabsTrigger value="update" disabled={!!restrictToTab && restrictToTab !== 'update'}>
+            更新管理
+          </TabsTrigger>
         </TabsList>
 
         {/* 系统设置 */}
@@ -192,6 +200,11 @@ export function SettingsPage({
         {/* 配置守护 */}
         <TabsContent value="config-guard" className="space-y-6">
           <ConfigGuardTab />
+        </TabsContent>
+
+        {/* 更新管理 */}
+        <TabsContent value="update" className="space-y-6">
+          <UpdateTab updateInfo={updateInfo} onUpdateCheck={onUpdateCheck} />
         </TabsContent>
       </Tabs>
 
