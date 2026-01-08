@@ -30,8 +30,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     '*.lan',
   ]);
 
-  // 实验性功能 - 透明代理
-
   // 状态
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig | null>(initialConfig);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -98,12 +96,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
     proxyBypassUrls,
     onConfigChange,
   ]);
-
-  // 生成代理 API Key（已废弃，透明代理功能已移除）
-  const generateProxyKey = useCallback(() => {
-    // 功能已移除
-    console.warn('generateProxyKey 功能已废弃');
-  }, []);
 
   // 测试代理连接
   const testProxy = useCallback(async (): Promise<{
@@ -211,7 +203,6 @@ export function useSettingsForm({ initialConfig, onConfigChange }: UseSettingsFo
 
     // Actions
     saveSettings,
-    generateProxyKey,
     testProxy,
   };
 }
