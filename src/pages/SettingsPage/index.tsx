@@ -9,6 +9,7 @@ import { BasicSettingsTab } from './components/BasicSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
 import { LogSettingsTab } from './components/LogSettingsTab';
 import { ConfigGuardTab } from './components/ConfigGuardTab';
+import { TokenStatsTab } from './components/TokenStatsTab';
 import type { GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
 
 interface SettingsPageProps {
@@ -157,6 +158,12 @@ export function SettingsPage({
           <TabsTrigger value="log" disabled={!!restrictToTab && restrictToTab !== 'log'}>
             日志配置
           </TabsTrigger>
+          <TabsTrigger
+            value="token-stats"
+            disabled={!!restrictToTab && restrictToTab !== 'token-stats'}
+          >
+            Token 统计
+          </TabsTrigger>
         </TabsList>
 
         {/* 系统设置 */}
@@ -196,6 +203,11 @@ export function SettingsPage({
         {/* 配置守护 */}
         <TabsContent value="config-guard" className="space-y-6">
           <ConfigGuardTab />
+        </TabsContent>
+
+        {/* Token 统计 */}
+        <TabsContent value="token-stats" className="space-y-6">
+          <TokenStatsTab />
         </TabsContent>
       </Tabs>
 

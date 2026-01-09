@@ -40,6 +40,20 @@ pub struct TokenLog {
 
     /// 缓存读取Token数量
     pub cache_read_tokens: i64,
+
+    /// 请求状态：success, failed
+    pub request_status: String,
+
+    /// 响应类型：sse, json, unknown
+    pub response_type: String,
+
+    /// 错误类型：parse_error, request_interrupted, upstream_error（成功时为None）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_type: Option<String>,
+
+    /// 错误详情（成功时为None）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_detail: Option<String>,
 }
 
 impl TokenLog {
@@ -57,6 +71,10 @@ impl TokenLog {
         output_tokens: i64,
         cache_creation_tokens: i64,
         cache_read_tokens: i64,
+        request_status: String,
+        response_type: String,
+        error_type: Option<String>,
+        error_detail: Option<String>,
     ) -> Self {
         Self {
             id: None,
@@ -71,6 +89,10 @@ impl TokenLog {
             output_tokens,
             cache_creation_tokens,
             cache_read_tokens,
+            request_status,
+            response_type,
+            error_type,
+            error_detail,
         }
     }
 
@@ -82,6 +104,11 @@ impl TokenLog {
     /// 计算总缓存Token数量
     pub fn total_cache_tokens(&self) -> i64 {
         self.cache_creation_tokens + self.cache_read_tokens
+    }
+
+    /// 是否成功
+    pub fn is_success(&self) -> bool {
+        self.request_status == "success"
     }
 }
 
@@ -200,11 +227,16 @@ mod tests {
             500,
             100,
             200,
+            "success".to_string(),
+            "sse".to_string(),
+            None,
+            None,
         );
 
         assert_eq!(log.tool_type, "claude_code");
         assert_eq!(log.total_tokens(), 1500);
         assert_eq!(log.total_cache_tokens(), 300);
+        assert!(log.is_success());
     }
 
     #[test]

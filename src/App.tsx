@@ -14,12 +14,13 @@ import { TransparentProxyPage } from '@/pages/TransparentProxyPage';
 import { ToolManagementPage } from '@/pages/ToolManagementPage';
 import { HelpPage } from '@/pages/HelpPage';
 import { AboutPage } from '@/pages/AboutPage';
+import { BalancePage } from '@/pages/BalancePage';
+import TokenStatisticsPage from '@/pages/TokenStatisticsPage';
 import { useToast } from '@/hooks/use-toast';
 import { useAppEvents } from '@/hooks/useAppEvents';
 import { useCloseAction } from '@/hooks/useCloseAction';
 import { useConfigWatch } from '@/hooks/useConfigWatch';
 import { Toaster } from '@/components/ui/toaster';
-import { BalancePage } from '@/pages/BalancePage';
 import OnboardingOverlay from '@/components/Onboarding/OnboardingOverlay';
 import {
   getRequiredSteps,
@@ -36,6 +37,7 @@ import {
   type GlobalConfig,
   type UpdateInfo,
 } from '@/lib/tauri-commands';
+import type { ToolType } from '@/types/token-stats';
 
 type TabType =
   | 'dashboard'
@@ -44,6 +46,7 @@ type TabType =
   | 'profile-management'
   | 'balance'
   | 'transparent-proxy'
+  | 'token-statistics'
   | 'provider-management'
   | 'settings'
   | 'help'
@@ -56,6 +59,12 @@ function App() {
   const [settingsInitialTab, setSettingsInitialTab] = useState<string>('basic');
   const [settingsRestrictToTab, setSettingsRestrictToTab] = useState<string | undefined>(undefined);
   const [restrictedPage, setRestrictedPage] = useState<string | undefined>(undefined);
+
+  // Token 统计页面导航参数
+  const [tokenStatsParams, setTokenStatsParams] = useState<{
+    sessionId?: string;
+    toolType?: ToolType;
+  }>({});
 
   // 引导状态管理
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -286,6 +295,24 @@ function App() {
       setSettingsRestrictToTab(undefined);
     });
 
+    // 监听应用内导航事件
+    const unlistenAppNavigate = listen<{
+      tab: TabType;
+      params?: { sessionId?: string; toolType?: ToolType };
+    }>('app-navigate', (event) => {
+      const { tab, params } = event.payload || {};
+      if (tab) {
+        setActiveTab(tab);
+        // 如果是导航到 Token 统计页面，保存参数
+        if (tab === 'token-statistics' && params) {
+          setTokenStatsParams(params);
+        } else if (tab !== 'token-statistics') {
+          // 清空参数
+          setTokenStatsParams({});
+        }
+      }
+    });
+
     return () => {
       unlistenUpdateAvailable.then((fn) => fn());
       unlistenRequestCheck.then((fn) => fn());
@@ -293,6 +320,7 @@ function App() {
       unlistenOpenSettings.then((fn) => fn());
       unlistenOnboardingNavigate.then((fn) => fn());
       unlistenClearRestriction.then((fn) => fn());
+      unlistenAppNavigate.then((fn) => fn());
     };
   }, [toast]);
 
@@ -379,6 +407,12 @@ function App() {
           {activeTab === 'profile-management' && <ProfileManagementPage />}
           {activeTab === 'transparent-proxy' && (
             <TransparentProxyPage selectedToolId={selectedProxyToolId} />
+          )}
+          {activeTab === 'token-statistics' && (
+            <TokenStatisticsPage
+              sessionId={tokenStatsParams.sessionId}
+              toolType={tokenStatsParams.toolType}
+            />
           )}
           {activeTab === 'settings' && (
             <SettingsPage

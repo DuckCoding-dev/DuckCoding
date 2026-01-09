@@ -11,4 +11,4 @@ pub use extractor::{
     create_extractor, ClaudeTokenExtractor, MessageDeltaData, MessageStartData, ResponseTokenInfo,
     SseTokenData, TokenExtractor,
 };
-pub use manager::TokenStatsManager;
+pub use manager::{shutdown_token_stats_manager, TokenStatsManager};

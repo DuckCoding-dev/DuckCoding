@@ -4,5 +4,5 @@ mod db_utils;
 pub mod manager;
 pub mod models;
 
-pub use manager::SESSION_MANAGER;
+pub use manager::{shutdown_session_manager, SESSION_MANAGER};
 pub use models::{ProxySession, SessionEvent, SessionListResponse};

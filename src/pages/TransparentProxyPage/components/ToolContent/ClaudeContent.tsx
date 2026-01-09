@@ -2,6 +2,7 @@
 // 显示代理请求历史记录表格
 
 import { useState, useEffect, useCallback } from 'react';
+import { emit } from '@tauri-apps/api/event';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -22,6 +23,7 @@ import {
   X,
   Info,
   ExternalLink,
+  History,
 } from 'lucide-react';
 import { useSessionData } from '../../hooks/useSessionData';
 import { SessionConfigDialog } from '../SessionConfigDialog';
@@ -33,6 +35,7 @@ import {
   type SessionRecord,
 } from '@/lib/tauri-commands';
 import { isActiveSession } from '@/utils/sessionHelpers';
+import { useToast } from '@/hooks/use-toast';
 
 /**
  * 渲染配置显示内容
@@ -204,9 +207,11 @@ function DisabledHint({
  * - 支持切换会话配置
  * - 支持编辑会话备注
  * - 支持删除单个会话
+ * - 支持查看会话日志
  * - 自动定时轮询更新（5 秒间隔）
  */
 export function ClaudeContent() {
+  const { toast } = useToast();
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
@@ -216,6 +221,26 @@ export function ClaudeContent() {
   const [sessionEndpointEnabled, setSessionEndpointEnabled] = useState<boolean | null>(null);
   const [hintDismissed, setHintDismissed] = useState(false);
   const [hintClosed, setHintClosed] = useState(false);
+
+  // 导航到 Token 统计页面并筛选该会话的日志
+  const handleViewLogs = useCallback(
+    async (sessionId: string) => {
+      try {
+        await emit('app-navigate', {
+          tab: 'token-statistics',
+          params: { sessionId, toolType: 'claude-code' },
+        });
+      } catch (error) {
+        console.error('导航失败:', error);
+        toast({
+          title: '导航失败',
+          description: '无法打开统计页面',
+          variant: 'destructive',
+        });
+      }
+    },
+    [toast],
+  );
 
   // 打开代理设置弹窗
   const openProxySettings = useCallback(() => {
@@ -403,6 +428,16 @@ export function ClaudeContent() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-1">
+                    {/* 查看日志按钮 */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8"
+                      onClick={() => handleViewLogs(session.display_id)}
+                      title="查看日志"
+                    >
+                      <History className="h-3 w-3" />
+                    </Button>
                     {/* 备注按钮 */}
                     <Button
                       variant="ghost"

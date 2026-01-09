@@ -41,10 +41,24 @@ impl TokenStatsDb {
                     output_tokens INTEGER NOT NULL DEFAULT 0,
                     cache_creation_tokens INTEGER NOT NULL DEFAULT 0,
                     cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+                    request_status TEXT NOT NULL DEFAULT 'success',
+                    response_type TEXT NOT NULL DEFAULT 'unknown',
+                    error_type TEXT,
+                    error_detail TEXT,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )",
             )
             .context("Failed to create token_logs table")?;
+
+        // 如果表已存在但缺少新字段，添加它们（ALTER TABLE）
+        let _ = manager.execute_raw(
+            "ALTER TABLE token_logs ADD COLUMN request_status TEXT NOT NULL DEFAULT 'success'",
+        );
+        let _ = manager.execute_raw(
+            "ALTER TABLE token_logs ADD COLUMN response_type TEXT NOT NULL DEFAULT 'unknown'",
+        );
+        let _ = manager.execute_raw("ALTER TABLE token_logs ADD COLUMN error_type TEXT");
+        let _ = manager.execute_raw("ALTER TABLE token_logs ADD COLUMN error_detail TEXT");
 
         // 创建索引
         manager
@@ -89,6 +103,10 @@ impl TokenStatsDb {
             log.output_tokens.to_string(),
             log.cache_creation_tokens.to_string(),
             log.cache_read_tokens.to_string(),
+            log.request_status.clone(),
+            log.response_type.clone(),
+            log.error_type.clone().unwrap_or_default(),
+            log.error_detail.clone().unwrap_or_default(),
         ];
 
         let params_refs: Vec<&str> = params.iter().map(|s| s.as_str()).collect();
@@ -98,13 +116,72 @@ impl TokenStatsDb {
                 "INSERT INTO token_logs (
                     tool_type, timestamp, client_ip, session_id, config_name,
                     model, message_id, input_tokens, output_tokens,
-                    cache_creation_tokens, cache_read_tokens
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    cache_creation_tokens, cache_read_tokens,
+                    request_status, response_type, error_type, error_detail
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
                 &params_refs,
             )
             .context("Failed to insert token log")?;
 
+        // 执行 WAL checkpoint（TRUNCATE 模式，立即回写主文件）
+        // 注意：这会稍微影响写入性能，但确保数据及时持久化
+        let _ = manager.execute_raw("PRAGMA wal_checkpoint(TRUNCATE)");
+
         // 获取最后插入的ID（通过查询max(id)）
+        let rows = manager
+            .query("SELECT max(id) as last_id FROM token_logs", &[])
+            .context("Failed to query last insert id")?;
+
+        let id = rows
+            .first()
+            .and_then(|row| row.values.first())
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+
+        Ok(id)
+    }
+
+    /// 插入单条日志记录（不执行 checkpoint）
+    ///
+    /// 用于批量写入场景，在批量写入后统一执行 checkpoint
+    pub fn insert_log_without_checkpoint(&self, log: &TokenLog) -> Result<i64> {
+        let manager = DataManager::global()
+            .sqlite(&self.db_path)
+            .context("Failed to get SQLite manager")?;
+
+        let params = vec![
+            log.tool_type.clone(),
+            log.timestamp.to_string(),
+            log.client_ip.clone(),
+            log.session_id.clone(),
+            log.config_name.clone(),
+            log.model.clone(),
+            log.message_id.clone().unwrap_or_default(),
+            log.input_tokens.to_string(),
+            log.output_tokens.to_string(),
+            log.cache_creation_tokens.to_string(),
+            log.cache_read_tokens.to_string(),
+            log.request_status.clone(),
+            log.response_type.clone(),
+            log.error_type.clone().unwrap_or_default(),
+            log.error_detail.clone().unwrap_or_default(),
+        ];
+
+        let params_refs: Vec<&str> = params.iter().map(|s| s.as_str()).collect();
+
+        manager
+            .execute(
+                "INSERT INTO token_logs (
+                    tool_type, timestamp, client_ip, session_id, config_name,
+                    model, message_id, input_tokens, output_tokens,
+                    cache_creation_tokens, cache_read_tokens,
+                    request_status, response_type, error_type, error_detail
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+                &params_refs,
+            )
+            .context("Failed to insert token log")?;
+
+        // 获取最后插入的ID
         let rows = manager
             .query("SELECT max(id) as last_id FROM token_logs", &[])
             .context("Failed to query last insert id")?;
@@ -209,7 +286,8 @@ impl TokenStatsDb {
         let list_sql = format!(
             "SELECT id, tool_type, timestamp, client_ip, session_id, config_name,
                     model, message_id, input_tokens, output_tokens,
-                    cache_creation_tokens, cache_read_tokens
+                    cache_creation_tokens, cache_read_tokens,
+                    request_status, response_type, error_type, error_detail
              FROM token_logs {}
              ORDER BY timestamp DESC
              LIMIT ? OFFSET ?",
@@ -267,6 +345,28 @@ impl TokenStatsDb {
                     output_tokens: row.values.get(9).and_then(|v| v.as_i64()).unwrap_or(0),
                     cache_creation_tokens: row.values.get(10).and_then(|v| v.as_i64()).unwrap_or(0),
                     cache_read_tokens: row.values.get(11).and_then(|v| v.as_i64()).unwrap_or(0),
+                    request_status: row
+                        .values
+                        .get(12)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("success")
+                        .to_string(),
+                    response_type: row
+                        .values
+                        .get(13)
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    error_type: row
+                        .values
+                        .get(14)
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    error_detail: row
+                        .values
+                        .get(15)
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
                 })
             })
             .collect::<Result<Vec<TokenLog>>>()?;
@@ -320,6 +420,13 @@ impl TokenStatsDb {
             deleted_count += count;
         }
 
+        // 执行 WAL checkpoint 回写主文件
+        if deleted_count > 0 {
+            manager
+                .execute_raw("PRAGMA wal_checkpoint(TRUNCATE)")
+                .context("Failed to checkpoint WAL")?;
+        }
+
         Ok(deleted_count)
     }
 
@@ -347,6 +454,38 @@ impl TokenStatsDb {
         let newest = row.values.get(2).and_then(|v| v.as_i64());
 
         Ok((total, oldest, newest))
+    }
+
+    /// 强制执行 WAL checkpoint（手动触发）
+    ///
+    /// 将 WAL 文件中的所有数据回写到主数据库文件，
+    /// 用于清理过大的 WAL 文件
+    pub fn force_checkpoint(&self) -> Result<()> {
+        let manager = DataManager::global()
+            .sqlite(&self.db_path)
+            .context("Failed to get SQLite manager")?;
+
+        manager
+            .execute_raw("PRAGMA wal_checkpoint(TRUNCATE)")
+            .context("Failed to execute WAL checkpoint")?;
+
+        Ok(())
+    }
+
+    /// 执行 PASSIVE checkpoint
+    ///
+    /// 尽可能多地将 WAL 数据回写到主文件，但不阻塞其他操作。
+    /// 适合在批量写入后执行，性能影响最小。
+    pub fn passive_checkpoint(&self) -> Result<()> {
+        let manager = DataManager::global()
+            .sqlite(&self.db_path)
+            .context("Failed to get SQLite manager")?;
+
+        manager
+            .execute_raw("PRAGMA wal_checkpoint(PASSIVE)")
+            .context("Failed to execute PASSIVE checkpoint")?;
+
+        Ok(())
     }
 }
 
@@ -392,6 +531,10 @@ mod tests {
             500,
             100,
             200,
+            "success".to_string(),
+            "json".to_string(),
+            None,
+            None,
         );
 
         let id = db.insert_log(&log).unwrap();
@@ -422,6 +565,10 @@ mod tests {
                 50,
                 10,
                 20,
+                "success".to_string(),
+                "sse".to_string(),
+                None,
+                None,
             );
             db.insert_log(&log).unwrap();
         }
@@ -464,6 +611,10 @@ mod tests {
             50,
             0,
             0,
+            "success".to_string(),
+            "json".to_string(),
+            None,
+            None,
         );
         db.insert_log(&old_log).unwrap();
 
@@ -475,10 +626,14 @@ mod tests {
             "default".to_string(),
             "claude-3".to_string(),
             None,
+            200,
             100,
-            50,
             0,
             0,
+            "success".to_string(),
+            "json".to_string(),
+            None,
+            None,
         );
         db.insert_log(&new_log).unwrap();
 

@@ -295,6 +295,7 @@ fn main() {
         query_token_logs,
         cleanup_token_logs,
         get_token_stats_summary,
+        force_token_stats_checkpoint,
         // 配置监听控制
         block_external_change,
         allow_external_change,
@@ -377,11 +378,24 @@ fn main() {
         set_selected_provider_id,
     ]);
 
-    // 使用自定义事件循环处理 macOS Reopen 事件
+    // 使用自定义事件循环处理 macOS Reopen 事件和应用关闭
     builder
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
+            // 处理应用关闭事件
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                tracing::info!("应用正在关闭，执行清理任务...");
+
+                // 关闭会话管理器后台任务
+                duckcoding::services::session::shutdown_session_manager();
+
+                // 关闭 Token 统计后台任务
+                duckcoding::services::token_stats::shutdown_token_stats_manager();
+
+                tracing::info!("清理任务完成");
+            }
+
             #[cfg(not(target_os = "macos"))]
             {
                 let _ = app_handle;

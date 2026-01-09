@@ -89,13 +89,22 @@ impl TokenExtractor for ClaudeTokenExtractor {
     }
 
     fn extract_from_sse_chunk(&self, chunk: &str) -> Result<Option<SseTokenData>> {
-        // SSE格式: data: {...}
+        // SSE格式: data: {...} 或直接 {...}（已去掉前缀）
         let data_line = chunk.trim();
-        if !data_line.starts_with("data: ") {
+
+        // 跳过空行
+        if data_line.is_empty() {
             return Ok(None);
         }
 
-        let json_str = &data_line[6..]; // 去掉 "data: " 前缀
+        // 兼容处理：去掉 "data: " 前缀（如果存在）
+        let json_str = if let Some(stripped) = data_line.strip_prefix("data: ") {
+            stripped
+        } else {
+            data_line
+        };
+
+        // 跳过 [DONE] 标记
         if json_str.trim() == "[DONE]" {
             return Ok(None);
         }
@@ -235,7 +244,9 @@ impl TokenExtractor for ClaudeTokenExtractor {
 
 /// 创建Token提取器工厂函数
 pub fn create_extractor(tool_type: &str) -> Result<Box<dyn TokenExtractor>> {
-    match tool_type {
+    // 支持破折号和下划线两种格式
+    let normalized = tool_type.replace('-', "_");
+    match normalized.as_str() {
         "claude_code" => Ok(Box::new(ClaudeTokenExtractor)),
         // 预留扩展点
         "codex" => anyhow::bail!("Codex token extractor not implemented yet"),

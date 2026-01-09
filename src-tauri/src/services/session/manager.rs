@@ -139,6 +139,8 @@ impl SessionManager {
 
     /// 批量写入事件到数据库
     fn flush_events(manager: &Arc<DataManager>, db_path: &Path, buffer: &mut Vec<SessionEvent>) {
+        let mut has_writes = false;
+
         for event in buffer.drain(..) {
             match event {
                 SessionEvent::NewRequest {
@@ -150,8 +152,9 @@ impl SessionManager {
                     if let Some(display_id) = ProxySession::extract_display_id(&session_id) {
                         // Upsert 会话
                         if let Ok(db) = manager.sqlite(db_path) {
-                            let _ = db.execute(
-                                "INSERT INTO claude_proxy_sessions (
+                            if db
+                                .execute(
+                                    "INSERT INTO claude_proxy_sessions (
                                     session_id, display_id, tool_id, config_name, url, api_key,
                                     first_seen_at, last_seen_at, request_count,
                                     created_at, updated_at
@@ -160,11 +163,22 @@ impl SessionManager {
                                     last_seen_at = ?4,
                                     request_count = request_count + 1,
                                     updated_at = ?4",
-                                &[&session_id, &display_id, &tool_id, &timestamp.to_string()],
-                            );
+                                    &[&session_id, &display_id, &tool_id, &timestamp.to_string()],
+                                )
+                                .is_ok()
+                            {
+                                has_writes = true;
+                            }
                         }
                     }
                 }
+            }
+        }
+
+        // 批量写入后执行 PASSIVE checkpoint（不阻塞，性能最优）
+        if has_writes {
+            if let Ok(db) = manager.sqlite(db_path) {
+                let _ = db.execute_raw("PRAGMA wal_checkpoint(PASSIVE)");
             }
         }
     }
@@ -209,7 +223,14 @@ impl SessionManager {
             0
         };
 
-        Ok(deleted_by_age + deleted_by_count)
+        let total_deleted = deleted_by_age + deleted_by_count;
+
+        // 执行 WAL checkpoint 回写主文件
+        if total_deleted > 0 {
+            let _ = db.execute_raw("PRAGMA wal_checkpoint(TRUNCATE)");
+        }
+
+        Ok(total_deleted)
     }
 
     /// 发送会话事件（公共 API）
@@ -264,20 +285,32 @@ impl SessionManager {
     /// 删除单个会话（公共 API）
     pub fn delete_session(&self, session_id: &str) -> Result<()> {
         let db = self.manager.sqlite(&self.db_path)?;
-        db.execute(
+        let deleted = db.execute(
             "DELETE FROM claude_proxy_sessions WHERE session_id = ?",
             &[session_id],
         )?;
+
+        // 执行 PASSIVE checkpoint（不阻塞）
+        if deleted > 0 {
+            let _ = db.execute_raw("PRAGMA wal_checkpoint(PASSIVE)");
+        }
+
         Ok(())
     }
 
     /// 清空工具所有会话（公共 API）
     pub fn clear_sessions(&self, tool_id: &str) -> Result<()> {
         let db = self.manager.sqlite(&self.db_path)?;
-        db.execute(
+        let deleted = db.execute(
             "DELETE FROM claude_proxy_sessions WHERE tool_id = ?",
             &[tool_id],
         )?;
+
+        // 执行 PASSIVE checkpoint（不阻塞）
+        if deleted > 0 {
+            let _ = db.execute_raw("PRAGMA wal_checkpoint(PASSIVE)");
+        }
+
         Ok(())
     }
 
@@ -325,7 +358,7 @@ impl SessionManager {
         let db = self.manager.sqlite(&self.db_path)?;
         let now = chrono::Utc::now().timestamp();
 
-        db.execute(
+        let updated = db.execute(
             "UPDATE claude_proxy_sessions
              SET config_name = ?, custom_profile_name = ?, url = ?, api_key = ?, updated_at = ?
              WHERE session_id = ?",
@@ -339,6 +372,11 @@ impl SessionManager {
             ],
         )?;
 
+        // 执行 PASSIVE checkpoint（不阻塞）
+        if updated > 0 {
+            let _ = db.execute_raw("PRAGMA wal_checkpoint(PASSIVE)");
+        }
+
         Ok(())
     }
 
@@ -347,10 +385,15 @@ impl SessionManager {
         let db = self.manager.sqlite(&self.db_path)?;
         let now = chrono::Utc::now().timestamp();
 
-        db.execute(
+        let updated = db.execute(
             "UPDATE claude_proxy_sessions SET note = ?, updated_at = ? WHERE session_id = ?",
             &[note.unwrap_or(""), &now.to_string(), session_id],
         )?;
+
+        // 执行 PASSIVE checkpoint（不阻塞）
+        if updated > 0 {
+            let _ = db.execute_raw("PRAGMA wal_checkpoint(PASSIVE)");
+        }
 
         Ok(())
     }

@@ -7,7 +7,7 @@
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
-use http_body_util::BodyExt;
+use http_body_util::{BodyExt, Full};
 use hyper::body::{Frame, Incoming};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -244,6 +244,35 @@ async fn handle_request_inner(
     let method = req.method().clone();
     let headers = req.headers().clone();
 
+    // 拦截 count_tokens 接口，不转发到上游，直接返回权限错误
+    if path == "/v1/messages/count_tokens" {
+        tracing::warn!("拦截 count_tokens 请求，返回权限错误");
+        let error_response = serde_json::json!({
+            "type": "error",
+            "error": {
+                "type": "permission_error",
+                "message": "count_tokens endpoint is not enabled for this channel. Please enable it in channel settings."
+            }
+        });
+        let response_body = serde_json::to_string(&error_response)
+            .unwrap_or_else(|_| r#"{"type":"error","error":{"type":"internal_error","message":"Failed to serialize error response"}}"#.to_string());
+
+        return Response::builder()
+            .status(StatusCode::FORBIDDEN)
+            .header("content-type", "application/json")
+            .body(box_body(Full::new(Bytes::from(response_body))))
+            .map_err(|e| anyhow::anyhow!("Failed to build count_tokens error response: {}", e));
+    }
+
+    // 提取客户端IP（用于日志记录）
+    let client_ip = req
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .unwrap_or("unknown")
+        .to_string();
+
     let base = proxy_config
         .real_base_url
         .as_ref()
@@ -297,7 +326,12 @@ async fn handle_request_inner(
     }
 
     // 发送请求
-    let upstream_res = reqwest_builder.send().await.context("上游请求失败")?;
+    let upstream_res = match reqwest_builder.send().await {
+        Ok(res) => res,
+        Err(e) => {
+            return Err(anyhow::anyhow!("上游请求失败: {}", e));
+        }
+    };
 
     // 构建响应
     let status = StatusCode::from_u16(upstream_res.status().as_u16())
@@ -320,20 +354,110 @@ async fn handle_request_inner(
 
     if is_sse {
         tracing::debug!(tool_id = %tool_id, "SSE 流式响应");
+
+        // SSE 流式响应：收集响应体并调用 processor.record_request_log
         use futures_util::StreamExt;
+        use std::sync::{Arc, Mutex};
+
+        let config_name = proxy_config
+            .real_profile_name
+            .clone()
+            .unwrap_or_else(|| "default".to_string());
+
+        // 使用 Arc<Mutex<Vec>> 在流处理过程中收集数据
+        let sse_chunks = Arc::new(Mutex::new(Vec::new()));
+        let sse_chunks_clone = Arc::clone(&sse_chunks);
 
         let stream = upstream_res.bytes_stream();
-        let mapped_stream = stream.map(|result| {
+
+        // 拦截流数据并收集
+        let mapped_stream = stream.map(move |result| {
+            if let Ok(chunk) = &result {
+                if let Ok(mut chunks) = sse_chunks_clone.lock() {
+                    chunks.push(chunk.clone());
+                }
+            }
             result
                 .map(Frame::data)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
         });
 
+        // 在流结束后异步记录日志
+        let processor_clone = Arc::clone(&processor);
+        let client_ip_clone = client_ip.clone();
+        let request_body_clone = processed.body.clone();
+        let response_status = status.as_u16();
+
+        tokio::spawn(async move {
+            // 等待流结束（延迟确保所有 chunks 已收集）
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
+            let chunks = match sse_chunks.lock() {
+                Ok(guard) => guard.clone(),
+                Err(e) => {
+                    tracing::error!(error = ?e, "获取 SSE chunks 锁失败");
+                    return;
+                }
+            };
+
+            // 将所有 chunk 合并为完整响应体
+            let mut full_data = Vec::new();
+            for chunk in &chunks {
+                full_data.extend_from_slice(chunk);
+            }
+
+            // 调用工具特定的日志记录
+            if let Err(e) = processor_clone
+                .record_request_log(
+                    &client_ip_clone,
+                    &config_name,
+                    &request_body_clone,
+                    response_status,
+                    &full_data,
+                    true, // is_sse
+                )
+                .await
+            {
+                tracing::error!(error = ?e, "SSE 流日志记录失败");
+            }
+        });
+
         let body = http_body_util::StreamBody::new(mapped_stream);
         Ok(response.body(box_body(body)).unwrap())
     } else {
-        // 普通响应
+        // 普通响应：读取响应体并调用 processor.record_request_log
         let body_bytes = upstream_res.bytes().await.context("读取响应体失败")?;
+
+        // 获取配置名称
+        let config_name = proxy_config
+            .real_profile_name
+            .clone()
+            .unwrap_or_else(|| "default".to_string());
+
+        // 异步记录日志
+        let processor_clone = Arc::clone(&processor);
+        let client_ip_clone = client_ip.clone();
+        let request_body_clone = processed.body.clone();
+        let response_body_clone = body_bytes.clone();
+        let response_status = status.as_u16();
+
+        tokio::spawn(async move {
+            // 调用工具特定的日志记录
+            if let Err(e) = processor_clone
+                .record_request_log(
+                    &client_ip_clone,
+                    &config_name,
+                    &request_body_clone,
+                    response_status,
+                    &response_body_clone,
+                    false, // is_sse
+                )
+                .await
+            {
+                tracing::error!(error = ?e, "日志记录失败");
+            }
+        });
+
         Ok(response
             .body(box_body(http_body_util::Full::new(body_bytes)))
             .unwrap())

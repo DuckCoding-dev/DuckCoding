@@ -430,8 +430,8 @@ impl ProfileManager {
                 // TOML 文件：读取后转换为 JSON
                 let doc = manager.toml().read_document(&config_path)?;
                 let toml_str = doc.to_string();
-                let toml_value: toml::Value = toml::from_str(&toml_str)
-                    .map_err(|e| anyhow!("TOML 解析失败: {}", e))?;
+                let toml_value: toml::Value =
+                    toml::from_str(&toml_str).map_err(|e| anyhow!("TOML 解析失败: {}", e))?;
                 serde_json::to_value(toml_value)?
             } else if filename.ends_with(".env") || filename == ".env" {
                 // ENV 文件：读取为 HashMap 后转换为 JSON

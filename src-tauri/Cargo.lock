@@ -891,6 +891,7 @@ dependencies = [
  "chrono",
  "cocoa",
  "dirs",
+ "flate2",
  "fs2",
  "futures-util",
  "http-body-util",
@@ -927,6 +928,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "urlencoding",
+ "uuid",
  "winreg 0.52.0",
 ]
 

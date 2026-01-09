@@ -2,8 +2,10 @@
 // 提供三工具透明代理的统一管理界面
 
 import { useState, useEffect } from 'react';
+import { emit } from '@tauri-apps/api/event';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, BarChart3 } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { useToast } from '@/hooks/use-toast';
 import { logoMap } from '@/utils/constants';
@@ -41,6 +43,20 @@ interface TransparentProxyPageProps {
 export function TransparentProxyPage({ selectedToolId: initialToolId }: TransparentProxyPageProps) {
   const { toast } = useToast();
   const [selectedToolId, setSelectedToolId] = useState<ToolId>('claude-code');
+
+  // 导航到 Token 统计页面
+  const handleNavigateToTokenStats = async () => {
+    try {
+      await emit('app-navigate', { tab: 'token-statistics' });
+    } catch (error) {
+      console.error('导航失败:', error);
+      toast({
+        title: '导航失败',
+        description: '无法打开统计页面',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // 当外部传入 toolId 时，更新选中状态
   useEffect(() => {
@@ -99,11 +115,19 @@ export function TransparentProxyPage({ selectedToolId: initialToolId }: Transpar
   return (
     <PageContainer>
       {/* 页面标题 */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold mb-1">透明代理</h2>
-        <p className="text-sm text-muted-foreground">
-          为不同 AI 编程工具提供统一的透明代理服务，支持配置热切换
-        </p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold mb-1">透明代理</h2>
+          <p className="text-sm text-muted-foreground">
+            为不同 AI 编程工具提供统一的透明代理服务，支持配置热切换
+          </p>
+        </div>
+
+        {/* 统计按钮 */}
+        <Button variant="outline" onClick={handleNavigateToTokenStats} className="gap-2">
+          <BarChart3 className="h-4 w-4" />
+          查看统计
+        </Button>
       </div>
 
       {/* 三工具 Tab 切换 */}

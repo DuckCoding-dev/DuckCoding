@@ -39,6 +39,17 @@ pub async fn get_token_stats_summary() -> Result<(i64, Option<i64>, Option<i64>)
         .map_err(|e| e.to_string())
 }
 
+/// 强制执行 WAL checkpoint
+///
+/// 将 WAL 文件中的所有数据回写到主数据库文件，
+/// 用于手动清理过大的 WAL 文件
+#[tauri::command]
+pub async fn force_token_stats_checkpoint() -> Result<(), String> {
+    TokenStatsManager::get()
+        .force_checkpoint()
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -89,6 +89,33 @@ pub trait RequestProcessor: Send + Sync + std::fmt::Debug {
     fn should_process_response(&self) -> bool {
         false
     }
+
+    /// 记录请求日志（包括 Token 统计）
+    ///
+    /// 不同的 AI 工具有不同的数据格式和会话 ID 提取方式，
+    /// 因此每个工具需要实现自己的日志记录逻辑。
+    ///
+    /// # 参数
+    /// - `client_ip`: 客户端 IP 地址
+    /// - `config_name`: 配置名称（"global" 或 Profile 名称）
+    /// - `request_body`: 请求体字节数组
+    /// - `response_status`: HTTP 响应状态码
+    /// - `response_body`: 响应体字节数组
+    /// - `is_sse`: 是否为 SSE 流式响应
+    ///
+    /// # 默认实现
+    /// 默认不记录日志（空操作）
+    async fn record_request_log(
+        &self,
+        _client_ip: &str,
+        _config_name: &str,
+        _request_body: &[u8],
+        _response_status: u16,
+        _response_body: &[u8],
+        _is_sse: bool,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// 创建请求处理器工厂函数

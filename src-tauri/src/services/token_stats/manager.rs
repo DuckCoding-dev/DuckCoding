@@ -8,9 +8,16 @@ use anyhow::{Context, Result};
 use once_cell::sync::OnceCell;
 use serde_json::Value;
 use std::path::PathBuf;
+use tokio::sync::mpsc;
+use tokio::time::{interval, Duration};
+use tokio_util::sync::CancellationToken;
 
 /// 全局 TokenStatsManager 单例
 static TOKEN_STATS_MANAGER: OnceCell<TokenStatsManager> = OnceCell::new();
+
+/// 全局取消令牌，用于优雅关闭后台任务
+static CANCELLATION_TOKEN: once_cell::sync::Lazy<CancellationToken> =
+    once_cell::sync::Lazy::new(CancellationToken::new);
 
 /// 响应数据类型
 pub enum ResponseData {
@@ -23,6 +30,7 @@ pub enum ResponseData {
 /// Token统计管理器
 pub struct TokenStatsManager {
     db: TokenStatsDb,
+    event_sender: mpsc::UnboundedSender<TokenLog>,
 }
 
 impl TokenStatsManager {
@@ -37,7 +45,15 @@ impl TokenStatsManager {
                 eprintln!("Failed to initialize token stats database: {}", e);
             }
 
-            TokenStatsManager { db }
+            // 创建事件队列
+            let (event_sender, event_receiver) = mpsc::unbounded_channel();
+
+            let manager = TokenStatsManager { db, event_sender };
+
+            // 启动后台任务
+            manager.start_background_tasks(event_receiver);
+
+            manager
         })
     }
 
@@ -46,6 +62,93 @@ impl TokenStatsManager {
         config_dir()
             .map(|dir| dir.join("token_stats.db"))
             .unwrap_or_else(|_| PathBuf::from("token_stats.db"))
+    }
+
+    /// 启动后台任务
+    fn start_background_tasks(&self, mut event_receiver: mpsc::UnboundedReceiver<TokenLog>) {
+        let db = self.db.clone();
+
+        // 批量写入任务
+        tokio::spawn(async move {
+            let mut buffer: Vec<TokenLog> = Vec::new();
+            let mut tick_interval = interval(Duration::from_millis(100));
+
+            loop {
+                tokio::select! {
+                    _ = CANCELLATION_TOKEN.cancelled() => {
+                        // 应用关闭，刷盘缓冲区
+                        if !buffer.is_empty() {
+                            Self::flush_logs(&db, &mut buffer, true);
+                            tracing::info!("Token 日志已刷盘: {} 条", buffer.len());
+                        }
+                        tracing::info!("Token 批量写入任务已停止");
+                        break;
+                    }
+                    // 接收日志事件
+                    Some(log) = event_receiver.recv() => {
+                        buffer.push(log);
+
+                        // 如果缓冲区达到 10 条，立即写入
+                        if buffer.len() >= 10 {
+                            Self::flush_logs(&db, &mut buffer, false);
+                        }
+                    }
+                    // 每 100ms 刷新一次
+                    _ = tick_interval.tick() => {
+                        if !buffer.is_empty() {
+                            Self::flush_logs(&db, &mut buffer, false);
+                        }
+                    }
+                }
+            }
+        });
+
+        // 定期 TRUNCATE checkpoint 任务（每 5 分钟）
+        let db_clone = self.db.clone();
+        tokio::spawn(async move {
+            let mut checkpoint_interval = interval(Duration::from_secs(300)); // 5分钟
+
+            loop {
+                tokio::select! {
+                    _ = CANCELLATION_TOKEN.cancelled() => {
+                        tracing::info!("Token Checkpoint 任务已停止");
+                        break;
+                    }
+                    _ = checkpoint_interval.tick() => {
+                        if let Err(e) = db_clone.force_checkpoint() {
+                            tracing::error!("定期 Checkpoint 失败: {}", e);
+                        } else {
+                            tracing::debug!("Token 数据库 TRUNCATE checkpoint 完成");
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    /// 批量写入日志到数据库
+    ///
+    /// # 参数
+    /// - `db`: 数据库实例
+    /// - `buffer`: 日志缓冲区
+    /// - `use_truncate`: 是否使用 TRUNCATE checkpoint（应用关闭时使用）
+    fn flush_logs(db: &TokenStatsDb, buffer: &mut Vec<TokenLog>, use_truncate: bool) {
+        for log in buffer.drain(..) {
+            if let Err(e) = db.insert_log_without_checkpoint(&log) {
+                tracing::error!("插入 Token 日志失败: {}", e);
+            }
+        }
+
+        // 批量写入后执行 checkpoint
+        let checkpoint_result = if use_truncate {
+            db.force_checkpoint() // TRUNCATE模式
+        } else {
+            db.passive_checkpoint() // PASSIVE模式
+        };
+
+        if let Err(e) = checkpoint_result {
+            tracing::error!("Checkpoint 失败: {}", e);
+        }
     }
 
     /// 记录请求日志
@@ -75,13 +178,19 @@ impl TokenStatsManager {
             .extract_model_from_request(request_body)
             .context("Failed to extract model from request")?;
 
+        // 确定响应类型
+        let response_type = match &response_data {
+            ResponseData::Sse(_) => "sse",
+            ResponseData::Json(_) => "json",
+        };
+
         // 提取响应中的Token信息
         let token_info = match response_data {
             ResponseData::Sse(chunks) => self.parse_sse_chunks(&*extractor, chunks)?,
             ResponseData::Json(json) => extractor.extract_from_json(&json)?,
         };
 
-        // 创建日志记录
+        // 创建日志记录（成功）
         let timestamp = chrono::Utc::now().timestamp_millis();
         let log = TokenLog::new(
             tool_type.to_string(),
@@ -95,15 +204,77 @@ impl TokenStatsManager {
             token_info.output_tokens,
             token_info.cache_creation_tokens,
             token_info.cache_read_tokens,
+            "success".to_string(),
+            response_type.to_string(),
+            None,
+            None,
         );
 
-        // 插入数据库（异步执行，不阻塞代理响应）
-        let db = self.db.clone();
-        tokio::task::spawn_blocking(move || {
-            if let Err(e) = db.insert_log(&log) {
-                eprintln!("Failed to insert token log: {}", e);
-            }
-        });
+        // 发送到批量写入队列（异步，不阻塞）
+        if let Err(e) = self.event_sender.send(log) {
+            tracing::error!("发送 Token 日志事件失败: {}", e);
+        }
+
+        Ok(())
+    }
+
+    /// 记录失败的请求
+    ///
+    /// # 参数
+    ///
+    /// - `tool_type`: 工具类型
+    /// - `session_id`: 会话ID
+    /// - `config_name`: 配置名称
+    /// - `client_ip`: 客户端IP
+    /// - `request_body`: 请求体（用于提取model，失败时可能为空）
+    /// - `error_type`: 错误类型（parse_error/request_interrupted/upstream_error）
+    /// - `error_detail`: 错误详情
+    /// - `response_type`: 响应类型（sse/json/unknown）
+    #[allow(clippy::too_many_arguments)]
+    pub async fn log_failed_request(
+        &self,
+        tool_type: &str,
+        session_id: &str,
+        config_name: &str,
+        client_ip: &str,
+        request_body: &[u8],
+        error_type: &str,
+        error_detail: &str,
+        response_type: &str,
+    ) -> Result<()> {
+        // 尝试提取模型名称（失败时使用 "unknown"）
+        let model = if !request_body.is_empty() {
+            create_extractor(tool_type)
+                .and_then(|extractor| extractor.extract_model_from_request(request_body))
+                .unwrap_or_else(|_| "unknown".to_string())
+        } else {
+            "unknown".to_string()
+        };
+
+        // 创建日志记录（失败）
+        let timestamp = chrono::Utc::now().timestamp_millis();
+        let log = TokenLog::new(
+            tool_type.to_string(),
+            timestamp,
+            client_ip.to_string(),
+            session_id.to_string(),
+            config_name.to_string(),
+            model,
+            None, // 失败时没有 message_id
+            0,    // 失败时 token 数量为 0
+            0,
+            0,
+            0,
+            "failed".to_string(),
+            response_type.to_string(),
+            Some(error_type.to_string()),
+            Some(error_detail.to_string()),
+        );
+
+        // 发送到批量写入队列
+        if let Err(e) = self.event_sender.send(log) {
+            tracing::error!("发送失败请求日志事件失败: {}", e);
+        }
 
         Ok(())
     }
@@ -117,18 +288,37 @@ impl TokenStatsManager {
         let mut message_start: Option<MessageStartData> = None;
         let mut message_delta: Option<MessageDeltaData> = None;
 
-        for chunk in chunks {
-            if let Some(data) = extractor
-                .extract_from_sse_chunk(&chunk)
-                .context("Failed to extract from SSE chunk")?
-            {
-                if let Some(start) = data.message_start {
-                    message_start = Some(start);
+        for (i, chunk) in chunks.iter().enumerate() {
+            match extractor.extract_from_sse_chunk(chunk) {
+                Ok(Some(data)) => {
+                    if let Some(start) = data.message_start {
+                        tracing::debug!(chunk_index = i, "找到 message_start 事件");
+                        message_start = Some(start);
+                    }
+                    if let Some(delta) = data.message_delta {
+                        tracing::debug!(chunk_index = i, "找到 message_delta 事件");
+                        message_delta = Some(delta);
+                    }
                 }
-                if let Some(delta) = data.message_delta {
-                    message_delta = Some(delta);
+                Ok(None) => {
+                    // 正常跳过非数据块（如 ping、空行等）
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        chunk_index = i,
+                        error = ?e,
+                        chunk_preview = %chunk.chars().take(100).collect::<String>(),
+                        "SSE chunk 解析失败"
+                    );
                 }
             }
+        }
+
+        if message_start.is_none() {
+            tracing::error!(
+                chunks_count = chunks.len(),
+                "所有 SSE chunks 中未找到 message_start 事件"
+            );
         }
 
         let start = message_start.context("Missing message_start in SSE stream")?;
@@ -159,6 +349,25 @@ impl TokenStatsManager {
     pub fn get_stats_summary(&self) -> Result<(i64, Option<i64>, Option<i64>)> {
         self.db.get_stats_summary()
     }
+
+    /// 强制执行 WAL checkpoint
+    ///
+    /// 将所有 WAL 数据回写到主数据库文件，
+    /// 用于手动清理过大的 WAL 文件
+    pub fn force_checkpoint(&self) -> Result<()> {
+        self.db.force_checkpoint()
+    }
+}
+
+/// 关闭 TokenStatsManager 后台任务
+///
+/// 在应用关闭时调用，优雅地停止所有后台任务并刷盘缓冲区数据
+pub fn shutdown_token_stats_manager() {
+    tracing::info!("TokenStatsManager 关闭信号已发送");
+    CANCELLATION_TOKEN.cancel();
+
+    // 等待一小段时间让任务完成刷盘
+    std::thread::sleep(std::time::Duration::from_millis(300));
 }
 
 #[cfg(test)]
@@ -247,6 +456,10 @@ mod tests {
             50,
             10,
             20,
+            "success".to_string(),
+            "json".to_string(),
+            None,
+            None,
         );
         manager.db.insert_log(&log).unwrap();
 
