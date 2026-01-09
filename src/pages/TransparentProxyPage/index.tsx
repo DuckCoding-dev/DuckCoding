@@ -18,7 +18,7 @@ const SUPPORTED_TOOLS: ToolMetadata[] = [
   { id: 'claude-code', name: 'Claude Code', icon: logoMap['claude-code'] },
   { id: 'codex', name: 'CodeX', icon: logoMap.codex },
   { id: 'gemini-cli', name: 'Gemini CLI', icon: logoMap['gemini-cli'] },
-  { id: 'amp-code', name: 'Amp Code', icon: logoMap['amp-code'] },
+  { id: 'amp-code', name: 'AMP Code', icon: logoMap['amp-code'] },
 ];
 
 interface TransparentProxyPageProps {

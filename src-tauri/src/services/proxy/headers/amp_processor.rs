@@ -1,4 +1,4 @@
-// Amp Code 请求处理器
+// AMP Code 请求处理器
 //
 // 路由逻辑：
 // 1. /api/provider/anthropic/* → Claude Profile（提取 /v1/messages）
@@ -26,6 +26,8 @@ enum ApiType {
     Codex,
     Gemini,
 }
+
+const TOOL_PREFIX: &str = "dc_";
 
 impl AmpHeadersProcessor {
     fn detect_api_type(path: &str, headers: &HyperHeaderMap, body: &[u8]) -> ApiType {
@@ -154,6 +156,29 @@ impl AmpHeadersProcessor {
         }
     }
 
+        fn add_tool_prefix(body: &[u8]) -> Vec<u8> {
+        if body.is_empty() {
+            return body.to_vec();
+        }
+
+        let Ok(mut json) = serde_json::from_slice::<serde_json::Value>(body) else {
+            return body.to_vec();
+        };
+
+        if let Some(tools) = json.get_mut("tools").and_then(|t| t.as_array_mut()) {
+            for tool in tools.iter_mut() {
+                if let Some(name) = tool.get("name").and_then(|n| n.as_str()) {
+                    if !name.starts_with(TOOL_PREFIX) {
+                        tool["name"] =
+                            serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name));
+                    }
+                }
+            }
+        }
+
+        serde_json::to_vec(&json).unwrap_or_else(|_| body.to_vec())
+    }
+    
     async fn forward_to_amp(
         path: &str,
         query: Option<&str>,
@@ -166,11 +191,11 @@ impl AmpHeadersProcessor {
         let config = proxy_mgr
             .get_config("amp-code")
             .map_err(|e| anyhow!("读取配置失败: {}", e))?
-            .ok_or_else(|| anyhow!("Amp Code 代理未配置"))?;
+            .ok_or_else(|| anyhow!("AMP Code 代理未配置"))?;
 
         let token = config
             .real_api_key
-            .ok_or_else(|| anyhow!("Amp Code Access Token 未配置"))?;
+            .ok_or_else(|| anyhow!("AMP Code Access Token 未配置"))?;
 
         let base_url = config
             .real_base_url
@@ -181,7 +206,7 @@ impl AmpHeadersProcessor {
             None => format!("{}{}", base_url, path),
         };
 
-        tracing::info!("Amp Code → ampcode.com: {}", target_url);
+        tracing::info!("AMP Code → ampcode.com: {}", target_url);
 
         let mut new_headers = headers.clone();
         new_headers.remove(hyper::header::AUTHORIZATION);
@@ -217,7 +242,7 @@ impl RequestProcessor for AmpHeadersProcessor {
         body: &[u8],
     ) -> Result<ProcessedRequest> {
         let api_type = Self::detect_api_type(path, original_headers, body);
-        tracing::debug!("Amp Code 路由: path={}, type={:?}", path, api_type);
+        tracing::debug!("AMP Code 路由: path={}, type={:?}", path, api_type);
 
         if api_type == ApiType::AmpInternal {
             return Self::forward_to_amp(path, query, original_headers, body).await;
@@ -236,7 +261,9 @@ impl RequestProcessor for AmpHeadersProcessor {
         match api_type {
             ApiType::Claude => {
                 let p = claude.ok_or_else(|| anyhow!("未配置 Claude Profile"))?;
-                tracing::info!("Amp Code → Claude: {}{}", p.base_url, llm_path);
+                tracing::info!("AMP Code → Claude: {}{}", p.base_url, llm_path);
+                let prefixed_body = Self::add_tool_prefix(body);
+
                 let mut result = ClaudeHeadersProcessor
                     .process_outgoing_request(
                         &p.base_url,
@@ -244,7 +271,7 @@ impl RequestProcessor for AmpHeadersProcessor {
                         &llm_path,
                         query,
                         original_headers,
-                        body,
+                        &prefixed_body,
                     )
                     .await?;
 
@@ -257,6 +284,9 @@ impl RequestProcessor for AmpHeadersProcessor {
                 for key in amp_headers {
                     result.headers.remove(&key);
                 }
+
+                result.headers.remove("content-length");
+                result.headers.remove("transfer-encoding");
 
                 result.headers.insert(
                     "user-agent",
@@ -276,7 +306,7 @@ impl RequestProcessor for AmpHeadersProcessor {
             }
             ApiType::Codex => {
                 let p = codex.ok_or_else(|| anyhow!("未配置 Codex Profile"))?;
-                tracing::info!("Amp Code → Codex: {}{}", p.base_url, llm_path);
+                tracing::info!("AMP Code → Codex: {}{}", p.base_url, llm_path);
                 let mut result = CodexHeadersProcessor
                     .process_outgoing_request(
                         &p.base_url,
@@ -295,7 +325,7 @@ impl RequestProcessor for AmpHeadersProcessor {
             }
             ApiType::Gemini => {
                 let p = gemini.ok_or_else(|| anyhow!("未配置 Gemini Profile"))?;
-                tracing::info!("Amp Code → Gemini: {}{}", p.base_url, llm_path);
+                tracing::info!("AMP Code → Gemini: {}{}", p.base_url, llm_path);
                 let mut result = GeminiHeadersProcessor
                     .process_outgoing_request(
                         &p.base_url,

@@ -358,11 +358,29 @@ async fn handle_request_inner(
     if is_sse {
         tracing::debug!(tool_id = %tool_id, "SSE 流式响应");
         use futures_util::StreamExt;
+        use regex::Regex;
 
         let stream = upstream_res.bytes_stream();
-        let mapped_stream = stream.map(|result| {
+
+        // amp-code 需要移除工具名前缀
+        let is_amp_code = tool_id == "amp-code";
+        let prefix_regex = Regex::new(r#""name"\s*:\s*"dc_([^"]+)""#).ok();
+
+        let mapped_stream = stream.map(move |result| {
             result
-                .map(Frame::data)
+                .map(|bytes| {
+                    if is_amp_code {
+                        if let Some(ref re) = prefix_regex {
+                            let text = String::from_utf8_lossy(&bytes);
+                            let cleaned = re.replace_all(&text, r#""name": "$1""#);
+                            Frame::data(Bytes::from(cleaned.into_owned()))
+                        } else {
+                            Frame::data(bytes)
+                        }
+                    } else {
+                        Frame::data(bytes)
+                    }
+                })
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
         });
 
@@ -371,8 +389,18 @@ async fn handle_request_inner(
     } else {
         // 普通响应
         let body_bytes = upstream_res.bytes().await.context("读取响应体失败")?;
+
+        let final_body = if tool_id == "amp-code" {
+            let text = String::from_utf8_lossy(&body_bytes);
+            let re = regex::Regex::new(r#""name"\s*:\s*"dc_([^"]+)""#).unwrap();
+            let cleaned = re.replace_all(&text, r#""name": "$1""#);
+            Bytes::from(cleaned.into_owned())
+        } else {
+            body_bytes
+        };
+
         Ok(response
-            .body(box_body(http_body_util::Full::new(body_bytes)))
+            .body(box_body(http_body_util::Full::new(final_body)))
             .unwrap())
     }
 }

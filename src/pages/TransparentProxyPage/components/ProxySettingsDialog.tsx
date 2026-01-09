@@ -199,10 +199,10 @@ export function ProxySettingsDialog({
         session_endpoint_config_enabled: sessionEndpointEnabled,
         auto_start: autoStart,
       };
-      // AMP Access Token 需要一起保存
-      if (toolId === 'amp-code' && ampAccessToken) {
-        updates.real_api_key = ampAccessToken;
-        updates.real_base_url = 'https://ampcode.com';
+      // AMP Access Token 需要一起保存（空值也需要保存以清除配置）
+      if (toolId === 'amp-code') {
+        updates.real_api_key = ampAccessToken || null;
+        updates.real_base_url = ampAccessToken ? 'https://ampcode.com' : null;
       }
       await onSave(updates);
       // 触发配置更新事件

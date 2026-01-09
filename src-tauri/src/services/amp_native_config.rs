@@ -1,4 +1,4 @@
-//! Amp Code 原生配置文件管理
+//! AMP Code 原生配置文件管理
 //!
 //! 配置文件位置：
 //! - ~/.config/amp/settings.json - 存储 amp.url
