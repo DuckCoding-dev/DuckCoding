@@ -207,6 +207,9 @@ async fn handle_request_inner(
     own_port: u16,
     tool_id: &str,
 ) -> Result<Response<BoxBody>> {
+    // 记录请求开始时间（用于计算响应时间）
+    let start_time = std::time::Instant::now();
+
     // 获取配置
     let proxy_config = {
         let cfg = config.read().await;
@@ -364,6 +367,8 @@ async fn handle_request_inner(
             .clone()
             .unwrap_or_else(|| "default".to_string());
 
+        let proxy_pricing_template_id = proxy_config.pricing_template_id.clone();
+
         // 使用 Arc<Mutex<Vec>> 在流处理过程中收集数据
         let sse_chunks = Arc::new(Mutex::new(Vec::new()));
         let sse_chunks_clone = Arc::clone(&sse_chunks);
@@ -387,6 +392,8 @@ async fn handle_request_inner(
         let client_ip_clone = client_ip.clone();
         let request_body_clone = processed.body.clone();
         let response_status = status.as_u16();
+        let start_time_clone = start_time; // 捕获 start_time 用于计算响应时间
+        let proxy_pricing_template_id_clone = proxy_pricing_template_id.clone();
 
         tokio::spawn(async move {
             // 等待流结束（延迟确保所有 chunks 已收集）
@@ -406,15 +413,20 @@ async fn handle_request_inner(
                 full_data.extend_from_slice(chunk);
             }
 
+            // 计算响应时间
+            let response_time_ms = start_time_clone.elapsed().as_millis() as i64;
+
             // 调用工具特定的日志记录
             if let Err(e) = processor_clone
                 .record_request_log(
                     &client_ip_clone,
                     &config_name,
+                    proxy_pricing_template_id_clone.as_deref(),
                     &request_body_clone,
                     response_status,
                     &full_data,
                     true, // is_sse
+                    Some(response_time_ms),
                 )
                 .await
             {
@@ -434,12 +446,15 @@ async fn handle_request_inner(
             .clone()
             .unwrap_or_else(|| "default".to_string());
 
+        let proxy_pricing_template_id = proxy_config.pricing_template_id.clone();
+
         // 异步记录日志
         let processor_clone = Arc::clone(&processor);
         let client_ip_clone = client_ip.clone();
         let request_body_clone = processed.body.clone();
         let response_body_clone = body_bytes.clone();
         let response_status = status.as_u16();
+        let response_time_ms = start_time.elapsed().as_millis() as i64; // 计算响应时间
 
         tokio::spawn(async move {
             // 调用工具特定的日志记录
@@ -447,10 +462,12 @@ async fn handle_request_inner(
                 .record_request_log(
                     &client_ip_clone,
                     &config_name,
+                    proxy_pricing_template_id.as_deref(),
                     &request_body_clone,
                     response_status,
                     &response_body_clone,
                     false, // is_sse
+                    Some(response_time_ms),
                 )
                 .await
             {

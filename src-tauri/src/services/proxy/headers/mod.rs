@@ -90,6 +90,21 @@ pub trait RequestProcessor: Send + Sync + std::fmt::Debug {
         false
     }
 
+    /// 提取模型名称（用于成本计算）
+    ///
+    /// # 参数
+    /// - `request_body`: 请求体字节数组
+    ///
+    /// # 返回
+    /// - `Some(String)`: 成功提取模型名称
+    /// - `None`: 未找到模型名称或解析失败
+    ///
+    /// # 默认实现
+    /// 默认返回 None（不提取模型）
+    fn extract_model(&self, _request_body: &[u8]) -> Option<String> {
+        None
+    }
+
     /// 记录请求日志（包括 Token 统计）
     ///
     /// 不同的 AI 工具有不同的数据格式和会话 ID 提取方式，
@@ -98,10 +113,12 @@ pub trait RequestProcessor: Send + Sync + std::fmt::Debug {
     /// # 参数
     /// - `client_ip`: 客户端 IP 地址
     /// - `config_name`: 配置名称（"global" 或 Profile 名称）
+    /// - `proxy_pricing_template_id`: 代理配置的价格模板 ID
     /// - `request_body`: 请求体字节数组
     /// - `response_status`: HTTP 响应状态码
     /// - `response_body`: 响应体字节数组
     /// - `is_sse`: 是否为 SSE 流式响应
+    /// - `response_time_ms`: 响应时间（毫秒）
     ///
     /// # 默认实现
     /// 默认不记录日志（空操作）
@@ -109,10 +126,12 @@ pub trait RequestProcessor: Send + Sync + std::fmt::Debug {
         &self,
         _client_ip: &str,
         _config_name: &str,
+        _proxy_pricing_template_id: Option<&str>,
         _request_body: &[u8],
         _response_status: u16,
         _response_body: &[u8],
         _is_sse: bool,
+        _response_time_ms: Option<i64>,
     ) -> Result<()> {
         Ok(())
     }

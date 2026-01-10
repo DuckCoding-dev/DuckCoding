@@ -131,6 +131,23 @@ impl RequestProcessor for ClaudeHeadersProcessor {
     // Claude Code 不需要特殊的响应处理
     // 使用默认实现即可
 
+    /// 提取模型名称
+    fn extract_model(&self, request_body: &[u8]) -> Option<String> {
+        if request_body.is_empty() {
+            return None;
+        }
+
+        // 尝试解析请求体 JSON
+        if let Ok(json_body) = serde_json::from_slice::<serde_json::Value>(request_body) {
+            // Claude API 的模型字段在顶层
+            json_body.get("model")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        } else {
+            None
+        }
+    }
+
     /// Claude Code 的请求日志记录实现
     ///
     /// 从请求体中提取会话 ID（metadata.user_id），根据响应类型解析 Token 统计
@@ -138,10 +155,12 @@ impl RequestProcessor for ClaudeHeadersProcessor {
         &self,
         client_ip: &str,
         config_name: &str,
+        proxy_pricing_template_id: Option<&str>,
         request_body: &[u8],
         response_status: u16,
         response_body: &[u8],
         is_sse: bool,
+        response_time_ms: Option<i64>,
     ) -> Result<()> {
         // 1. 提取会话 ID（从 metadata.user_id 的 _session_ 后部分）
         let session_id = if !request_body.is_empty() {
@@ -160,7 +179,12 @@ impl RequestProcessor for ClaudeHeadersProcessor {
             uuid::Uuid::new_v4().to_string()
         };
 
-        // 2. 检查响应状态
+        // 2. 获取 pricing_template_id（优先级：会话配置 > 代理配置 > None）
+        // TODO: Phase 3.4 后续需要从 get_session_config 返回会话的 pricing_template_id
+        let pricing_template_id: Option<String> =
+            proxy_pricing_template_id.map(|s| s.to_string());
+
+        // 3. 检查响应状态
         let status_code =
             StatusCode::from_u16(response_status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
@@ -191,6 +215,13 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                     client_ip,
                     request_body,
                     response_data,
+                    response_time_ms,
+                    pricing_template_id.clone(),
+                    None, // input_price 由 TokenStatsManager 内部计算
+                    None, // output_price 由 TokenStatsManager 内部计算
+                    None, // cache_write_price 由 TokenStatsManager 内部计算
+                    None, // cache_read_price 由 TokenStatsManager 内部计算
+                    0.0,  // total_cost 由 TokenStatsManager 内部计算
                 )
                 .await
             {
@@ -222,6 +253,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                             "parse_error",
                             &error_detail,
                             response_type,
+                            response_time_ms,
                         )
                         .await;
                 }
@@ -246,6 +278,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                     "upstream_error",
                     &error_detail,
                     response_type,
+                    response_time_ms,
                 )
                 .await;
         }

@@ -2,8 +2,8 @@
 
 use crate::data::DataManager;
 use crate::services::session::db_utils::{
-    parse_count, parse_proxy_session, parse_session_config, ALTER_TABLE_SQL, CREATE_TABLE_SQL,
-    SELECT_SESSION_FIELDS,
+    parse_count, parse_proxy_session, parse_session_config, ALTER_TABLE_STATEMENTS,
+    CREATE_TABLE_SQL, SELECT_SESSION_FIELDS,
 };
 use crate::services::session::models::{ProxySession, SessionEvent, SessionListResponse};
 use anyhow::Result;
@@ -43,8 +43,10 @@ impl SessionManager {
         let db = manager_instance.sqlite(&db_path)?;
         db.execute_raw(CREATE_TABLE_SQL)?;
 
-        // 兼容旧数据库（忽略错误）
-        let _ = db.execute_raw(ALTER_TABLE_SQL);
+        // 兼容旧数据库（逐个执行 ALTER TABLE，忽略重复列错误）
+        for stmt in ALTER_TABLE_STATEMENTS {
+            let _ = db.execute_raw(stmt);
+        }
 
         // 创建事件队列
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
@@ -424,7 +426,9 @@ mod tests {
         // 初始化数据库
         let db = manager_instance.sqlite(&db_path).unwrap();
         db.execute_raw(CREATE_TABLE_SQL).unwrap();
-        let _ = db.execute_raw(ALTER_TABLE_SQL);
+        for stmt in ALTER_TABLE_STATEMENTS {
+            let _ = db.execute_raw(stmt);
+        }
 
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
 

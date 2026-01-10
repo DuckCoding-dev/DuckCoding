@@ -8,7 +8,7 @@ use anyhow::{anyhow, Context, Result};
 
 /// 标准会话查询的 SQL 语句
 ///
-/// **字段顺序（共 13 个）：**
+/// **字段顺序（共 14 个）：**
 /// 1. session_id
 /// 2. display_id
 /// 3. tool_id
@@ -22,10 +22,11 @@ use anyhow::{anyhow, Context, Result};
 /// 11. request_count
 /// 12. created_at
 /// 13. updated_at
+/// 14. pricing_template_id
 pub const SELECT_SESSION_FIELDS: &str = "session_id, display_id, tool_id, config_name, \
                                           custom_profile_name, url, api_key, note, \
                                           first_seen_at, last_seen_at, request_count, \
-                                          created_at, updated_at";
+                                          created_at, updated_at, pricing_template_id";
 
 /// 创建表的 SQL 语句
 pub const CREATE_TABLE_SQL: &str = "
@@ -42,7 +43,8 @@ CREATE TABLE IF NOT EXISTS claude_proxy_sessions (
     last_seen_at INTEGER NOT NULL,
     request_count INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    pricing_template_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_tool_id ON claude_proxy_sessions(tool_id);
@@ -50,10 +52,22 @@ CREATE INDEX IF NOT EXISTS idx_display_id ON claude_proxy_sessions(display_id);
 CREATE INDEX IF NOT EXISTS idx_last_seen_at ON claude_proxy_sessions(last_seen_at);
 ";
 
-/// 兼容旧数据库的字段添加语句
+/// 兼容旧数据库的字段添加语句（每个语句单独执行，忽略重复列错误）
+pub const ALTER_TABLE_STATEMENTS: &[&str] = &[
+    "ALTER TABLE claude_proxy_sessions ADD COLUMN custom_profile_name TEXT",
+    "ALTER TABLE claude_proxy_sessions ADD COLUMN note TEXT",
+    "ALTER TABLE claude_proxy_sessions ADD COLUMN pricing_template_id TEXT",
+];
+
+/// 兼容旧数据库的字段添加语句（已废弃，保留用于向后兼容）
+#[deprecated(
+    since = "1.5.1",
+    note = "请使用 ALTER_TABLE_STATEMENTS 数组，每个语句单独执行"
+)]
 pub const ALTER_TABLE_SQL: &str = "
 ALTER TABLE claude_proxy_sessions ADD COLUMN custom_profile_name TEXT;
 ALTER TABLE claude_proxy_sessions ADD COLUMN note TEXT;
+ALTER TABLE claude_proxy_sessions ADD COLUMN pricing_template_id TEXT;
 ";
 
 /// 从 QueryRow 解析为 ProxySession
@@ -73,9 +87,9 @@ ALTER TABLE claude_proxy_sessions ADD COLUMN note TEXT;
 /// - values[7]: note (可为 NULL)
 /// - values[8..12]: 整数字段
 pub fn parse_proxy_session(row: &QueryRow) -> Result<ProxySession> {
-    if row.values.len() != 13 {
+    if row.values.len() != 14 {
         return Err(anyhow!(
-            "Invalid row: expected 13 columns, got {}",
+            "Invalid row: expected 14 columns, got {}",
             row.values.len()
         ));
     }
@@ -196,6 +210,7 @@ mod tests {
                 "request_count".to_string(),
                 "created_at".to_string(),
                 "updated_at".to_string(),
+                "pricing_template_id".to_string(),
             ],
             values: vec![
                 json!("test_session_1"),
@@ -211,6 +226,7 @@ mod tests {
                 json!(5),
                 json!(1000),
                 json!(2000),
+                json!("anthropic_official"),
             ],
         };
 
@@ -229,6 +245,10 @@ mod tests {
         assert_eq!(session.request_count, 5);
         assert_eq!(session.created_at, 1000);
         assert_eq!(session.updated_at, 2000);
+        assert_eq!(
+            session.pricing_template_id,
+            Some("anthropic_official".to_string())
+        );
     }
 
     #[test]
@@ -248,6 +268,7 @@ mod tests {
                 "request_count".to_string(),
                 "created_at".to_string(),
                 "updated_at".to_string(),
+                "pricing_template_id".to_string(),
             ],
             values: vec![
                 json!("test_session_2"),
@@ -263,6 +284,7 @@ mod tests {
                 json!(10),
                 json!(3000),
                 json!(4000),
+                json!(null), // pricing_template_id
             ],
         };
 
@@ -272,6 +294,7 @@ mod tests {
         assert_eq!(session.config_name, "global");
         assert_eq!(session.custom_profile_name, None);
         assert_eq!(session.note, None);
+        assert_eq!(session.pricing_template_id, None);
         assert_eq!(session.request_count, 10);
     }
 
@@ -320,6 +343,6 @@ mod tests {
         assert!(result
             .unwrap_err()
             .to_string()
-            .contains("expected 13 columns"));
+            .contains("expected 14 columns"));
     }
 }

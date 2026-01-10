@@ -1,4 +1,5 @@
 use crate::models::token_stats::{SessionStats, TokenLog, TokenLogsPage, TokenStatsQuery};
+use crate::services::pricing::PRICING_MANAGER;
 use crate::services::token_stats::db::TokenStatsDb;
 use crate::services::token_stats::extractor::{
     create_extractor, MessageDeltaData, MessageStartData, ResponseTokenInfo,
@@ -161,6 +162,14 @@ impl TokenStatsManager {
     /// - `client_ip`: 客户端IP地址
     /// - `request_body`: 请求体（用于提取model）
     /// - `response_data`: 响应数据（SSE流或JSON）
+    /// - `response_time_ms`: 响应时间（毫秒）
+    /// - `pricing_template_id`: 价格模板ID
+    /// - `input_price`: 输入部分价格（USD）
+    /// - `output_price`: 输出部分价格（USD）
+    /// - `cache_write_price`: 缓存写入部分价格（USD）
+    /// - `cache_read_price`: 缓存读取部分价格（USD）
+    /// - `total_cost`: 总成本（USD）
+    #[allow(clippy::too_many_arguments)]
     pub async fn log_request(
         &self,
         tool_type: &str,
@@ -169,6 +178,13 @@ impl TokenStatsManager {
         client_ip: &str,
         request_body: &[u8],
         response_data: ResponseData,
+        response_time_ms: Option<i64>,
+        pricing_template_id: Option<String>,
+        input_price: Option<f64>,
+        output_price: Option<f64>,
+        cache_write_price: Option<f64>,
+        cache_read_price: Option<f64>,
+        total_cost: f64,
     ) -> Result<()> {
         // 创建提取器
         let extractor = create_extractor(tool_type).context("Failed to create token extractor")?;
@@ -190,6 +206,68 @@ impl TokenStatsManager {
             ResponseData::Json(json) => extractor.extract_from_json(&json)?,
         };
 
+        // 计算成本（如果提供了 pricing_template_id 和模型名称）
+        let (final_input_price, final_output_price, final_cache_write_price, final_cache_read_price, final_total_cost, final_pricing_template_id) =
+            if let Some(ref template_id) = pricing_template_id {
+                // 使用提供的 pricing_template_id 计算成本
+                match PRICING_MANAGER.calculate_cost(
+                    Some(template_id.as_str()),
+                    &model,
+                    token_info.input_tokens,
+                    token_info.output_tokens,
+                    token_info.cache_creation_tokens,
+                    token_info.cache_read_tokens,
+                ) {
+                    Ok(breakdown) => (
+                        Some(breakdown.input_price),
+                        Some(breakdown.output_price),
+                        Some(breakdown.cache_write_price),
+                        Some(breakdown.cache_read_price),
+                        breakdown.total_cost,
+                        Some(breakdown.template_id),
+                    ),
+                    Err(e) => {
+                        tracing::warn!(
+                            model = %model,
+                            template_id = %template_id,
+                            error = ?e,
+                            "成本计算失败，使用默认值 0"
+                        );
+                        (input_price, output_price, cache_write_price, cache_read_price, total_cost, pricing_template_id)
+                    }
+                }
+            } else if !input_price.is_some() {
+                // 没有提供 pricing_template_id，且没有手动指定价格，尝试使用默认模板
+                match PRICING_MANAGER.calculate_cost(
+                    None, // 使用默认模板
+                    &model,
+                    token_info.input_tokens,
+                    token_info.output_tokens,
+                    token_info.cache_creation_tokens,
+                    token_info.cache_read_tokens,
+                ) {
+                    Ok(breakdown) => (
+                        Some(breakdown.input_price),
+                        Some(breakdown.output_price),
+                        Some(breakdown.cache_write_price),
+                        Some(breakdown.cache_read_price),
+                        breakdown.total_cost,
+                        Some(breakdown.template_id),
+                    ),
+                    Err(e) => {
+                        tracing::debug!(
+                            model = %model,
+                            error = ?e,
+                            "使用默认模板计算成本失败（正常，可能模型不在模板中）"
+                        );
+                        (input_price, output_price, cache_write_price, cache_read_price, total_cost, pricing_template_id)
+                    }
+                }
+            } else {
+                // 使用手动指定的价格
+                (input_price, output_price, cache_write_price, cache_read_price, total_cost, pricing_template_id)
+            };
+
         // 创建日志记录（成功）
         let timestamp = chrono::Utc::now().timestamp_millis();
         let log = TokenLog::new(
@@ -208,13 +286,13 @@ impl TokenStatsManager {
             response_type.to_string(),
             None,
             None,
-            None, // TODO: Phase 3 will add response_time_ms
-            None, // TODO: Phase 3 will add input_price
-            None, // TODO: Phase 3 will add output_price
-            None, // TODO: Phase 3 will add cache_write_price
-            None, // TODO: Phase 3 will add cache_read_price
-            0.0,  // TODO: Phase 3 will add total_cost
-            None, // TODO: Phase 3 will add pricing_template_id
+            response_time_ms,
+            final_input_price,
+            final_output_price,
+            final_cache_write_price,
+            final_cache_read_price,
+            final_total_cost,
+            final_pricing_template_id,
         );
 
         // 发送到批量写入队列（异步，不阻塞）
@@ -237,6 +315,7 @@ impl TokenStatsManager {
     /// - `error_type`: 错误类型（parse_error/request_interrupted/upstream_error）
     /// - `error_detail`: 错误详情
     /// - `response_type`: 响应类型（sse/json/unknown）
+    /// - `response_time_ms`: 响应时间（毫秒）
     #[allow(clippy::too_many_arguments)]
     pub async fn log_failed_request(
         &self,
@@ -248,6 +327,7 @@ impl TokenStatsManager {
         error_type: &str,
         error_detail: &str,
         response_type: &str,
+        response_time_ms: Option<i64>,
     ) -> Result<()> {
         // 尝试提取模型名称（失败时使用 "unknown"）
         let model = if !request_body.is_empty() {
@@ -276,13 +356,13 @@ impl TokenStatsManager {
             response_type.to_string(),
             Some(error_type.to_string()),
             Some(error_detail.to_string()),
-            None, // TODO: Phase 3 will add response_time_ms
-            None, // TODO: Phase 3 will add input_price
-            None, // TODO: Phase 3 will add output_price
-            None, // TODO: Phase 3 will add cache_write_price
-            None, // TODO: Phase 3 will add cache_read_price
-            0.0,  // TODO: Phase 3 will add total_cost
-            None, // TODO: Phase 3 will add pricing_template_id
+            response_time_ms,
+            None, // 失败时没有价格信息
+            None,
+            None,
+            None,
+            0.0, // 失败时成本为 0
+            None,
         );
 
         // 发送到批量写入队列
@@ -418,6 +498,13 @@ mod tests {
                 "127.0.0.1",
                 request_body.as_bytes(),
                 ResponseData::Json(response_json),
+                None,    // response_time_ms
+                None,    // pricing_template_id
+                None,    // input_price
+                None,    // output_price
+                None,    // cache_write_price
+                None,    // cache_read_price
+                0.0,     // total_cost
             )
             .await;
 
