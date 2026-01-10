@@ -122,6 +122,7 @@ pub trait RequestProcessor: Send + Sync + std::fmt::Debug {
     ///
     /// # 默认实现
     /// 默认不记录日志（空操作）
+    #[allow(clippy::too_many_arguments)]
     async fn record_request_log(
         &self,
         _client_ip: &str,

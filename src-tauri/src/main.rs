@@ -297,6 +297,9 @@ fn main() {
         cleanup_token_logs,
         get_token_stats_summary,
         force_token_stats_checkpoint,
+        // Token统计分析命令（Phase 4）
+        // query_trends,
+        // query_cost_summary,
         // 配置监听控制
         block_external_change,
         allow_external_change,

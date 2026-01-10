@@ -80,6 +80,25 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
         ),
     );
 
+    // Claude 3.5 Sonnet (旧版本): $3 input / $15 output
+    custom_models.insert(
+        "claude-3-5-sonnet".to_string(),
+        ModelPrice::new(
+            "anthropic".to_string(),
+            3.0,
+            15.0,
+            Some(3.75), // Cache write: 3.0 * 1.25
+            Some(0.3),  // Cache read: 3.0 * 0.1
+            vec![
+                "claude-3-5-sonnet".to_string(),
+                "claude-3-5-sonnet-20240620".to_string(),
+                "claude-3-5-sonnet-20241022".to_string(),
+                "claude-3-sonnet-3-5".to_string(),
+                "sonnet-3.5".to_string(),
+            ],
+        ),
+    );
+
     // Claude Haiku 4.5: $1 input / $5 output
     custom_models.insert(
         "claude-haiku-4.5".to_string(),
@@ -115,7 +134,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
     PricingTemplate::new(
         "claude_official_2025_01".to_string(),
         "Claude 官方价格 (2025年1月)".to_string(),
-        "Anthropic 官方定价，包含 7 个 Claude 模型".to_string(),
+        "Anthropic 官方定价，包含 8 个 Claude 模型（含 3.5 Sonnet 旧版本）".to_string(),
         "1.0".to_string(),
         vec![], // 内置模板不使用继承
         custom_models,
@@ -137,8 +156,8 @@ mod tests {
         assert!(template.is_default_preset);
         assert!(template.is_full_custom());
 
-        // 验证包含 7 个模型
-        assert_eq!(template.custom_models.len(), 7);
+        // 验证包含 8 个模型
+        assert_eq!(template.custom_models.len(), 8);
 
         // 验证 Opus 4.5 价格
         let opus_4_5 = template.custom_models.get("claude-opus-4.5").unwrap();
@@ -155,6 +174,16 @@ mod tests {
         assert_eq!(sonnet_4_5.output_price_per_1m, 15.0);
         assert_eq!(sonnet_4_5.cache_write_price_per_1m, Some(3.75));
         assert_eq!(sonnet_4_5.cache_read_price_per_1m, Some(0.3));
+
+        // 验证 Claude 3.5 Sonnet (旧版本) 价格
+        let sonnet_3_5 = template.custom_models.get("claude-3-5-sonnet").unwrap();
+        assert_eq!(sonnet_3_5.input_price_per_1m, 3.0);
+        assert_eq!(sonnet_3_5.output_price_per_1m, 15.0);
+        assert_eq!(sonnet_3_5.cache_write_price_per_1m, Some(3.75));
+        assert_eq!(sonnet_3_5.cache_read_price_per_1m, Some(0.3));
+        assert!(sonnet_3_5
+            .aliases
+            .contains(&"claude-3-5-sonnet-20241022".to_string()));
 
         // 验证 Haiku 3.5 价格
         let haiku_3_5 = template.custom_models.get("claude-haiku-3.5").unwrap();

@@ -64,6 +64,7 @@ pub const ALTER_TABLE_STATEMENTS: &[&str] = &[
     since = "1.5.1",
     note = "请使用 ALTER_TABLE_STATEMENTS 数组，每个语句单独执行"
 )]
+#[allow(dead_code)]
 pub const ALTER_TABLE_SQL: &str = "
 ALTER TABLE claude_proxy_sessions ADD COLUMN custom_profile_name TEXT;
 ALTER TABLE claude_proxy_sessions ADD COLUMN note TEXT;

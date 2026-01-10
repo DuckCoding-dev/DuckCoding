@@ -1,27 +1,34 @@
 use crate::data::DataManager;
 use crate::models::pricing::{DefaultTemplatesConfig, InheritedModel, ModelPrice, PricingTemplate};
 use crate::services::pricing::builtin::builtin_claude_official_template;
+use crate::utils::precision::price_precision;
 use anyhow::{anyhow, Context, Result};
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 
 /// 成本分解结果
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CostBreakdown {
     /// 输入部分价格（USD）
+    #[serde(with = "price_precision")]
     pub input_price: f64,
 
     /// 输出部分价格（USD）
+    #[serde(with = "price_precision")]
     pub output_price: f64,
 
     /// 缓存写入部分价格（USD）
+    #[serde(with = "price_precision")]
     pub cache_write_price: f64,
 
     /// 缓存读取部分价格（USD）
+    #[serde(with = "price_precision")]
     pub cache_read_price: f64,
 
     /// 总成本（USD）
+    #[serde(with = "price_precision")]
     pub total_cost: f64,
 
     /// 使用的价格模板 ID

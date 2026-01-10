@@ -1,3 +1,4 @@
+// pub mod analytics_commands; // Token统计分析命令（Phase 4）
 pub mod balance_commands;
 pub mod config_commands;
 pub mod dashboard_commands; // 仪表板状态管理命令
@@ -19,6 +20,7 @@ pub mod update_commands;
 pub mod window_commands;
 
 // 重新导出所有命令函数
+// pub use analytics_commands::*; // Token统计分析命令（Phase 4）
 pub use balance_commands::*;
 pub use config_commands::*;
 pub use dashboard_commands::*; // 仪表板状态管理命令

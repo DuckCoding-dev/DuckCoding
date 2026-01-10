@@ -61,22 +61,27 @@ pub struct TokenLog {
 
     /// 输入部分价格（USD）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::utils::precision::option_price_precision")]
     pub input_price: Option<f64>,
 
     /// 输出部分价格（USD）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::utils::precision::option_price_precision")]
     pub output_price: Option<f64>,
 
     /// 缓存写入部分价格（USD）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::utils::precision::option_price_precision")]
     pub cache_write_price: Option<f64>,
 
     /// 缓存读取部分价格（USD）
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::utils::precision::option_price_precision")]
     pub cache_read_price: Option<f64>,
 
     /// 总成本（USD）
     #[serde(default)]
+    #[serde(with = "crate::utils::precision::price_precision")]
     pub total_cost: f64,
 
     /// 使用的价格模板ID

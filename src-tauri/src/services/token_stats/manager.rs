@@ -163,12 +163,7 @@ impl TokenStatsManager {
     /// - `request_body`: 请求体（用于提取model）
     /// - `response_data`: 响应数据（SSE流或JSON）
     /// - `response_time_ms`: 响应时间（毫秒）
-    /// - `pricing_template_id`: 价格模板ID
-    /// - `input_price`: 输入部分价格（USD）
-    /// - `output_price`: 输出部分价格（USD）
-    /// - `cache_write_price`: 缓存写入部分价格（USD）
-    /// - `cache_read_price`: 缓存读取部分价格（USD）
-    /// - `total_cost`: 总成本（USD）
+    /// - `pricing_template_id`: 价格模板ID（None则使用默认模板）
     #[allow(clippy::too_many_arguments)]
     pub async fn log_request(
         &self,
@@ -180,11 +175,6 @@ impl TokenStatsManager {
         response_data: ResponseData,
         response_time_ms: Option<i64>,
         pricing_template_id: Option<String>,
-        input_price: Option<f64>,
-        output_price: Option<f64>,
-        cache_write_price: Option<f64>,
-        cache_read_price: Option<f64>,
-        total_cost: f64,
     ) -> Result<()> {
         // 创建提取器
         let extractor = create_extractor(tool_type).context("Failed to create token extractor")?;
@@ -206,67 +196,53 @@ impl TokenStatsManager {
             ResponseData::Json(json) => extractor.extract_from_json(&json)?,
         };
 
-        // 计算成本（如果提供了 pricing_template_id 和模型名称）
-        let (final_input_price, final_output_price, final_cache_write_price, final_cache_read_price, final_total_cost, final_pricing_template_id) =
-            if let Some(ref template_id) = pricing_template_id {
-                // 使用提供的 pricing_template_id 计算成本
-                match PRICING_MANAGER.calculate_cost(
-                    Some(template_id.as_str()),
-                    &model,
-                    token_info.input_tokens,
-                    token_info.output_tokens,
-                    token_info.cache_creation_tokens,
-                    token_info.cache_read_tokens,
-                ) {
-                    Ok(breakdown) => (
-                        Some(breakdown.input_price),
-                        Some(breakdown.output_price),
-                        Some(breakdown.cache_write_price),
-                        Some(breakdown.cache_read_price),
-                        breakdown.total_cost,
-                        Some(breakdown.template_id),
-                    ),
-                    Err(e) => {
-                        tracing::warn!(
-                            model = %model,
-                            template_id = %template_id,
-                            error = ?e,
-                            "成本计算失败，使用默认值 0"
-                        );
-                        (input_price, output_price, cache_write_price, cache_read_price, total_cost, pricing_template_id)
-                    }
-                }
-            } else if !input_price.is_some() {
-                // 没有提供 pricing_template_id，且没有手动指定价格，尝试使用默认模板
-                match PRICING_MANAGER.calculate_cost(
-                    None, // 使用默认模板
-                    &model,
-                    token_info.input_tokens,
-                    token_info.output_tokens,
-                    token_info.cache_creation_tokens,
-                    token_info.cache_read_tokens,
-                ) {
-                    Ok(breakdown) => (
-                        Some(breakdown.input_price),
-                        Some(breakdown.output_price),
-                        Some(breakdown.cache_write_price),
-                        Some(breakdown.cache_read_price),
-                        breakdown.total_cost,
-                        Some(breakdown.template_id),
-                    ),
-                    Err(e) => {
-                        tracing::debug!(
-                            model = %model,
-                            error = ?e,
-                            "使用默认模板计算成本失败（正常，可能模型不在模板中）"
-                        );
-                        (input_price, output_price, cache_write_price, cache_read_price, total_cost, pricing_template_id)
-                    }
-                }
-            } else {
-                // 使用手动指定的价格
-                (input_price, output_price, cache_write_price, cache_read_price, total_cost, pricing_template_id)
-            };
+        // 使用价格模板计算成本
+        let template_id_ref = pricing_template_id.as_deref();
+
+        let (
+            final_input_price,
+            final_output_price,
+            final_cache_write_price,
+            final_cache_read_price,
+            final_total_cost,
+            final_pricing_template_id,
+        ) = match PRICING_MANAGER.calculate_cost(
+            template_id_ref,
+            &model,
+            token_info.input_tokens,
+            token_info.output_tokens,
+            token_info.cache_creation_tokens,
+            token_info.cache_read_tokens,
+        ) {
+            Ok(breakdown) => {
+                tracing::debug!(
+                    model = %model,
+                    template_id = %breakdown.template_id,
+                    total_cost = breakdown.total_cost,
+                    input_tokens = token_info.input_tokens,
+                    output_tokens = token_info.output_tokens,
+                    "成本计算成功"
+                );
+                (
+                    Some(breakdown.input_price),
+                    Some(breakdown.output_price),
+                    Some(breakdown.cache_write_price),
+                    Some(breakdown.cache_read_price),
+                    breakdown.total_cost,
+                    Some(breakdown.template_id),
+                )
+            }
+            Err(e) => {
+                // 计算失败，使用 0
+                tracing::warn!(
+                    model = %model,
+                    template_id = ?template_id_ref,
+                    error = ?e,
+                    "成本计算失败，使用默认值 0"
+                );
+                (None, None, None, None, 0.0, None)
+            }
+        };
 
         // 创建日志记录（成功）
         let timestamp = chrono::Utc::now().timestamp_millis();
@@ -498,13 +474,8 @@ mod tests {
                 "127.0.0.1",
                 request_body.as_bytes(),
                 ResponseData::Json(response_json),
-                None,    // response_time_ms
-                None,    // pricing_template_id
-                None,    // input_price
-                None,    // output_price
-                None,    // cache_write_price
-                None,    // cache_read_price
-                0.0,     // total_cost
+                None, // response_time_ms
+                None, // pricing_template_id
             )
             .await;
 

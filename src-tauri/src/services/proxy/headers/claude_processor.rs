@@ -140,7 +140,8 @@ impl RequestProcessor for ClaudeHeadersProcessor {
         // 尝试解析请求体 JSON
         if let Ok(json_body) = serde_json::from_slice::<serde_json::Value>(request_body) {
             // Claude API 的模型字段在顶层
-            json_body.get("model")
+            json_body
+                .get("model")
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
         } else {
@@ -181,8 +182,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
 
         // 2. 获取 pricing_template_id（优先级：会话配置 > 代理配置 > None）
         // TODO: Phase 3.4 后续需要从 get_session_config 返回会话的 pricing_template_id
-        let pricing_template_id: Option<String> =
-            proxy_pricing_template_id.map(|s| s.to_string());
+        let pricing_template_id: Option<String> = proxy_pricing_template_id.map(|s| s.to_string());
 
         // 3. 检查响应状态
         let status_code =
@@ -217,11 +217,6 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                     response_data,
                     response_time_ms,
                     pricing_template_id.clone(),
-                    None, // input_price 由 TokenStatsManager 内部计算
-                    None, // output_price 由 TokenStatsManager 内部计算
-                    None, // cache_write_price 由 TokenStatsManager 内部计算
-                    None, // cache_read_price 由 TokenStatsManager 内部计算
-                    0.0,  // total_cost 由 TokenStatsManager 内部计算
                 )
                 .await
             {

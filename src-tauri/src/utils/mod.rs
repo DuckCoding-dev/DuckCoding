@@ -4,6 +4,7 @@ pub mod config;
 pub mod file_helpers;
 pub mod installer_scanner;
 pub mod platform;
+pub mod precision;
 pub mod version;
 pub mod wsl_executor;
 
