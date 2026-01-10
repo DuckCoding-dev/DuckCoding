@@ -384,7 +384,7 @@ async fn handle_request_inner(
 
         // amp-code 需要移除工具名前缀
         let is_amp_code = tool_id == "amp-code";
-        let prefix_regex = Regex::new(r#""name"\s*:\s*"dc_([^"]+)""#).ok();
+        let prefix_regex = Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).ok();
 
         let mapped_stream = stream.map(move |result| {
             result
@@ -412,7 +412,7 @@ async fn handle_request_inner(
 
         let final_body = if tool_id == "amp-code" {
             let text = String::from_utf8_lossy(&body_bytes);
-            let re = regex::Regex::new(r#""name"\s*:\s*"dc_([^"]+)""#).unwrap();
+            let re = regex::Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).unwrap();
             let cleaned = re.replace_all(&text, r#""name": "$1""#);
             Bytes::from(cleaned.into_owned())
         } else {

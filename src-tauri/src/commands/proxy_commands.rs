@@ -236,8 +236,8 @@ async fn try_start_proxy_internal(
         let backup = amp_native_config::backup_amp_config()
             .map_err(|e| format!("备份 AMP Code 配置失败: {}", e))?;
 
-        tool_config.original_amp_settings = backup.settings_json;
-        tool_config.original_amp_secrets = backup.secrets_json;
+        tool_config.original_amp_settings = backup.settings;
+        tool_config.original_amp_secrets = backup.secrets;
 
         // 2. 保存备份到 proxy.json
         proxy_config_mgr
@@ -352,8 +352,8 @@ pub async fn stop_tool_proxy(
     if tool_id == "amp-code" {
         // amp-code：完整还原 AMP Code 原生配置文件
         let backup = amp_native_config::AmpConfigBackup {
-            settings_json: tool_config.original_amp_settings.take(),
-            secrets_json: tool_config.original_amp_secrets.take(),
+            settings: tool_config.original_amp_settings.take(),
+            secrets: tool_config.original_amp_secrets.take(),
         };
 
         amp_native_config::restore_amp_config(&backup)
@@ -366,8 +366,8 @@ pub async fn stop_tool_proxy(
 
         tracing::info!(
             tool_id = %tool_id,
-            had_settings = backup.settings_json.is_some(),
-            had_secrets = backup.secrets_json.is_some(),
+            had_settings = backup.settings.is_some(),
+            had_secrets = backup.secrets.is_some(),
             "已完整还原 AMP Code 配置"
         );
 

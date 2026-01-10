@@ -3,111 +3,125 @@
 //! 配置文件位置：
 //! - ~/.config/amp/settings.json - 存储 amp.url
 //! - ~/.local/share/amp/secrets.json - 存储 apiKey@{url}
+//!
+//! Windows: %USERPROFILE%\.config\amp\... 和 %USERPROFILE%\.local\share\amp\...
 
+use crate::data::DataManager;
 use anyhow::{anyhow, Result};
 use serde_json::Value;
-use std::fs;
 use std::path::PathBuf;
 
-/// AMP Code 配置备份信息（完整文件内容）
+/// AMP Code 配置备份信息（语义备份）
 #[derive(Debug, Clone)]
 pub struct AmpConfigBackup {
-    pub settings_json: Option<String>,
-    pub secrets_json: Option<String>,
+    pub settings: Option<Value>,
+    pub secrets: Option<Value>,
+}
+
+/// 获取 home 目录（跨平台）
+fn home_dir() -> Result<PathBuf> {
+    if let Some(p) = dirs::home_dir() {
+        return Ok(p);
+    }
+    #[cfg(windows)]
+    if let Ok(p) = std::env::var("USERPROFILE") {
+        return Ok(PathBuf::from(p));
+    }
+    #[cfg(not(windows))]
+    if let Ok(p) = std::env::var("HOME") {
+        return Ok(PathBuf::from(p));
+    }
+    Err(anyhow!("无法获取 home 目录"))
 }
 
 /// 获取 AMP Code settings.json 路径
-/// macOS/Linux: ~/.config/amp/settings.json
+/// 所有平台: ~/.config/amp/settings.json
 fn amp_settings_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("无法获取 home 目录"))?;
-    Ok(home.join(".config").join("amp").join("settings.json"))
+    Ok(home_dir()?
+        .join(".config")
+        .join("amp")
+        .join("settings.json"))
 }
 
 /// 获取 AMP Code secrets.json 路径
-/// macOS/Linux: ~/.local/share/amp/secrets.json
+/// 所有平台: ~/.local/share/amp/secrets.json
 fn amp_secrets_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().ok_or_else(|| anyhow!("无法获取 home 目录"))?;
-    Ok(home
+    Ok(home_dir()?
         .join(".local")
         .join("share")
         .join("amp")
         .join("secrets.json"))
 }
 
-/// 读取文件内容，不存在则返回 None
-fn read_file_content(path: &PathBuf) -> Option<String> {
-    if path.exists() {
-        fs::read_to_string(path).ok()
-    } else {
-        None
-    }
-}
-
-/// 写入文件，自动创建目录
-fn write_file_content(path: &PathBuf, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    fs::write(path, content)?;
-    Ok(())
-}
-
-/// 删除文件（如果存在）
-fn delete_file_if_exists(path: &PathBuf) -> Result<()> {
-    if path.exists() {
-        fs::remove_file(path)?;
-    }
-    Ok(())
-}
-
-/// 读取当前 AMP Code 配置（完整备份）
+/// 读取当前 AMP Code 配置（语义备份）
+/// 注意：文件存在但读取失败时会返回错误，避免还原时误删用户文件
 pub fn backup_amp_config() -> Result<AmpConfigBackup> {
+    let dm = DataManager::global();
+    let jm = dm.json_uncached();
+
     let settings_path = amp_settings_path()?;
     let secrets_path = amp_secrets_path()?;
 
-    Ok(AmpConfigBackup {
-        settings_json: read_file_content(&settings_path),
-        secrets_json: read_file_content(&secrets_path),
-    })
+    let settings = if settings_path.exists() {
+        Some(
+            jm.read(&settings_path)
+                .map_err(|e| anyhow!("读取 settings.json 失败: {}", e))?,
+        )
+    } else {
+        None
+    };
+
+    let secrets = if secrets_path.exists() {
+        Some(
+            jm.read(&secrets_path)
+                .map_err(|e| anyhow!("读取 secrets.json 失败: {}", e))?,
+        )
+    } else {
+        None
+    };
+
+    Ok(AmpConfigBackup { settings, secrets })
 }
 
 /// 应用代理配置到 Amp（设置本地代理地址和密钥）
+/// 注意：如果配置文件存在但格式错误，会返回错误而非静默覆盖
 pub fn apply_proxy_config(proxy_url: &str, local_api_key: &str) -> Result<()> {
+    let dm = DataManager::global();
+    let jm = dm.json_uncached();
+
     let settings_path = amp_settings_path()?;
     let secrets_path = amp_secrets_path()?;
 
-    // 读取现有配置或创建新的
-    let settings_content = read_file_content(&settings_path);
-    let secrets_content = read_file_content(&secrets_path);
+    // 读取现有配置或创建新的（文件存在但格式错误时返回错误）
+    let mut settings: Value = if settings_path.exists() {
+        jm.read(&settings_path)
+            .map_err(|e| anyhow!("读取 settings.json 失败: {}", e))?
+    } else {
+        serde_json::json!({})
+    };
 
-    // 更新 settings.json
-    let mut settings: Value = settings_content
-        .as_ref()
-        .and_then(|s| serde_json::from_str(s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
-
+    // 更新 settings.json（使用 object insert 因为 "amp.url" 含 .）
     let settings_obj = settings
         .as_object_mut()
-        .ok_or_else(|| anyhow!("settings.json 格式错误"))?;
+        .ok_or_else(|| anyhow!("settings.json 格式错误：不是 JSON 对象"))?;
     settings_obj.insert("amp.url".to_string(), Value::String(proxy_url.to_string()));
+    jm.write(&settings_path, &settings)?;
 
-    let new_settings = serde_json::to_string_pretty(&settings)?;
-    write_file_content(&settings_path, &new_settings)?;
+    // 读取 secrets.json（文件存在但格式错误时返回错误）
+    let mut secrets: Value = if secrets_path.exists() {
+        jm.read(&secrets_path)
+            .map_err(|e| anyhow!("读取 secrets.json 失败: {}", e))?
+    } else {
+        serde_json::json!({})
+    };
 
-    // 更新 secrets.json
-    let mut secrets: Value = secrets_content
-        .as_ref()
-        .and_then(|s| serde_json::from_str(s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
-
+    // 更新 secrets.json（key 含 @ 和 url，使用 object insert）
     let secrets_obj = secrets
         .as_object_mut()
-        .ok_or_else(|| anyhow!("secrets.json 格式错误"))?;
+        .ok_or_else(|| anyhow!("secrets.json 格式错误：不是 JSON 对象"))?;
     let key_name = format!("apiKey@{}", proxy_url);
     secrets_obj.insert(key_name, Value::String(local_api_key.to_string()));
-
-    let new_secrets = serde_json::to_string_pretty(&secrets)?;
-    write_file_content(&secrets_path, &new_secrets)?;
+    jm.write(&secrets_path, &secrets)?;
 
     tracing::info!(
         proxy_url = %proxy_url,
@@ -119,24 +133,27 @@ pub fn apply_proxy_config(proxy_url: &str, local_api_key: &str) -> Result<()> {
 
 /// 完整还原 AMP Code 配置到原始状态
 pub fn restore_amp_config(backup: &AmpConfigBackup) -> Result<()> {
+    let dm = DataManager::global();
+    let jm = dm.json_uncached();
+
     let settings_path = amp_settings_path()?;
     let secrets_path = amp_secrets_path()?;
 
     // 还原 settings.json
-    if let Some(content) = &backup.settings_json {
-        write_file_content(&settings_path, content)?;
+    if let Some(value) = &backup.settings {
+        jm.write(&settings_path, value)?;
         tracing::debug!("已还原 settings.json");
-    } else {
-        delete_file_if_exists(&settings_path)?;
+    } else if settings_path.exists() {
+        jm.delete(&settings_path, None)?;
         tracing::debug!("已删除 settings.json（原本不存在）");
     }
 
     // 还原 secrets.json
-    if let Some(content) = &backup.secrets_json {
-        write_file_content(&secrets_path, content)?;
+    if let Some(value) = &backup.secrets {
+        jm.write(&secrets_path, value)?;
         tracing::debug!("已还原 secrets.json");
-    } else {
-        delete_file_if_exists(&secrets_path)?;
+    } else if secrets_path.exists() {
+        jm.delete(&secrets_path, None)?;
         tracing::debug!("已删除 secrets.json（原本不存在）");
     }
 

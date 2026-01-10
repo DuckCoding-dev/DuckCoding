@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// 单个工具的透明代理配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,12 +26,12 @@ pub struct ToolProxyConfig {
     /// 启动代理前激活的 Profile 名称（用于关闭时还原）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub original_active_profile: Option<String>,
-    /// AMP Code 原始 settings.json 完整内容（用于关闭时还原）
+    /// AMP Code 原始 settings.json 完整内容（用于关闭时还原，语义备份）
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub original_amp_settings: Option<String>,
-    /// AMP Code 原始 secrets.json 完整内容（用于关闭时还原）
+    pub original_amp_settings: Option<Value>,
+    /// AMP Code 原始 secrets.json 完整内容（用于关闭时还原，语义备份）
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub original_amp_secrets: Option<String>,
+    pub original_amp_secrets: Option<Value>,
     /// Tavily API Key（用于本地搜索，可选，无则降级 DuckDuckGo）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tavily_api_key: Option<String>,

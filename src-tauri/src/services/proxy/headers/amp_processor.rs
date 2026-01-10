@@ -48,8 +48,6 @@ enum ApiType {
     Gemini,
 }
 
-const TOOL_PREFIX: &str = "dc_";
-
 impl AmpHeadersProcessor {
     fn detect_api_type(path: &str, headers: &HyperHeaderMap, body: &[u8]) -> ApiType {
         let path_lower = path.to_lowercase();
@@ -178,6 +176,8 @@ impl AmpHeadersProcessor {
     }
 
     fn add_tool_prefix(body: &[u8]) -> Vec<u8> {
+        const TOOL_PREFIX: &str = "mcp_";
+
         if body.is_empty() {
             return body.to_vec();
         }
