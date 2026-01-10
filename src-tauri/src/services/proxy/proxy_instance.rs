@@ -317,11 +317,11 @@ async fn handle_request_inner(
         let mut response = Response::builder()
             .status(StatusCode::OK)
             .header("content-type", "application/json");
-        
+
         for (name, value) in processed.headers.iter() {
             response = response.header(name.as_str(), value.as_bytes());
         }
-        
+
         return Ok(response
             .body(box_body(http_body_util::Full::new(processed.body)))
             .unwrap());

@@ -371,7 +371,9 @@ pub async fn stop_tool_proxy(
             "已完整还原 AMP Code 配置"
         );
 
-        return Ok(format!("✅ {tool_id} 透明代理已停止\n已完整还原 AMP Code 配置"));
+        return Ok(format!(
+            "✅ {tool_id} 透明代理已停止\n已完整还原 AMP Code 配置"
+        ));
     }
 
     // 其他工具：Profile 还原逻辑

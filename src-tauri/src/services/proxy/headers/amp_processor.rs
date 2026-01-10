@@ -177,7 +177,7 @@ impl AmpHeadersProcessor {
         }
     }
 
-        fn add_tool_prefix(body: &[u8]) -> Vec<u8> {
+    fn add_tool_prefix(body: &[u8]) -> Vec<u8> {
         if body.is_empty() {
             return body.to_vec();
         }
@@ -205,7 +205,7 @@ impl AmpHeadersProcessor {
 
         serde_json::to_vec(&json).unwrap_or_else(|_| body.to_vec())
     }
-    
+
     async fn forward_to_amp(
         path: &str,
         query: Option<&str>,
@@ -283,10 +283,13 @@ impl AmpHeadersProcessor {
     }
 
     /// 处理网页搜索请求
-    async fn handle_web_search(body: &[u8], tavily_api_key: Option<&str>) -> Result<ProcessedRequest> {
+    async fn handle_web_search(
+        body: &[u8],
+        tavily_api_key: Option<&str>,
+    ) -> Result<ProcessedRequest> {
         // 解析请求 JSON（不吞掉错误）
-        let req_json: Value = serde_json::from_slice(body)
-            .map_err(|e| anyhow!("请求 JSON 解析失败: {}", e))?;
+        let req_json: Value =
+            serde_json::from_slice(body).map_err(|e| anyhow!("请求 JSON 解析失败: {}", e))?;
         let params = &req_json["params"];
 
         let objective = params["objective"].as_str().unwrap_or("");
@@ -316,12 +319,18 @@ impl AmpHeadersProcessor {
                 Ok(r) => (r, "tavily"),
                 Err(e) => {
                     tracing::warn!("Tavily 搜索失败，降级 DuckDuckGo: {}", e);
-                    (Self::search_duckduckgo(&queries, max_results).await?, "local-duckduckgo")
+                    (
+                        Self::search_duckduckgo(&queries, max_results).await?,
+                        "local-duckduckgo",
+                    )
                 }
             }
         } else {
             tracing::info!("使用 DuckDuckGo 本地搜索（未配置 Tavily API Key）");
-            (Self::search_duckduckgo(&queries, max_results).await?, "local-duckduckgo")
+            (
+                Self::search_duckduckgo(&queries, max_results).await?,
+                "local-duckduckgo",
+            )
         };
 
         let response = json!({
@@ -549,8 +558,8 @@ impl AmpHeadersProcessor {
     /// 处理网页内容提取请求（增强 SSRF 防护 + 流式读取）
     async fn handle_extract_web_page(body: &[u8]) -> Result<ProcessedRequest> {
         // 解析请求 JSON（不吞掉错误）
-        let req_json: Value = serde_json::from_slice(body)
-            .map_err(|e| anyhow!("请求 JSON 解析失败: {}", e))?;
+        let req_json: Value =
+            serde_json::from_slice(body).map_err(|e| anyhow!("请求 JSON 解析失败: {}", e))?;
         let target_url = req_json["params"]["url"]
             .as_str()
             .ok_or_else(|| anyhow!("缺少 URL 参数"))?;
@@ -574,7 +583,7 @@ impl AmpHeadersProcessor {
 
         // 流式读取并限制大小（防止 chunked 编码绕过 Content-Length 检查）
         let html = Self::read_response_with_limit(resp, MAX_RESPONSE_SIZE).await?;
-        
+
         // 返回原始 HTML（与 AMP-Manager 行为一致）
         let response = json!({
             "ok": true,
@@ -638,7 +647,8 @@ impl AmpHeadersProcessor {
                     || ipv4.is_broadcast()   // 255.255.255.255
                     || ipv4.is_unspecified() // 0.0.0.0
                     || ipv4.is_multicast()   // 224.0.0.0/4
-                    || ipv4.octets()[0] == 100 && (ipv4.octets()[1] & 0xc0) == 64 // 100.64.0.0/10 (CGN)
+                    || ipv4.octets()[0] == 100 && (ipv4.octets()[1] & 0xc0) == 64
+                // 100.64.0.0/10 (CGN)
             }
             IpAddr::V6(ipv6) => {
                 ipv6.is_loopback()      // ::1
@@ -706,13 +716,13 @@ impl RequestProcessor for AmpHeadersProcessor {
         // 0. 本地工具拦截：webSearch2 / extractWebPageContent
         if let Some(tool_name) = Self::detect_local_tool(query) {
             tracing::info!("AMP Code 本地工具: {}", tool_name);
-            
+
             // 获取 Tavily API Key（如果配置了）
             let tavily_api_key = crate::services::proxy_config_manager::ProxyConfigManager::new()
                 .ok()
                 .and_then(|mgr| mgr.get_config("amp-code").ok().flatten())
                 .and_then(|cfg| cfg.tavily_api_key);
-            
+
             return Self::handle_local_tool(tool_name, body, tavily_api_key.as_deref()).await;
         }
 
