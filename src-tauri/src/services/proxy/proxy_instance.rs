@@ -119,6 +119,24 @@ impl ProxyInstance {
                                     error = ?err,
                                     "处理连接失败"
                                 );
+
+                                // 记录连接层错误到数据库（无 session_id）
+                                let manager =
+                                    crate::services::token_stats::manager::TokenStatsManager::get();
+                                let error_detail = format!("连接处理失败: {:?}", err);
+                                let _ = manager
+                                    .log_failed_request(
+                                        &tool_id_for_error,
+                                        "connection_error", // 通用会话 ID
+                                        "global",
+                                        "unknown", // 无法获取客户端 IP
+                                        &[],       // 无请求体
+                                        "connection_error",
+                                        &error_detail,
+                                        "unknown", // 无法确定响应类型
+                                        None,      // 无响应时间
+                                    )
+                                    .await;
                             }
                         });
                     }
@@ -332,7 +350,40 @@ async fn handle_request_inner(
     let upstream_res = match reqwest_builder.send().await {
         Ok(res) => res,
         Err(e) => {
-            return Err(anyhow::anyhow!("上游请求失败: {}", e));
+            // 上游请求失败，记录错误到数据库
+            let processor_clone = Arc::clone(&processor);
+            let client_ip_clone = client_ip.clone();
+            let config_name_clone = proxy_config
+                .real_profile_name
+                .clone()
+                .unwrap_or_else(|| "default".to_string());
+            let proxy_pricing_template_id_clone = proxy_config.pricing_template_id.clone();
+            let request_body_clone = processed.body.clone();
+            let error_msg = e.to_string();
+
+            // 从请求体中判断是否为流式请求
+            let is_sse = serde_json::from_slice::<serde_json::Value>(&processed.body)
+                .ok()
+                .and_then(|json| json.get("stream").and_then(|v| v.as_bool()))
+                .unwrap_or(false);
+
+            tokio::spawn(async move {
+                // 调用 record_request_log，传递 response_status=0 标记为上游失败
+                let _ = processor_clone
+                    .record_request_log(
+                        &client_ip_clone,
+                        &config_name_clone,
+                        proxy_pricing_template_id_clone.as_deref(),
+                        &request_body_clone,
+                        0,      // response_status=0 标记上游请求失败
+                        &[],    // 空响应体
+                        is_sse, // 从请求体提取
+                        Some(start_time.elapsed().as_millis() as i64),
+                    )
+                    .await;
+            });
+
+            return Err(anyhow::anyhow!("上游请求失败: {}", error_msg));
         }
     };
 

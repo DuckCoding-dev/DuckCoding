@@ -4,6 +4,7 @@
 
 pub mod config; // 代理配置辅助模块
 pub mod headers;
+pub mod log_recorder; // 统一日志记录模块
 pub mod proxy_instance;
 pub mod proxy_manager;
 pub mod proxy_service;

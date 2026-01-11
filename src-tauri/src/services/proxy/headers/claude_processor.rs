@@ -1,12 +1,11 @@
 // Claude Code 请求处理器
 
 use super::{ProcessedRequest, RequestProcessor};
-use crate::services::session::{ProxySession, SessionEvent, SESSION_MANAGER};
-use crate::services::token_stats::TokenStatsManager;
+use crate::services::session::{SessionEvent, SESSION_MANAGER};
 use anyhow::Result;
 use async_trait::async_trait;
 use bytes::Bytes;
-use hyper::{HeaderMap as HyperHeaderMap, StatusCode};
+use hyper::HeaderMap as HyperHeaderMap;
 use reqwest::header::HeaderMap as ReqwestHeaderMap;
 
 /// Claude Code 专用请求处理器
@@ -155,7 +154,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
 
     /// Claude Code 的请求日志记录实现
     ///
-    /// 从请求体中提取会话 ID（metadata.user_id），根据响应类型解析 Token 统计
+    /// 使用统一的日志记录架构，自动处理所有错误场景
     async fn record_request_log(
         &self,
         client_ip: &str,
@@ -165,147 +164,26 @@ impl RequestProcessor for ClaudeHeadersProcessor {
         response_status: u16,
         response_body: &[u8],
         is_sse: bool,
-        response_time_ms: Option<i64>,
+        _response_time_ms: Option<i64>,
     ) -> Result<()> {
-        // 1. 提取会话 ID（从 metadata.user_id 的 _session_ 后部分）
-        let session_id = if !request_body.is_empty() {
-            if let Ok(json_body) = serde_json::from_slice::<serde_json::Value>(request_body) {
-                if let Some(user_id) = json_body["metadata"]["user_id"].as_str() {
-                    // 使用 ProxySession::extract_display_id 提取 _session_ 后的 UUID
-                    ProxySession::extract_display_id(user_id)
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
-                } else {
-                    uuid::Uuid::new_v4().to_string()
-                }
-            } else {
-                uuid::Uuid::new_v4().to_string()
-            }
-        } else {
-            uuid::Uuid::new_v4().to_string()
+        use crate::services::proxy::log_recorder::{
+            LogRecorder, RequestLogContext, ResponseParser,
         };
 
-        // 2. 获取 pricing_template_id（优先级：会话配置 > 代理配置 > None）
-        let pricing_template_id: Option<String> = if !request_body.is_empty() {
-            // 尝试从请求体提取会话 ID 并查询会话配置
-            if let Ok(json_body) = serde_json::from_slice::<serde_json::Value>(request_body) {
-                if let Some(user_id) = json_body["metadata"]["user_id"].as_str() {
-                    // 查询会话的 pricing_template_id
-                    if let Ok(Some((_, _, _, session_pricing_template_id))) =
-                        SESSION_MANAGER.get_session_config(user_id)
-                    {
-                        // 优先使用会话级别的 pricing_template_id
-                        session_pricing_template_id
-                            .or_else(|| proxy_pricing_template_id.map(|s| s.to_string()))
-                    } else {
-                        // 会话不存在，回退到代理配置
-                        proxy_pricing_template_id.map(|s| s.to_string())
-                    }
-                } else {
-                    // 无 user_id，使用代理配置
-                    proxy_pricing_template_id.map(|s| s.to_string())
-                }
-            } else {
-                // JSON 解析失败，使用代理配置
-                proxy_pricing_template_id.map(|s| s.to_string())
-            }
-        } else {
-            // 空 body，使用代理配置
-            proxy_pricing_template_id.map(|s| s.to_string())
-        };
+        // 1. 创建请求上下文（一次性提取所有信息）
+        let context = RequestLogContext::from_request(
+            self.tool_id(),
+            config_name,
+            client_ip,
+            proxy_pricing_template_id,
+            request_body,
+        );
 
-        // 3. 检查响应状态
-        let status_code =
-            StatusCode::from_u16(response_status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        // 2. 解析响应
+        let parsed = ResponseParser::parse(response_body, response_status, is_sse);
 
-        if !status_code.is_server_error() && !status_code.is_client_error() {
-            // 成功响应，记录 Token 统计
-            let manager = TokenStatsManager::get();
-            let response_data = if is_sse {
-                // SSE 流式响应：解析所有 data 块
-                let body_str = String::from_utf8_lossy(response_body);
-                let data_lines: Vec<String> = body_str
-                    .lines()
-                    .filter(|line| line.starts_with("data: "))
-                    .map(|line| line.trim_start_matches("data: ").to_string())
-                    .collect();
-
-                crate::services::token_stats::manager::ResponseData::Sse(data_lines)
-            } else {
-                // JSON 响应
-                let json: serde_json::Value = serde_json::from_slice(response_body)?;
-                crate::services::token_stats::manager::ResponseData::Json(json)
-            };
-
-            match manager
-                .log_request(
-                    self.tool_id(),
-                    &session_id,
-                    config_name,
-                    client_ip,
-                    request_body,
-                    response_data,
-                    response_time_ms,
-                    pricing_template_id.clone(),
-                )
-                .await
-            {
-                Ok(_) => {
-                    tracing::info!(
-                        tool_id = %self.tool_id(),
-                        session_id = %session_id,
-                        "Token 统计记录成功"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        tool_id = %self.tool_id(),
-                        session_id = %session_id,
-                        error = ?e,
-                        "Token 统计记录失败"
-                    );
-
-                    // 记录解析失败
-                    let error_detail = format!("Token parsing failed: {}", e);
-                    let response_type = if is_sse { "sse" } else { "json" };
-                    let _ = manager
-                        .log_failed_request(
-                            self.tool_id(),
-                            &session_id,
-                            config_name,
-                            client_ip,
-                            request_body,
-                            "parse_error",
-                            &error_detail,
-                            response_type,
-                            response_time_ms,
-                        )
-                        .await;
-                }
-            }
-        } else {
-            // 失败响应，记录错误
-            let manager = TokenStatsManager::get();
-            let error_detail = format!(
-                "HTTP {}: {}",
-                response_status,
-                status_code.canonical_reason().unwrap_or("Unknown")
-            );
-            let response_type = if is_sse { "sse" } else { "json" };
-
-            let _ = manager
-                .log_failed_request(
-                    self.tool_id(),
-                    &session_id,
-                    config_name,
-                    client_ip,
-                    request_body,
-                    "upstream_error",
-                    &error_detail,
-                    response_type,
-                    response_time_ms,
-                )
-                .await;
-        }
+        // 3. 记录日志（自动处理成功/失败/解析错误）
+        LogRecorder::record(&context, response_status, parsed).await?;
 
         Ok(())
     }
