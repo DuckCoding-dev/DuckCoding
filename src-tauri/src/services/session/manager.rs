@@ -2,7 +2,7 @@
 
 use crate::data::DataManager;
 use crate::services::session::db_utils::{
-    parse_count, parse_proxy_session, parse_session_config, ALTER_TABLE_STATEMENTS,
+    parse_count, parse_proxy_session, parse_session_config, SessionConfig, ALTER_TABLE_STATEMENTS,
     CREATE_TABLE_SQL, SELECT_SESSION_FIELDS,
 };
 use crate::services::session::models::{ProxySession, SessionEvent, SessionListResponse};
@@ -333,11 +333,11 @@ impl SessionManager {
     }
 
     /// 获取会话配置（公共 API，用于请求处理）
-    /// 返回 (config_name, url, api_key)
-    pub fn get_session_config(&self, session_id: &str) -> Result<Option<(String, String, String)>> {
+    /// 返回 (config_name, url, api_key, pricing_template_id)
+    pub fn get_session_config(&self, session_id: &str) -> Result<Option<SessionConfig>> {
         let db = self.manager.sqlite(&self.db_path)?;
         let rows = db.query(
-            "SELECT config_name, url, api_key FROM claude_proxy_sessions WHERE session_id = ?",
+            "SELECT config_name, url, api_key, pricing_template_id FROM claude_proxy_sessions WHERE session_id = ?",
             &[session_id],
         )?;
 

@@ -62,6 +62,25 @@ export default function TokenStatisticsPage({
     }
   };
 
+  /**
+   * 填充缺失的时间点数据（用于响应时间趋势图）
+   * 将 null 值的 avg_response_time 替换为 0，确保折线连续
+   * @param data - 原始趋势数据
+   * @returns 填充后的趋势数据
+   */
+  const fillMissingTimePoints = (data: TrendDataPoint[]): TrendDataPoint[] => {
+    return data.map((point) => {
+      // 如果 avg_response_time 为 null，替换为 0
+      if (point.avg_response_time === null) {
+        return {
+          ...point,
+          avg_response_time: 0,
+        };
+      }
+      return point;
+    });
+  };
+
   // 数据库摘要
   const [summary, setSummary] = useState<DatabaseSummary | null>(null);
   const [config, setConfig] = useState<TokenStatsConfig | null>(null);
@@ -69,6 +88,7 @@ export default function TokenStatisticsPage({
 
   // 分析数据
   const [trendsData, setTrendsData] = useState<TrendDataPoint[]>([]);
+  const [responseTimeTrends, setResponseTimeTrends] = useState<TrendDataPoint[]>([]); // 填充后的响应时间趋势数据
   const [costSummary, setCostSummary] = useState<CostSummary | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
@@ -105,7 +125,13 @@ export default function TokenStatisticsPage({
           queryCostSummary(timeControl.startTimeMs, timeControl.endTimeMs, toolType),
         ]);
 
+        // 原始数据用于成本和 Token 趋势图
         setTrendsData(trends);
+
+        // 为响应时间趋势图填充缺失的时间点（将 null 替换为 0）
+        const filledTrends = fillMissingTimePoints(trends);
+        setResponseTimeTrends(filledTrends);
+
         setCostSummary(summary);
       } catch (error) {
         console.error('Failed to load analytics data:', error);
@@ -316,7 +342,7 @@ export default function TokenStatisticsPage({
 
           {/* 响应时间趋势 */}
           <TrendsChart
-            data={trendsData}
+            data={responseTimeTrends}
             title="平均响应时间趋势"
             dataKeys={[
               {

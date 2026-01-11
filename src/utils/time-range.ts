@@ -199,3 +199,43 @@ export function formatTimeRangeDisplay(startTime: number, endTime: number): stri
 
   return `${formatDate(start)} ~ ${formatDate(end)}`;
 }
+
+/**
+ * 根据时间范围和粒度生成完整的时间戳序列（用于填充趋势图的缺失时间点）
+ * @param startTime - 开始时间戳（毫秒）
+ * @param endTime - 结束时间戳（毫秒）
+ * @param granularity - 时间粒度
+ * @returns 时间戳数组（按升序排列，对齐到粒度边界）
+ * @example
+ * // 生成最近1小时的15分钟粒度时间序列
+ * const now = Date.now();
+ * const oneHourAgo = now - TIME_CONSTANTS.HOUR_1;
+ * const sequence = generateTimeSequence(oneHourAgo, now, 'fifteen_minutes');
+ * // 返回: [timestamp1, timestamp2, timestamp3, timestamp4] (4个15分钟间隔)
+ */
+export function generateTimeSequence(
+  startTime: number,
+  endTime: number,
+  granularity: TimeGranularity,
+): number[] {
+  const stepMs = GRANULARITY_MS[granularity];
+
+  // 边界检查：无效时间范围
+  if (startTime >= endTime || stepMs <= 0) {
+    return [];
+  }
+
+  // 向下取整到最近的粒度边界（对齐时间戳）
+  const alignedStart = Math.floor(startTime / stepMs) * stepMs;
+
+  const sequence: number[] = [];
+  let current = alignedStart;
+
+  // 生成时间序列，直到超过结束时间
+  while (current <= endTime) {
+    sequence.push(current);
+    current += stepMs;
+  }
+
+  return sequence;
+}

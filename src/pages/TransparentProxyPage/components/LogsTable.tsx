@@ -266,12 +266,13 @@ export function LogsTable({ initialToolType, initialSessionId }: LogsTableProps)
                     <TableHead>配置</TableHead>
                     <TableHead>模型</TableHead>
                     <TableHead className="text-right">总计</TableHead>
+                    <TableHead className="text-right">总成本</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.logs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                         暂无日志记录
                       </TableCell>
                     </TableRow>
@@ -331,13 +332,19 @@ export function LogsTable({ initialToolType, initialSessionId }: LogsTableProps)
                             </TableCell>
                             <TableCell className="text-right text-xs tabular-nums font-medium">
                               {formatTokens(
-                                log.input_tokens + log.output_tokens + log.cache_creation_tokens,
+                                log.input_tokens +
+                                  log.output_tokens +
+                                  log.cache_creation_tokens +
+                                  log.cache_read_tokens,
                               )}
+                            </TableCell>
+                            <TableCell className="text-right text-xs tabular-nums font-medium">
+                              ${log.total_cost.toFixed(6)}
                             </TableCell>
                           </TableRow>
                           {isExpanded && (
                             <TableRow key={`details-${log.id}`}>
-                              <TableCell colSpan={9} className="bg-muted/30 p-4">
+                              <TableCell colSpan={10} className="bg-muted/30 p-4">
                                 <div className="space-y-3 text-sm">
                                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                                     <div className="flex justify-between">
@@ -373,6 +380,47 @@ export function LogsTable({ initialToolType, initialSessionId }: LogsTableProps)
                                       </span>
                                     </div>
                                   </div>
+                                  {/* 成本信息 */}
+                                  {log.request_status === 'success' && log.total_cost > 0 && (
+                                    <div className="pt-2 border-t">
+                                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">输入成本:</span>
+                                          <span className="font-mono text-xs">
+                                            ${log.input_price?.toFixed(6) ?? '0.000000'}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">输出成本:</span>
+                                          <span className="font-mono text-xs">
+                                            ${log.output_price?.toFixed(6) ?? '0.000000'}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">
+                                            缓存写入成本:
+                                          </span>
+                                          <span className="font-mono text-xs">
+                                            ${log.cache_write_price?.toFixed(6) ?? '0.000000'}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                          <span className="text-muted-foreground">
+                                            缓存读取成本:
+                                          </span>
+                                          <span className="font-mono text-xs">
+                                            ${log.cache_read_price?.toFixed(6) ?? '0.000000'}
+                                          </span>
+                                        </div>
+                                        <div className="flex justify-between col-span-2 font-semibold">
+                                          <span className="text-muted-foreground">总成本:</span>
+                                          <span className="font-mono text-xs">
+                                            ${log.total_cost.toFixed(6)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                   {log.message_id && (
                                     <div className="flex justify-between col-span-2">
                                       <span className="text-muted-foreground">消息ID:</span>

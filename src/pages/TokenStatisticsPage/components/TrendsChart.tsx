@@ -47,35 +47,31 @@ export interface TrendsChartProps {
 }
 
 /**
- * 格式化时间戳为可读日期
+ * 格式化时间戳为可读日期（用于 Tooltip 和 X 轴）
  */
 function formatTimestamp(
   timestamp: number,
   granularity: 'hour' | 'day' | 'week' | 'month',
 ): string {
   const date = new Date(timestamp);
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const hour = date.getHours().toString().padStart(2, '0');
+  const minute = date.getMinutes().toString().padStart(2, '0');
 
   switch (granularity) {
     case 'hour':
-      return date.toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+      // 格式：01/10 19:00
+      return `${month}/${day} ${hour}:${minute}`;
     case 'day':
-      return date.toLocaleDateString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-      });
+      // 格式：01/10
+      return `${month}/${day}`;
     case 'week':
     case 'month':
-      return date.toLocaleDateString('zh-CN', {
-        year: 'numeric',
-        month: '2-digit',
-      });
+      // 格式：2026/01/10
+      return `${date.getFullYear()}/${month}/${day}`;
     default:
-      return date.toLocaleDateString('zh-CN');
+      return `${month}/${day}`;
   }
 }
 
@@ -98,12 +94,12 @@ function detectGranularity(data: TrendDataPoint[]): 'hour' | 'day' | 'week' | 'm
 /**
  * 自定义 Tooltip 组件
  */
-const CustomTooltip: React.FC<TooltipProps<number, string> & { dataKeys: DataKey[] }> = ({
-  active,
-  payload,
-  label,
-  dataKeys,
-}) => {
+const CustomTooltip: React.FC<
+  TooltipProps<number, string> & {
+    dataKeys: DataKey[];
+    granularity: 'hour' | 'day' | 'week' | 'month';
+  }
+> = ({ active, payload, label, dataKeys, granularity }) => {
   if (!active || !payload || payload.length === 0) {
     return null;
   }
@@ -114,7 +110,7 @@ const CustomTooltip: React.FC<TooltipProps<number, string> & { dataKeys: DataKey
   return (
     <div className="rounded-lg border bg-white p-3 shadow-lg dark:bg-gray-800 dark:border-gray-700">
       <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-        {formatTimestamp(timestamp, detectGranularity([data]))}
+        {formatTimestamp(timestamp, granularity)}
       </p>
       <div className="space-y-1">
         {dataKeys.map((dk) => {
@@ -177,7 +173,7 @@ export const TrendsChart: React.FC<TrendsChartProps> = ({
             }
             className="text-xs text-gray-600 dark:text-gray-400"
           />
-          <Tooltip content={<CustomTooltip dataKeys={dataKeys} />} />
+          <Tooltip content={<CustomTooltip dataKeys={dataKeys} granularity={granularity} />} />
           <Legend
             wrapperStyle={{ paddingTop: '20px' }}
             iconType="line"
@@ -195,7 +191,6 @@ export const TrendsChart: React.FC<TrendsChartProps> = ({
               name={dk.name}
               dot={{ r: 3 }}
               activeDot={{ r: 5 }}
-              connectNulls={true}
             />
           ))}
         </LineChart>

@@ -95,7 +95,10 @@ export function RealtimeStats({
 
   // 计算总 Token 数
   const totalTokens =
-    (stats?.total_input ?? 0) + (stats?.total_output ?? 0) + (stats?.total_cache_creation ?? 0);
+    (stats?.total_input ?? 0) +
+    (stats?.total_output ?? 0) +
+    (stats?.total_cache_creation ?? 0) +
+    (stats?.total_cache_read ?? 0);
 
   // 加载状态
   if (isLoading) {

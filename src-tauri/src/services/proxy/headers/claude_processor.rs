@@ -41,8 +41,12 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                     let timestamp = chrono::Utc::now().timestamp();
 
                     // 查询会话配置
-                    if let Ok(Some((config_name, session_url, session_api_key))) =
-                        SESSION_MANAGER.get_session_config(user_id)
+                    if let Ok(Some((
+                        config_name,
+                        session_url,
+                        session_api_key,
+                        _session_pricing_template_id,
+                    ))) = SESSION_MANAGER.get_session_config(user_id)
                     {
                         // 如果是自定义配置且有 URL 和 API Key，使用数据库的配置
                         if config_name == "custom"
@@ -181,8 +185,33 @@ impl RequestProcessor for ClaudeHeadersProcessor {
         };
 
         // 2. 获取 pricing_template_id（优先级：会话配置 > 代理配置 > None）
-        // TODO: Phase 3.4 后续需要从 get_session_config 返回会话的 pricing_template_id
-        let pricing_template_id: Option<String> = proxy_pricing_template_id.map(|s| s.to_string());
+        let pricing_template_id: Option<String> = if !request_body.is_empty() {
+            // 尝试从请求体提取会话 ID 并查询会话配置
+            if let Ok(json_body) = serde_json::from_slice::<serde_json::Value>(request_body) {
+                if let Some(user_id) = json_body["metadata"]["user_id"].as_str() {
+                    // 查询会话的 pricing_template_id
+                    if let Ok(Some((_, _, _, session_pricing_template_id))) =
+                        SESSION_MANAGER.get_session_config(user_id)
+                    {
+                        // 优先使用会话级别的 pricing_template_id
+                        session_pricing_template_id
+                            .or_else(|| proxy_pricing_template_id.map(|s| s.to_string()))
+                    } else {
+                        // 会话不存在，回退到代理配置
+                        proxy_pricing_template_id.map(|s| s.to_string())
+                    }
+                } else {
+                    // 无 user_id，使用代理配置
+                    proxy_pricing_template_id.map(|s| s.to_string())
+                }
+            } else {
+                // JSON 解析失败，使用代理配置
+                proxy_pricing_template_id.map(|s| s.to_string())
+            }
+        } else {
+            // 空 body，使用代理配置
+            proxy_pricing_template_id.map(|s| s.to_string())
+        };
 
         // 3. 检查响应状态
         let status_code =
