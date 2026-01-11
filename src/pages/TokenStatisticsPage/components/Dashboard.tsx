@@ -75,7 +75,9 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
 /**
  * 格式化成本（USD）
+ * @deprecated 已废弃，保留用于未来可能的单项成本展示
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatCost(cost: number): string {
   if (cost >= 1) {
     return `$${cost.toFixed(2)}`;
@@ -84,6 +86,14 @@ function formatCost(cost: number): string {
     return `$${cost.toFixed(4)}`;
   }
   return `$${cost.toFixed(6)}`;
+}
+
+/**
+ * 格式化总成本（向上舍入到2位小数）
+ */
+function formatTotalCost(cost: number): string {
+  const rounded = Math.ceil(cost * 100) / 100;
+  return `$${rounded.toFixed(2)}`;
 }
 
 /**
@@ -144,7 +154,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ summary, loading = false }
       {/* 总成本 */}
       <MetricCard
         title="总成本"
-        value={formatCost(summary.total_cost)}
+        value={formatTotalCost(summary.total_cost)}
         subtitle={`共 ${formatRequestCount(summary.total_requests)} 个请求`}
         icon={<DollarSign className="h-6 w-6" />}
         iconBgColor="bg-green-100 dark:bg-green-900/20"

@@ -21,10 +21,6 @@ pub enum TimeGranularity {
     TwelveHours,
     /// 天粒度
     Day,
-    /// 7天粒度（周）
-    Week,
-    /// 30天粒度（月）
-    Month,
 }
 
 impl Default for TimeGranularity {
@@ -168,14 +164,6 @@ impl TokenStatsAnalytics {
                 // 按天分组
                 "CAST((timestamp / 86400000) * 86400000 AS INTEGER)"
             }
-            TimeGranularity::Week => {
-                // 按周分组（周一为一周开始）
-                "strftime('%s', date(timestamp / 1000, 'unixepoch', 'weekday 0', '-6 days')) * 1000"
-            }
-            TimeGranularity::Month => {
-                // 按月分组
-                "strftime('%s', date(timestamp / 1000, 'unixepoch', 'start of month')) * 1000"
-            }
         };
 
         // 构建 WHERE 子句
@@ -297,8 +285,6 @@ impl TokenStatsAnalytics {
             TimeGranularity::Hour => 60 * 60 * 1000,
             TimeGranularity::TwelveHours => 12 * 60 * 60 * 1000,
             TimeGranularity::Day => 24 * 60 * 60 * 1000,
-            TimeGranularity::Week => 7 * 24 * 60 * 60 * 1000,
-            TimeGranularity::Month => 30 * 24 * 60 * 60 * 1000,
         };
 
         // 将数据库结果转换为 HashMap 以便快速查找

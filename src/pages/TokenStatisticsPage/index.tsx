@@ -19,8 +19,11 @@ import { getTokenStatsSummary, getTokenStatsConfig } from '@/lib/tauri-commands'
 import { queryTokenTrends, queryCostSummary } from '@/lib/tauri-commands/analytics';
 import { Dashboard } from './components/Dashboard';
 import { TrendsChart } from './components/TrendsChart';
+import { CustomTimeRangeDialog } from '@/components/dialogs/CustomTimeRangeDialog';
+import { useTimeRangeControl } from '@/hooks/useTimeRangeControl';
+import { GRANULARITY_LABELS } from '@/utils/time-range';
 import type { DatabaseSummary, TokenStatsConfig, ToolType } from '@/types/token-stats';
-import type { TrendDataPoint, CostSummary, TimeRange } from '@/types/analytics';
+import type { TrendDataPoint, CostSummary, TimeRange, TimeGranularity } from '@/types/analytics';
 
 interface TokenStatisticsPageProps {
   /** 会话ID（从导航传入，用于筛选日志） */
@@ -41,6 +44,9 @@ export default function TokenStatisticsPage({
   // 使用传入的参数或默认值
   const sessionId = propsSessionId;
   const toolType = propsToolType;
+
+  // 使用统一的时间范围控制 Hook
+  const timeControl = useTimeRangeControl();
 
   // 返回透明代理页面
   const handleGoBack = async () => {
@@ -64,8 +70,6 @@ export default function TokenStatisticsPage({
   // 分析数据
   const [trendsData, setTrendsData] = useState<TrendDataPoint[]>([]);
   const [costSummary, setCostSummary] = useState<CostSummary | null>(null);
-  const [timeRange, setTimeRange] = useState<TimeRange>('day'); // 查询时间范围
-  const [granularity, setGranularity] = useState<TimeGranularity>('hour'); // 数据分组粒度
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   // 加载数据库摘要和配置
@@ -91,17 +95,14 @@ export default function TokenStatisticsPage({
     const loadAnalyticsData = async () => {
       setAnalyticsLoading(true);
       try {
-        const endTime = Date.now();
-        const startTime = getStartTime(endTime, timeRange);
-
         const [trends, summary] = await Promise.all([
           queryTokenTrends({
-            start_time: startTime,
-            end_time: endTime,
+            start_time: timeControl.startTimeMs,
+            end_time: timeControl.endTimeMs,
             tool_type: toolType,
-            granularity: granularity, // 使用独立的粒度状态
+            granularity: timeControl.granularity,
           }),
-          queryCostSummary(startTime, endTime, toolType),
+          queryCostSummary(timeControl.startTimeMs, timeControl.endTimeMs, toolType),
         ]);
 
         setTrendsData(trends);
@@ -119,7 +120,7 @@ export default function TokenStatisticsPage({
     };
 
     loadAnalyticsData();
-  }, [timeRange, granularity, toolType, toast]); // 监听时间范围和粒度的变化
+  }, [timeControl.startTimeMs, timeControl.endTimeMs, timeControl.granularity, toolType, toast]);
 
   // 刷新数据
   const handleRefresh = async () => {
@@ -157,29 +158,17 @@ export default function TokenStatisticsPage({
     });
   };
 
-  // 根据时间范围计算起始时间
-  const getStartTime = (endTime: number, range: TimeRange): number => {
-    const msPerMinute = 60 * 1000;
-    const msPerHour = 60 * msPerMinute;
-    const msPerDay = 24 * msPerHour;
+  // 格式化查询时间范围显示（所有模式都显示实际查询范围）
+  const formatQueryTimeRange = () => {
+    return `${formatDate(timeControl.startTimeMs)} - ${formatDate(timeControl.endTimeMs)}`;
+  };
 
-    switch (range) {
-      case 'fifteen_minutes':
-        return endTime - 15 * msPerMinute; // 最近15分钟
-      case 'thirty_minutes':
-        return endTime - 30 * msPerMinute; // 最近30分钟
-      case 'hour':
-        return endTime - msPerHour; // 最近1小时
-      case 'twelve_hours':
-        return endTime - 12 * msPerHour; // 最近12小时
-      case 'day':
-        return endTime - msPerDay; // 最近1天
-      case 'week':
-        return endTime - 7 * msPerDay; // 最近7天
-      case 'month':
-        return endTime - 30 * msPerDay; // 最近30天
-      default:
-        return endTime - msPerDay;
+  // 处理时间范围选择
+  const handleTimeRangeChange = (value: string) => {
+    if (value === 'custom') {
+      timeControl.openCustomDialog();
+    } else {
+      timeControl.setPresetRange(value as Exclude<TimeRange, 'custom'>);
     }
   };
 
@@ -209,17 +198,16 @@ export default function TokenStatisticsPage({
               </div>
               <div className="h-4 w-px bg-border" />
               <div className="text-muted-foreground">
-                {summary.oldest_timestamp && summary.newest_timestamp && (
-                  <span>
-                    {formatDate(summary.oldest_timestamp)} - {formatDate(summary.newest_timestamp)}
-                  </span>
-                )}
+                <span>{formatQueryTimeRange()}</span>
               </div>
             </div>
           )}
 
           {/* 时间范围选择器 */}
-          <Select value={timeRange} onValueChange={(value) => setTimeRange(value as TimeRange)}>
+          <Select
+            value={timeControl.mode === 'custom' ? 'custom' : timeControl.presetRange}
+            onValueChange={handleTimeRangeChange}
+          >
             <SelectTrigger className="w-36">
               <Calendar className="h-4 w-4 mr-2" />
               <SelectValue placeholder="查询范围" />
@@ -232,25 +220,24 @@ export default function TokenStatisticsPage({
               <SelectItem value="day">最近1天</SelectItem>
               <SelectItem value="week">最近7天</SelectItem>
               <SelectItem value="month">最近30天</SelectItem>
+              <SelectItem value="custom">自定义</SelectItem>
             </SelectContent>
           </Select>
 
           {/* 时间粒度选择器 */}
           <Select
-            value={granularity}
-            onValueChange={(value) => setGranularity(value as TimeGranularity)}
+            value={timeControl.granularity}
+            onValueChange={(value) => timeControl.setGranularity(value as TimeGranularity)}
           >
             <SelectTrigger className="w-32">
               <SelectValue placeholder="数据粒度" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="fifteen_minutes">15分钟</SelectItem>
-              <SelectItem value="thirty_minutes">30分钟</SelectItem>
-              <SelectItem value="hour">1小时</SelectItem>
-              <SelectItem value="twelve_hours">12小时</SelectItem>
-              <SelectItem value="day">1天</SelectItem>
-              <SelectItem value="week">1周</SelectItem>
-              <SelectItem value="month">1月</SelectItem>
+              {timeControl.allowedGranularities.map((g) => (
+                <SelectItem key={g} value={g}>
+                  {GRANULARITY_LABELS[g]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -366,6 +353,17 @@ export default function TokenStatisticsPage({
           </div>
         </div>
       )}
+
+      {/* 自定义时间范围对话框 */}
+      <CustomTimeRangeDialog
+        open={timeControl.showCustomDialog}
+        onOpenChange={timeControl.closeCustomDialog}
+        startTime={timeControl.customStartTime}
+        endTime={timeControl.customEndTime}
+        onStartTimeChange={timeControl.setCustomStartTime}
+        onEndTimeChange={timeControl.setCustomEndTime}
+        onConfirm={timeControl.confirmCustomTime}
+      />
     </div>
   );
 }

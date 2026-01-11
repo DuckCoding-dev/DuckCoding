@@ -12,7 +12,8 @@ export type TimeRange =
   | 'twelve_hours'
   | 'day'
   | 'week'
-  | 'month';
+  | 'month'
+  | 'custom'; // 自定义时间范围
 
 /**
  * 时间粒度（与后端 TimeGranularity 对应）
@@ -22,9 +23,7 @@ export type TimeGranularity =
   | 'thirty_minutes'
   | 'hour'
   | 'twelve_hours'
-  | 'day'
-  | 'week'
-  | 'month';
+  | 'day';
 
 /**
  * 趋势查询参数
