@@ -3,7 +3,7 @@
  */
 
 import { useState } from 'react';
-import { Check, MoreVertical, Pencil, Power, Trash2, Tag } from 'lucide-react';
+import { Check, MoreVertical, Pencil, Power, Trash2, Tag, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -99,12 +99,12 @@ export function ProfileCard({
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold">{profile.name}</CardTitle>
               {profile.is_active && !proxyRunning && (
-                <Badge variant="default" className="h-5">
+                <Badge variant="default" className="h-5 whitespace-nowrap">
                   <Check className="mr-1 h-3 w-3" />
                   激活中
                 </Badge>
               )}
-              <Badge variant={sourceInfo.variant} className="h-5" title={sourceInfo.tooltip}>
+              <Badge variant={sourceInfo.variant} className="h-5 whitespace-nowrap" title={sourceInfo.tooltip}>
                 <Tag className="mr-1 h-3 w-3" />
                 {sourceInfo.text}
               </Badge>
@@ -124,13 +124,19 @@ export function ProfileCard({
               {(!profile.is_active || proxyRunning) && (
                 <>
                   <DropdownMenuItem
-                    onClick={onActivate}
+                    onClick={proxyRunning ? undefined : onActivate}
                     disabled={proxyRunning}
-                    title={proxyRunning ? '透明代理运行中，无法激活配置' : ''}
+                    className={proxyRunning ? 'cursor-not-allowed opacity-50' : ''}
                   >
                     <Power className="mr-2 h-4 w-4" />
                     激活
                   </DropdownMenuItem>
+                  {proxyRunning && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      透明代理运行中，请先停止代理
+                    </div>
+                  )}
                   <DropdownMenuSeparator />
                 </>
               )}
