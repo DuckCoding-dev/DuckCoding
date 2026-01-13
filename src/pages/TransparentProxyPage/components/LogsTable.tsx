@@ -168,26 +168,27 @@ export function LogsTable({ initialToolType, initialSessionId }: LogsTableProps)
       <CardContent>
         {/* 过滤器 */}
         <div className="mb-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* 工具类型过滤 */}
-            <Select
-              value={toolTypeFilter ?? 'all'}
-              onValueChange={(v) => setToolTypeFilter(v === 'all' ? undefined : v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="全部工具" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部工具</SelectItem>
-                <SelectItem value="claude-code">Claude Code</SelectItem>
-                <SelectItem value="codex">CodeX</SelectItem>
-                <SelectItem value="gemini-cli">Gemini CLI</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* 过滤栏 - 单行布局 */}
+          <div className="flex items-center gap-3">
+            {/* 会话 ID 搜索 */}
+            <Input
+              placeholder="搜索会话 ID..."
+              value={sessionIdFilter}
+              onChange={(e) => setSessionIdFilter(e.target.value)}
+              className="max-w-xs"
+            />
+
+            {/* 配置名称搜索 */}
+            <Input
+              placeholder="搜索配置名称..."
+              value={configNameFilter}
+              onChange={(e) => setConfigNameFilter(e.target.value)}
+              className="max-w-xs"
+            />
 
             {/* 时间范围过滤 */}
             <Select value={timeRangeFilter} onValueChange={setTimeRangeFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="时间范围" />
               </SelectTrigger>
               <SelectContent>
@@ -199,38 +200,19 @@ export function LogsTable({ initialToolType, initialSessionId }: LogsTableProps)
               </SelectContent>
             </Select>
 
-            {/* 会话 ID 过滤 */}
-            <Input
-              placeholder="会话 ID"
-              value={sessionIdFilter}
-              onChange={(e) => setSessionIdFilter(e.target.value)}
-              className="flex-1"
-            />
-
-            {/* 配置名称过滤 */}
-            <Input
-              placeholder="配置名称"
-              value={configNameFilter}
-              onChange={(e) => setConfigNameFilter(e.target.value)}
-              className="flex-1"
-            />
-          </div>
-
-          {/* 操作按钮 */}
-          <div className="flex items-center gap-2">
+            {/* 查询按钮 */}
             <Button variant="outline" size="sm" onClick={fetchLogs} disabled={isLoading}>
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Search className="h-4 w-4" />
-              )}
-              <span className="ml-2">查询</span>
+              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             </Button>
+
+            {/* 重置按钮 */}
             <Button variant="ghost" size="sm" onClick={handleResetFilters}>
-              重置过滤器
+              重置
             </Button>
+
+            {/* 统计信息 */}
             {data && (
-              <span className="ml-auto text-sm text-muted-foreground">共 {data.total} 条记录</span>
+              <div className="ml-auto text-sm text-muted-foreground">共 {data.total} 条记录</div>
             )}
           </div>
         </div>
