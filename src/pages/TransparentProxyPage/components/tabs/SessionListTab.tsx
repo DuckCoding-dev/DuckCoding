@@ -70,7 +70,19 @@ function EmptyState() {
  * 会话列表 Tab 组件
  */
 export function SessionListTab({ toolId, onNavigateToDetail }: SessionListTabProps) {
-  const { sessions, loading, deleteSession, refresh } = useSessionData(toolId);
+  const {
+    sessions,
+    total,
+    loading,
+    deleteSession,
+    refresh,
+    page,
+    totalPages,
+    canGoPrevious,
+    canGoNext,
+    nextPage,
+    previousPage,
+  } = useSessionData(toolId, { pageSize: 20 });
 
   // 过滤和排序状态
   const [searchTerm, setSearchTerm] = useState('');
@@ -82,7 +94,7 @@ export function SessionListTab({ toolId, onNavigateToDetail }: SessionListTabPro
   const [noteDialogOpen, setNoteDialogOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<SessionRecord | null>(null);
 
-  // 过滤和排序逻辑
+  // 过滤和排序逻辑（客户端过滤当前页数据）
   const filteredSessions = useMemo(() => {
     let result = sessions;
 
@@ -273,6 +285,30 @@ export function SessionListTab({ toolId, onNavigateToDetail }: SessionListTabPro
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* 分页控制 */}
+      {totalPages > 1 && filteredSessions.length > 0 && (
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-sm text-muted-foreground">
+            第 {page} 页，共 {totalPages} 页（总计 {total} 个会话）
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={previousPage}
+              disabled={!canGoPrevious || loading}
+            >
+              <ChevronRight className="h-4 w-4 rotate-180" />
+              上一页
+            </Button>
+            <Button variant="outline" size="sm" onClick={nextPage} disabled={!canGoNext || loading}>
+              下一页
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       )}
 
