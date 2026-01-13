@@ -86,6 +86,7 @@ pub async fn query_token_trends(query: TrendQuery) -> Result<Vec<TrendDataPoint>
 /// - `start_time`: 开始时间戳（毫秒）
 /// - `end_time`: 结束时间戳（毫秒）
 /// - `tool_type`: 工具类型过滤（可选）
+/// - `session_id`: 会话 ID 过滤（可选）
 ///
 /// # 返回
 /// - `Ok(CostSummary)`: 成本汇总数据
@@ -95,6 +96,7 @@ pub async fn query_cost_summary(
     start_time: i64,
     end_time: i64,
     tool_type: Option<String>,
+    session_id: Option<String>,
 ) -> Result<CostSummary, String> {
     let db_path = config_dir()
         .map_err(|e| format!("Failed to get config dir: {}", e))?
@@ -107,6 +109,7 @@ pub async fn query_cost_summary(
         start_time: Some(start_time),
         end_time: Some(end_time),
         tool_type: tool_type.clone(),
+        session_id: session_id.clone(),
         group_by: CostGroupBy::Model, // 默认分组，实际查询时会覆盖
     };
 
@@ -133,6 +136,7 @@ pub async fn query_cost_summary(
         start_time: Some(start_time),
         end_time: Some(end_time),
         tool_type: tool_type.clone(),
+        session_id: session_id.clone(),
         granularity: TimeGranularity::Day,
         ..Default::default()
     };
@@ -152,19 +156,20 @@ pub async fn query_cost_summary(
 
     // 构建 WHERE 子句
     let mut where_clauses = vec!["timestamp >= ?1", "timestamp <= ?2"];
-    let params: Vec<Box<dyn rusqlite::ToSql>> = if let Some(ref tt) = tool_type {
-        where_clauses.push("tool_type = ?3");
-        vec![
-            Box::new(start_time) as Box<dyn rusqlite::ToSql>,
-            Box::new(end_time),
-            Box::new(tt.clone()),
-        ]
-    } else {
-        vec![
-            Box::new(start_time) as Box<dyn rusqlite::ToSql>,
-            Box::new(end_time),
-        ]
-    };
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![
+        Box::new(start_time) as Box<dyn rusqlite::ToSql>,
+        Box::new(end_time),
+    ];
+
+    if let Some(ref tt) = tool_type {
+        where_clauses.push("tool_type = ?");
+        params.push(Box::new(tt.clone()));
+    }
+
+    if let Some(ref sid) = session_id {
+        where_clauses.push("session_id = ?");
+        params.push(Box::new(sid.clone()));
+    }
 
     let where_clause = where_clauses.join(" AND ");
 
@@ -172,7 +177,7 @@ pub async fn query_cost_summary(
         "SELECT
             COUNT(*) as total,
             COALESCE(SUM(CASE WHEN request_status = 'success' THEN 1 ELSE 0 END), 0) as successful,
-            COALESCE(SUM(CASE WHEN request_status = 'error' THEN 1 ELSE 0 END), 0) as failed,
+            COALESCE(SUM(CASE WHEN request_status = 'failed' THEN 1 ELSE 0 END), 0) as failed,
             AVG(response_time_ms) as avg_response_time
         FROM token_logs
         WHERE {}",

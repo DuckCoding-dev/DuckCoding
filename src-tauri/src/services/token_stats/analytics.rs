@@ -42,6 +42,8 @@ pub struct TrendQuery {
     pub model: Option<String>,
     /// 配置名称过滤
     pub config_name: Option<String>,
+    /// 会话 ID 过滤
+    pub session_id: Option<String>,
     /// 时间粒度
     pub granularity: TimeGranularity,
 }
@@ -104,6 +106,8 @@ pub struct CostSummaryQuery {
     pub end_time: Option<i64>,
     /// 工具类型过滤
     pub tool_type: Option<String>,
+    /// 会话 ID 过滤
+    pub session_id: Option<String>,
     /// 分组方式
     pub group_by: CostGroupBy,
 }
@@ -193,6 +197,11 @@ impl TokenStatsAnalytics {
         if let Some(ref config_name) = query.config_name {
             where_clauses.push("config_name = ?");
             params.push(Box::new(config_name.clone()));
+        }
+
+        if let Some(ref session_id) = query.session_id {
+            where_clauses.push("session_id = ?");
+            params.push(Box::new(session_id.clone()));
         }
 
         let where_clause = if where_clauses.is_empty() {
@@ -356,6 +365,11 @@ impl TokenStatsAnalytics {
         if let Some(ref tool_type) = query.tool_type {
             where_clauses.push("tool_type = ?");
             params.push(Box::new(tool_type.clone()));
+        }
+
+        if let Some(ref session_id) = query.session_id {
+            where_clauses.push("session_id = ?");
+            params.push(Box::new(session_id.clone()));
         }
 
         let where_clause = if where_clauses.is_empty() {
