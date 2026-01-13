@@ -236,7 +236,7 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
                 onValueChange={handleInstanceChange}
                 disabled={toolInstances.length === 0}
               >
-                <SelectTrigger className="w-56 h-8 bg-white/80 dark:bg-slate-900/80">
+                <SelectTrigger className="min-w-[13rem] h-8 bg-white/80 dark:bg-slate-900/80 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:line-clamp-none [&>span]:overflow-visible">
                   <SelectValue placeholder="选择工具实例" />
                 </SelectTrigger>
                 <SelectContent>
