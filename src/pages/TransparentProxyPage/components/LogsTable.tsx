@@ -125,8 +125,10 @@ export function LogsTable({
         end_time = range.end_time;
       } else {
         // 自定义时间范围
-        start_time = Math.floor(customStartTime.getTime() / 1000);
-        end_time = Math.floor(customEndTime.getTime() / 1000);
+        if (customStartTime && customEndTime) {
+          start_time = Math.floor(customStartTime.getTime() / 1000);
+          end_time = Math.floor(customEndTime.getTime() / 1000);
+        }
       }
 
       const result = await queryTokenLogs({
