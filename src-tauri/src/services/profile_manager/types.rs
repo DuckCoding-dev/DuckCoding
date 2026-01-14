@@ -6,6 +6,39 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+// ==================== AMP Profile Selection ====================
+
+/// AMP Profile 引用（指向某工具的某个 profile）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfileRef {
+    pub tool_id: String,
+    pub profile_name: String,
+}
+
+/// AMP Profile 选择（引用其他工具的 profile）
+/// AMP 不创建独立 profile，而是从 3 个工具中选择
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AmpProfileSelection {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude: Option<ProfileRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codex: Option<ProfileRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gemini: Option<ProfileRef>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl Default for AmpProfileSelection {
+    fn default() -> Self {
+        Self {
+            claude: None,
+            codex: None,
+            gemini: None,
+            updated_at: Utc::now(),
+        }
+    }
+}
+
 // ==================== Profile 来源标记 ====================
 
 /// Profile 来源类型

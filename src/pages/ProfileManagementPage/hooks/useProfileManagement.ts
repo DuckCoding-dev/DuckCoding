@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import type { ProfileFormData, ProfileGroup, ToolId, ProfilePayload } from '@/types/profile';
+import type { ProfileFormData, ProfileGroup, ProfileToolId, ProfilePayload } from '@/types/profile';
 import {
   pmListAllProfiles,
   pmSaveProfile,
@@ -19,6 +19,7 @@ import { TOOL_NAMES } from '@/types/profile';
 interface UseProfileManagementReturn {
   // 状态
   profileGroups: ProfileGroup[];
+  allProfiles: import('@/types/profile').ProfileDescriptor[];
   loading: boolean;
   error: string | null;
   allProxyStatus: AllProxyStatus;
@@ -26,16 +27,17 @@ interface UseProfileManagementReturn {
   // 操作方法
   refresh: () => Promise<void>;
   loadAllProxyStatus: () => Promise<void>;
-  createProfile: (toolId: ToolId, data: ProfileFormData) => Promise<void>;
-  updateProfile: (toolId: ToolId, name: string, data: ProfileFormData) => Promise<void>;
-  deleteProfile: (toolId: ToolId, name: string) => Promise<void>;
-  activateProfile: (toolId: ToolId, name: string) => Promise<void>;
-  captureFromNative: (toolId: ToolId, name: string) => Promise<void>;
+  createProfile: (toolId: ProfileToolId, data: ProfileFormData) => Promise<void>;
+  updateProfile: (toolId: ProfileToolId, name: string, data: ProfileFormData) => Promise<void>;
+  deleteProfile: (toolId: ProfileToolId, name: string) => Promise<void>;
+  activateProfile: (toolId: ProfileToolId, name: string) => Promise<void>;
+  captureFromNative: (toolId: ProfileToolId, name: string) => Promise<void>;
 }
 
 export function useProfileManagement(): UseProfileManagementReturn {
   const { toast } = useToast();
   const [profileGroups, setProfileGroups] = useState<ProfileGroup[]>([]);
+  const [allProfiles, setAllProfiles] = useState<import('@/types/profile').ProfileDescriptor[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [allProxyStatus, setAllProxyStatus] = useState<AllProxyStatus>({});
@@ -46,22 +48,23 @@ export function useProfileManagement(): UseProfileManagementReturn {
     setError(null);
 
     try {
-      const allProfiles = await pmListAllProfiles();
+      const profiles = await pmListAllProfiles();
+      setAllProfiles(profiles);
 
-      // 按工具分组
-      const groups: ProfileGroup[] = (['claude-code', 'codex', 'gemini-cli'] as ToolId[]).map(
-        (toolId) => {
-          const toolProfiles = allProfiles.filter((p) => p.tool_id === toolId);
-          const activeProfile = toolProfiles.find((p) => p.is_active);
+      // 按工具分组（仅可创建 profile 的工具）
+      const groups: ProfileGroup[] = (
+        ['claude-code', 'codex', 'gemini-cli'] as ProfileToolId[]
+      ).map((toolId) => {
+        const toolProfiles = profiles.filter((p) => p.tool_id === toolId);
+        const activeProfile = toolProfiles.find((p) => p.is_active);
 
-          return {
-            tool_id: toolId,
-            tool_name: TOOL_NAMES[toolId],
-            profiles: toolProfiles,
-            active_profile: activeProfile,
-          };
-        },
-      );
+        return {
+          tool_id: toolId,
+          tool_name: TOOL_NAMES[toolId],
+          profiles: toolProfiles,
+          active_profile: activeProfile,
+        };
+      });
 
       setProfileGroups(groups);
     } catch (err) {
@@ -94,7 +97,7 @@ export function useProfileManagement(): UseProfileManagementReturn {
 
   // 创建 Profile
   const createProfile = useCallback(
-    async (toolId: ToolId, data: ProfileFormData) => {
+    async (toolId: ProfileToolId, data: ProfileFormData) => {
       try {
         const payload = buildProfilePayload(toolId, data);
         await pmSaveProfile(toolId, data.name, payload);
@@ -118,7 +121,7 @@ export function useProfileManagement(): UseProfileManagementReturn {
 
   // 更新 Profile
   const updateProfile = useCallback(
-    async (toolId: ToolId, name: string, data: ProfileFormData) => {
+    async (toolId: ProfileToolId, name: string, data: ProfileFormData) => {
       try {
         const payload = buildProfilePayload(toolId, data);
         await pmSaveProfile(toolId, name, payload);
@@ -142,7 +145,7 @@ export function useProfileManagement(): UseProfileManagementReturn {
 
   // 删除 Profile
   const deleteProfile = useCallback(
-    async (toolId: ToolId, name: string) => {
+    async (toolId: ProfileToolId, name: string) => {
       try {
         await pmDeleteProfile(toolId, name);
         toast({
@@ -165,7 +168,7 @@ export function useProfileManagement(): UseProfileManagementReturn {
 
   // 激活 Profile
   const activateProfile = useCallback(
-    async (toolId: ToolId, name: string) => {
+    async (toolId: ProfileToolId, name: string) => {
       try {
         await pmActivateProfile(toolId, name);
         toast({
@@ -188,7 +191,7 @@ export function useProfileManagement(): UseProfileManagementReturn {
 
   // 从原生配置捕获
   const captureFromNative = useCallback(
-    async (toolId: ToolId, name: string) => {
+    async (toolId: ProfileToolId, name: string) => {
       try {
         await pmCaptureFromNative(toolId, name);
         toast({
@@ -216,6 +219,7 @@ export function useProfileManagement(): UseProfileManagementReturn {
 
   return {
     profileGroups,
+    allProfiles,
     loading,
     error,
     allProxyStatus,
@@ -234,7 +238,7 @@ export function useProfileManagement(): UseProfileManagementReturn {
 /**
  * 构建 ProfilePayload（工具分组即类型，无需 type 字段）
  */
-function buildProfilePayload(toolId: ToolId, data: ProfileFormData): ProfilePayload {
+function buildProfilePayload(toolId: ProfileToolId, data: ProfileFormData): ProfilePayload {
   switch (toolId) {
     case 'claude-code':
       return {

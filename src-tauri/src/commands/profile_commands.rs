@@ -1,7 +1,7 @@
 //! Profile 管理 Tauri 命令（v2.1 - 简化版）
 
 use super::error::AppResult;
-use ::duckcoding::services::profile_manager::ProfileDescriptor;
+use ::duckcoding::services::profile_manager::{AmpProfileSelection, ProfileDescriptor, ProfileRef};
 use serde::Deserialize;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -225,4 +225,56 @@ pub async fn pm_capture_from_native(
 ) -> AppResult<()> {
     let manager = state.manager.write().await;
     Ok(manager.capture_from_native(&tool_id, &name)?)
+}
+
+// ==================== AMP Profile Selection ====================
+
+/// AMP Profile 选择输入（前端传递）
+#[derive(Debug, Deserialize)]
+pub struct AmpSelectionInput {
+    pub claude: Option<ProfileRefInput>,
+    pub codex: Option<ProfileRefInput>,
+    pub gemini: Option<ProfileRefInput>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProfileRefInput {
+    pub tool_id: String,
+    pub profile_name: String,
+}
+
+/// 获取 AMP Profile 选择
+#[tauri::command]
+pub async fn pm_get_amp_selection(
+    state: tauri::State<'_, ProfileManagerState>,
+) -> AppResult<AmpProfileSelection> {
+    let manager = state.manager.read().await;
+    Ok(manager.get_amp_selection()?)
+}
+
+/// 保存 AMP Profile 选择
+#[tauri::command]
+pub async fn pm_save_amp_selection(
+    state: tauri::State<'_, ProfileManagerState>,
+    input: AmpSelectionInput,
+) -> AppResult<()> {
+    let manager = state.manager.write().await;
+
+    let selection = AmpProfileSelection {
+        claude: input.claude.map(|r| ProfileRef {
+            tool_id: r.tool_id,
+            profile_name: r.profile_name,
+        }),
+        codex: input.codex.map(|r| ProfileRef {
+            tool_id: r.tool_id,
+            profile_name: r.profile_name,
+        }),
+        gemini: input.gemini.map(|r| ProfileRef {
+            tool_id: r.tool_id,
+            profile_name: r.profile_name,
+        }),
+        updated_at: chrono::Utc::now(),
+    };
+
+    Ok(manager.save_amp_selection(&selection)?)
 }

@@ -10,6 +10,7 @@ pub mod types;
 
 pub use manager::ProfileManager;
 pub use types::{
-    ActiveMetadata, ActiveProfile, ActiveStore, ClaudeProfile, CodexProfile, GeminiProfile,
-    ProfileDescriptor, ProfileSource, ProfilesMetadata, ProfilesStore, TokenImportStatus,
+    ActiveMetadata, ActiveProfile, ActiveStore, AmpProfileSelection, ClaudeProfile, CodexProfile,
+    GeminiProfile, ProfileDescriptor, ProfileRef, ProfileSource, ProfilesMetadata, ProfilesStore,
+    TokenImportStatus,
 };

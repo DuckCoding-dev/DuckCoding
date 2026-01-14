@@ -91,7 +91,7 @@ pub async fn auto_start_proxies(manager: &ProxyManager) {
     let mut started_count = 0;
     let mut failed_count = 0;
 
-    for tool_id in &["claude-code", "codex", "gemini-cli"] {
+    for tool_id in &["claude-code", "codex", "gemini-cli", "amp-code"] {
         let tool_config = match proxy_store.get_config(tool_id) {
             Some(cfg) => cfg.clone(),
             None => continue,

@@ -465,7 +465,7 @@ function SortableArrayItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 ${
+      className={`flex items-center gap-3 rounded-md border bg-card px-3 py-2 ${
         isDragging ? 'opacity-70' : ''
       }`}
     >
@@ -579,7 +579,7 @@ function ObjectField({
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">{description}</p>
-      <div className="space-y-4 rounded-md border border-slate-200/80 p-3">
+      <div className="space-y-4 rounded-md border p-3">
         {keys.length === 0 && (
           <div className="rounded border border-dashed p-3 text-center text-xs text-muted-foreground">
             尚未设置任何子选项
@@ -592,7 +592,7 @@ function ObjectField({
           const childIsCompound = isCompoundField(resolvedChildSchema, objectValue[key]);
 
           return (
-            <div key={key} className="space-y-2 rounded-md bg-white p-3">
+            <div key={key} className="space-y-2 rounded-md bg-card p-3">
               <div className="flex flex-col gap-3 md:flex-row md:items-center">
                 <div className="flex items-center gap-2 md:basis-1/2">
                   <span className="font-mono text-sm font-semibold">{key}</span>

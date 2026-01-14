@@ -25,13 +25,15 @@ import { ProfileEditor } from './components/ProfileEditor';
 import { ActiveProfileCard } from './components/ActiveProfileCard';
 import { ImportFromProviderDialog } from './components/ImportFromProviderDialog';
 import { CreateCustomProfileDialog } from './components/CreateCustomProfileDialog';
+import { AmpProfileSelector } from './components/AmpProfileSelector';
 import { useProfileManagement } from './hooks/useProfileManagement';
-import type { ToolId, ProfileFormData, ProfileDescriptor } from '@/types/profile';
+import type { ProfileToolId, ProfileFormData, ProfileDescriptor, ToolId } from '@/types/profile';
 import { logoMap } from '@/utils/constants';
 
 export default function ProfileManagementPage() {
   const {
     profileGroups,
+    allProfiles,
     loading,
     error,
     allProxyStatus,
@@ -69,10 +71,11 @@ export default function ProfileManagementPage() {
 
   // 保存 Profile
   const handleSaveProfile = async (data: ProfileFormData) => {
+    if (selectedTab === 'amp-code') return; // AMP 不支持创建 profile
     if (editorMode === 'create') {
-      await createProfile(selectedTab, data);
+      await createProfile(selectedTab as ProfileToolId, data);
     } else if (editingProfile) {
-      await updateProfile(selectedTab, editingProfile.name, data);
+      await updateProfile(selectedTab as ProfileToolId, editingProfile.name, data);
     }
     setEditorOpen(false);
     // 对话框关闭后刷新数据
@@ -81,12 +84,14 @@ export default function ProfileManagementPage() {
 
   // 激活 Profile
   const handleActivateProfile = async (profileName: string) => {
-    await activateProfile(selectedTab, profileName);
+    if (selectedTab === 'amp-code') return; // AMP 不支持激活 profile
+    await activateProfile(selectedTab as ProfileToolId, profileName);
   };
 
   // 删除 Profile
   const handleDeleteProfile = async (profileName: string) => {
-    await deleteProfile(selectedTab, profileName);
+    if (selectedTab === 'amp-code') return; // AMP 不支持删除 profile
+    await deleteProfile(selectedTab as ProfileToolId, profileName);
   };
 
   // 构建编辑器初始数据
@@ -147,13 +152,18 @@ export default function ProfileManagementPage() {
         <>
           {/* 工具 Tab 切换 */}
           <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as ToolId)}>
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsList className="grid w-full grid-cols-4 mb-6">
               {profileGroups.map((group) => (
                 <TabsTrigger key={group.tool_id} value={group.tool_id} className="gap-2">
                   <img src={logoMap[group.tool_id]} alt={group.tool_name} className="w-4 h-4" />
                   {group.tool_name}
                 </TabsTrigger>
               ))}
+              {/* AMP Code Tab */}
+              <TabsTrigger value="amp-code" className="gap-2">
+                <img src={logoMap['amp-code']} alt="AMP Code" className="w-4 h-4" />
+                AMP Code
+              </TabsTrigger>
             </TabsList>
 
             {/* 每个工具的 Profile 列表 */}
@@ -216,19 +226,29 @@ export default function ProfileManagementPage() {
                 )}
               </TabsContent>
             ))}
+
+            {/* AMP Code Tab 内容 */}
+            <TabsContent value="amp-code" className="space-y-4">
+              <AmpProfileSelector
+                allProfiles={allProfiles}
+                onSwitchTab={(toolId) => setSelectedTab(toolId)}
+              />
+            </TabsContent>
           </Tabs>
         </>
       )}
 
-      {/* Profile 编辑器对话框 */}
-      <ProfileEditor
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        toolId={selectedTab}
-        mode={editorMode}
-        initialData={getEditorInitialData()}
-        onSave={handleSaveProfile}
-      />
+      {/* Profile 编辑器对话框（AMP 不需要） */}
+      {selectedTab !== 'amp-code' && (
+        <ProfileEditor
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          toolId={selectedTab as ProfileToolId}
+          mode={editorMode}
+          initialData={getEditorInitialData()}
+          onSave={handleSaveProfile}
+        />
+      )}
 
       {/* 帮助弹窗 */}
       <HelpDialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen} />

@@ -89,3 +89,25 @@ export async function pmCaptureFromNative(toolId: ToolId, name: string): Promise
 export async function updateProxyFromProfile(toolId: ToolId, profileName: string): Promise<void> {
   return invoke<void>('update_proxy_from_profile', { toolId, profileName });
 }
+
+// ==================== AMP Profile Selection ====================
+
+import type { AmpProfileSelection, ProfileRef } from '@/types/profile';
+
+/**
+ * 获取 AMP Profile 选择
+ */
+export async function pmGetAmpSelection(): Promise<AmpProfileSelection> {
+  return invoke<AmpProfileSelection>('pm_get_amp_selection');
+}
+
+/**
+ * 保存 AMP Profile 选择
+ */
+export async function pmSaveAmpSelection(input: {
+  claude: ProfileRef | null;
+  codex: ProfileRef | null;
+  gemini: ProfileRef | null;
+}): Promise<void> {
+  return invoke<void>('pm_save_amp_selection', { input });
+}

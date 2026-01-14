@@ -45,3 +45,6 @@ export * from './platform';
 
 // API 调用
 export * from './api';
+
+// AMP 用户认证
+export * from './amp';

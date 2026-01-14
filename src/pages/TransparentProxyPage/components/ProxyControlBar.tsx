@@ -223,8 +223,9 @@ export function ProxyControlBar({
     };
   }, [tool.id]);
 
-  // 检查上游配置是否缺失
-  const isUpstreamConfigMissing = isRunning && (!config?.real_base_url || !config?.real_api_key);
+  // 检查上游配置是否缺失（amp-code 除外，它使用 amp_selection）
+  const isUpstreamConfigMissing =
+    isRunning && tool.id !== 'amp-code' && (!config?.real_base_url || !config?.real_api_key);
 
   // 当前配置名称
   const currentProfileName = config?.real_profile_name;
@@ -256,6 +257,11 @@ export function ProxyControlBar({
 
   // 启动代理处理：检查上游配置
   const handleStartProxy = () => {
+    // amp-code 不需要 real_base_url/real_api_key，跳过检查
+    if (tool.id === 'amp-code') {
+      onStart();
+      return;
+    }
     // 检查上游配置是否缺失
     if (!config?.real_base_url || !config?.real_api_key) {
       // 配置缺失，标记需要自动启动，然后打开配置选择对话框
@@ -284,12 +290,15 @@ export function ProxyControlBar({
               <Badge variant={isRunning ? 'default' : 'secondary'} className="text-xs">
                 {isRunning ? `运行中 (端口 ${port})` : '已停止'}
               </Badge>
-              <Badge
-                variant="outline"
-                className={`text-xs font-normal ${!isProfileConfigured ? 'text-red-500 border-red-300' : ''}`}
-              >
-                配置：{currentProfileName || '未知'}
-              </Badge>
+              {/* amp-code 使用 amp_selection 而非 real_profile_name，不显示此标签 */}
+              {tool.id !== 'amp-code' && (
+                <Badge
+                  variant="outline"
+                  className={`text-xs font-normal ${!isProfileConfigured ? 'text-red-500 border-red-300' : ''}`}
+                >
+                  配置：{currentProfileName || '未知'}
+                </Badge>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               {isRunning
@@ -341,8 +350,8 @@ export function ProxyControlBar({
             代理设置
           </Button>
 
-          {/* 切换配置按钮（运行时显示） */}
-          {isRunning && (
+          {/* 切换配置按钮（运行时显示，amp-code 除外） */}
+          {isRunning && tool.id !== 'amp-code' && (
             <Button
               type="button"
               variant="outline"

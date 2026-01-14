@@ -2,11 +2,13 @@
 import ClaudeLogo from '@/assets/claude-logo.png';
 import CodexLogo from '@/assets/codex-logo.png';
 import GeminiLogo from '@/assets/gemini-logo.png';
+import AmpLogo from '@/assets/amp-logo.svg';
 
 export const logoMap: Record<string, string> = {
   'claude-code': ClaudeLogo,
   codex: CodexLogo,
   'gemini-cli': GeminiLogo,
+  'amp-code': AmpLogo,
 };
 
 // 工具描述映射

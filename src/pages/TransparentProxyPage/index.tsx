@@ -22,6 +22,7 @@ const SUPPORTED_TOOLS: ToolMetadata[] = [
   { id: 'claude-code', name: 'Claude Code', icon: logoMap['claude-code'] },
   { id: 'codex', name: 'CodeX', icon: logoMap.codex },
   { id: 'gemini-cli', name: 'Gemini CLI', icon: logoMap['gemini-cli'] },
+  { id: 'amp-code', name: 'AMP Code', icon: logoMap['amp-code'] },
 ];
 
 interface TransparentProxyPageProps {
@@ -55,7 +56,8 @@ export function TransparentProxyPage({ selectedToolId: initialToolId }: Transpar
       initialToolId &&
       (initialToolId === 'claude-code' ||
         initialToolId === 'codex' ||
-        initialToolId === 'gemini-cli')
+        initialToolId === 'gemini-cli' ||
+        initialToolId === 'amp-code')
     ) {
       setSelectedToolId(initialToolId as ToolId);
     }
@@ -136,9 +138,9 @@ export function TransparentProxyPage({ selectedToolId: initialToolId }: Transpar
         </p>
       </div>
 
-      {/* 三工具 Tab 切换 */}
+      {/* 四工具 Tab 切换 */}
       <Tabs value={selectedToolId} onValueChange={(val) => setSelectedToolId(val as ToolId)}>
-        <TabsList className="grid w-full grid-cols-3 mb-6">
+        <TabsList className="grid w-full grid-cols-4 mb-6">
           {SUPPORTED_TOOLS.map((tool) => (
             <TabsTrigger key={tool.id} value={tool.id} className="gap-2">
               <img src={tool.icon} alt={tool.name} className="w-4 h-4" />

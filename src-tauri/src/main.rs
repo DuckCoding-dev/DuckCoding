@@ -285,6 +285,10 @@ fn main() {
         get_proxy_config,
         update_proxy_config,
         get_all_proxy_configs,
+        // AMP 用户认证命令
+        get_amp_user_info,
+        validate_and_save_amp_token,
+        get_saved_amp_user_info,
         // 会话管理命令
         get_session_list,
         delete_session,
@@ -358,6 +362,8 @@ fn main() {
         pm_get_active_profile_name,
         pm_get_active_profile,
         pm_capture_from_native,
+        pm_get_amp_selection,
+        pm_save_amp_selection,
         // 供应商管理命令（v1.5.0）
         list_providers,
         create_provider,
@@ -387,6 +393,10 @@ fn main() {
         delete_pricing_template,
         set_default_template,
         get_default_template,
+        // AMP 用户认证命令
+        get_amp_user_info,
+        validate_and_save_amp_token,
+        get_saved_amp_user_info,
     ]);
 
     // 使用自定义事件循环处理 macOS Reopen 事件和应用关闭

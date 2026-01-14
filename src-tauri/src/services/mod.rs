@@ -12,6 +12,7 @@
 // - new_api: NEW API 客户端服务
 // - token_stats: Token统计和请求记录
 
+pub mod amp_native_config; // AMP Code 原生配置管理
 pub mod balance;
 pub mod config;
 pub mod dashboard_manager; // 仪表板状态管理

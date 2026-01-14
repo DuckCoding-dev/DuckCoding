@@ -18,6 +18,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 use super::headers::RequestProcessor;
 use super::utils::body::{box_body, BoxBody};
@@ -30,6 +31,7 @@ pub struct ProxyInstance {
     config: Arc<RwLock<ToolProxyConfig>>,
     processor: Arc<dyn RequestProcessor>,
     server_handle: Arc<RwLock<Option<tokio::task::JoinHandle<()>>>>,
+    cancel_token: CancellationToken,
 }
 
 impl ProxyInstance {
@@ -44,6 +46,7 @@ impl ProxyInstance {
             config: Arc::new(RwLock::new(config)),
             processor: Arc::from(processor),
             server_handle: Arc::new(RwLock::new(None)),
+            cancel_token: CancellationToken::new(),
         }
     }
 
@@ -89,35 +92,63 @@ impl ProxyInstance {
         let processor_clone = Arc::clone(&self.processor);
         let port = config.port;
         let tool_id = self.tool_id.clone();
+        let cancel_token = self.cancel_token.clone();
 
         // 启动服务器
         let handle = tokio::spawn(async move {
             loop {
-                match listener.accept().await {
-                    Ok((stream, _addr)) => {
-                        let config = Arc::clone(&config_clone);
-                        let processor = Arc::clone(&processor_clone);
-                        let tool_id_inner = tool_id.clone();
-                        let tool_id_for_error = tool_id.clone();
+                tokio::select! {
+                    _ = cancel_token.cancelled() => {
+                        tracing::debug!(tool_id = %tool_id, "代理服务器收到取消信号");
+                        break;
+                    }
+                    result = listener.accept() => {
+                        match result {
+                            Ok((stream, _addr)) => {
+                                let config = Arc::clone(&config_clone);
+                                let processor = Arc::clone(&processor_clone);
+                                let tool_id_inner = tool_id.clone();
+                                let tool_id_for_error = tool_id.clone();
+                                let conn_cancel = cancel_token.clone();
 
-                        tokio::spawn(async move {
-                            let io = TokioIo::new(stream);
-                            let service = service_fn(move |req| {
-                                let config = Arc::clone(&config);
-                                let processor = Arc::clone(&processor);
-                                let tool_id = tool_id_inner.clone();
-                                async move {
-                                    handle_request(req, config, processor, port, &tool_id).await
-                                }
-                            });
+                                tokio::spawn(async move {
+                                    let io = TokioIo::new(stream);
+                                    let service = service_fn(move |req| {
+                                        let config = Arc::clone(&config);
+                                        let processor = Arc::clone(&processor);
+                                        let tool_id = tool_id_inner.clone();
+                                        async move {
+                                            handle_request(req, config, processor, port, &tool_id).await
+                                        }
+                                    });
 
-                            if let Err(err) =
-                                http1::Builder::new().serve_connection(io, service).await
-                            {
+                                    let conn = http1::Builder::new().serve_connection(io, service);
+                                    tokio::pin!(conn);
+
+                                    // 使用 select 在连接完成或取消时退出
+                                    tokio::select! {
+                                        _ = conn_cancel.cancelled() => {
+                                            tracing::debug!(tool_id = %tool_id_for_error, "连接被取消");
+                                        }
+                                        result = &mut conn => {
+                                            if let Err(err) = result {
+                                                if !err.is_incomplete_message() {
+                                                    tracing::error!(
+                                                        tool_id = %tool_id_for_error,
+                                                        error = ?err,
+                                                        "处理连接失败"
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                            Err(e) => {
                                 tracing::error!(
-                                    tool_id = %tool_id_for_error,
-                                    error = ?err,
-                                    "处理连接失败"
+                                    tool_id = %tool_id,
+                                    error = ?e,
+                                    "接受连接失败"
                                 );
 
                                 // 记录连接层错误到数据库（无 session_id）
@@ -138,14 +169,7 @@ impl ProxyInstance {
                                     )
                                     .await;
                             }
-                        });
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            tool_id = %tool_id,
-                            error = ?e,
-                            "接受连接失败"
-                        );
+                        }
                     }
                 }
             }
@@ -162,14 +186,25 @@ impl ProxyInstance {
 
     /// 停止代理服务
     pub async fn stop(&self) -> Result<()> {
+        // 1. 发送取消信号给所有连接
+        self.cancel_token.cancel();
+
+        // 2. 等待服务器任务结束
         let handle = {
             let mut h = self.server_handle.write().await;
             h.take()
         };
 
         if let Some(handle) = handle {
-            handle.abort();
-            tracing::info!(tool_id = %self.tool_id, "透明代理已停止");
+            // 等待任务结束（带超时）
+            match tokio::time::timeout(std::time::Duration::from_secs(2), handle).await {
+                Ok(_) => {
+                    tracing::info!(tool_id = %self.tool_id, "透明代理已停止");
+                }
+                Err(_) => {
+                    tracing::warn!(tool_id = %self.tool_id, "透明代理停止超时，强制终止");
+                }
+            }
         }
 
         Ok(())
@@ -294,11 +329,12 @@ async fn handle_request_inner(
         .unwrap_or("unknown")
         .to_string();
 
+    // amp-code 在 processor 内部获取配置，这里传占位符
     let base = proxy_config
         .real_base_url
-        .as_ref()
-        .unwrap()
-        .trim_end_matches('/');
+        .as_deref()
+        .map(|s| s.trim_end_matches('/'))
+        .unwrap_or("");
 
     // 读取请求体（消费 req）
     let body_bytes = if method != Method::GET && method != Method::HEAD {
@@ -308,10 +344,11 @@ async fn handle_request_inner(
     };
 
     // 使用 RequestProcessor 统一处理请求（URL + headers + body）
+    // amp-code 忽略传入的 base/api_key，在内部通过 amp_selection 获取
     let processed = processor
         .process_outgoing_request(
             base,
-            proxy_config.real_api_key.as_ref().unwrap(),
+            proxy_config.real_api_key.as_deref().unwrap_or(""),
             &path,
             query.as_deref(),
             &headers,
@@ -319,6 +356,26 @@ async fn handle_request_inner(
         )
         .await
         .context("处理出站请求失败")?;
+
+    // 本地工具处理：dc-local:// 协议标记的请求直接返回 body
+    if processed.target_url.starts_with("dc-local://") {
+        tracing::info!(
+            tool_id = %tool_id,
+            local_tool = %processed.target_url,
+            "本地工具响应"
+        );
+        let mut response = Response::builder()
+            .status(StatusCode::OK)
+            .header("content-type", "application/json");
+
+        for (name, value) in processed.headers.iter() {
+            response = response.header(name.as_str(), value.as_bytes());
+        }
+
+        return Ok(response
+            .body(box_body(http_body_util::Full::new(processed.body)))
+            .unwrap());
+    }
 
     // 回环检测
     if loop_detector::is_proxy_loop(&processed.target_url, own_port) {
@@ -412,6 +469,7 @@ async fn handle_request_inner(
         // SSE 流式响应：收集响应体并调用 processor.record_request_log
         use futures_util::StreamExt;
         use std::sync::{Arc, Mutex};
+        use regex::Regex;
 
         let config_name = proxy_config
             .real_profile_name
@@ -426,6 +484,10 @@ async fn handle_request_inner(
 
         let stream = upstream_res.bytes_stream();
 
+        // amp-code 需要移除工具名前缀
+        let is_amp_code = tool_id == "amp-code";
+        let prefix_regex = Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).ok();
+
         // 拦截流数据并收集
         let mapped_stream = stream.map(move |result| {
             if let Ok(chunk) = &result {
@@ -434,7 +496,19 @@ async fn handle_request_inner(
                 }
             }
             result
-                .map(Frame::data)
+                .map(|bytes| {
+                    if is_amp_code {
+                        if let Some(ref re) = prefix_regex {
+                            let text = String::from_utf8_lossy(&bytes);
+                            let cleaned = re.replace_all(&text, r#""name": "$1""#);
+                            Frame::data(Bytes::from(cleaned.into_owned()))
+                        } else {
+                            Frame::data(bytes)
+                        }
+                    } else {
+                        Frame::data(bytes)
+                    }
+                })
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
         });
 
@@ -491,6 +565,16 @@ async fn handle_request_inner(
         // 普通响应：读取响应体并调用 processor.record_request_log
         let body_bytes = upstream_res.bytes().await.context("读取响应体失败")?;
 
+        // amp-code 需要清理响应体中的工具名前缀
+        let final_body = if tool_id == "amp-code" {
+            let text = String::from_utf8_lossy(&body_bytes);
+            let re = regex::Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).unwrap();
+            let cleaned = re.replace_all(&text, r#""name": "$1""#);
+            Bytes::from(cleaned.into_owned())
+        } else {
+            body_bytes.clone()
+        };
+
         // 获取配置名称
         let config_name = proxy_config
             .real_profile_name
@@ -527,7 +611,7 @@ async fn handle_request_inner(
         });
 
         Ok(response
-            .body(box_body(http_body_util::Full::new(body_bytes)))
+            .body(box_body(http_body_util::Full::new(final_body)))
             .unwrap())
     }
 }

@@ -200,7 +200,7 @@ export function ClaudeConfigManager({ refreshSignal }: ClaudeConfigManagerProps)
         computeExternalDiffs={computeExtraDiffs}
       />
 
-      <Card className="border border-slate-200/80">
+      <Card className="border">
         <CardHeader>
           <CardTitle>附属配置：config.json</CardTitle>
           <CardDescription>可选文件，存在时将与 settings.json 一同保存。</CardDescription>
@@ -235,7 +235,7 @@ export function ClaudeConfigManager({ refreshSignal }: ClaudeConfigManagerProps)
             {extraEntries.map((entry, idx) => (
               <div
                 key={`${idx}-${entry.key}`}
-                className="flex flex-col gap-2 rounded-md border border-slate-200/80 p-3 md:flex-row md:items-center"
+                className="flex flex-col gap-2 rounded-md border p-3 md:flex-row md:items-center"
               >
                 <div className="flex flex-1 items-center gap-2">
                   <div className="w-40 min-w-[140px]">

@@ -286,5 +286,11 @@ fn parse_old_config(value: &Value) -> Result<ToolProxyConfig> {
             .get("pricing_template_id")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
+        original_amp_settings: obj.get("original_amp_settings").cloned(),
+        original_amp_secrets: obj.get("original_amp_secrets").cloned(),
+        tavily_api_key: obj
+            .get("tavily_api_key")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
     })
 }

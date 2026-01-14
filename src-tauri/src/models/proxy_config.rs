@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// 单个工具的透明代理配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +29,15 @@ pub struct ToolProxyConfig {
     /// 价格模板 ID（用于成本计算）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pricing_template_id: Option<String>,
+    /// AMP Code 原始 settings.json 完整内容（用于关闭时还原，语义备份）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_amp_settings: Option<Value>,
+    /// AMP Code 原始 secrets.json 完整内容（用于关闭时还原，语义备份）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original_amp_secrets: Option<Value>,
+    /// Tavily API Key（用于本地搜索，可选，无则降级 DuckDuckGo）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tavily_api_key: Option<String>,
 }
 
 impl ToolProxyConfig {
@@ -45,6 +55,9 @@ impl ToolProxyConfig {
             auto_start: false,
             original_active_profile: None,
             pricing_template_id: None,
+            original_amp_settings: None,
+            original_amp_secrets: None,
+            tavily_api_key: None,
         }
     }
 
@@ -54,6 +67,7 @@ impl ToolProxyConfig {
             "claude-code" => 8787,
             "codex" => 8788,
             "gemini-cli" => 8789,
+            "amp-code" => 8790,
             _ => 8787,
         }
     }
@@ -68,7 +82,13 @@ pub struct ProxyStore {
     pub codex: ToolProxyConfig,
     #[serde(rename = "gemini-cli")]
     pub gemini_cli: ToolProxyConfig,
+    #[serde(rename = "amp-code", default = "default_amp_config")]
+    pub amp_code: ToolProxyConfig,
     pub metadata: ProxyMetadata,
+}
+
+fn default_amp_config() -> ToolProxyConfig {
+    ToolProxyConfig::new(8790)
 }
 
 impl ProxyStore {
@@ -78,6 +98,7 @@ impl ProxyStore {
             claude_code: ToolProxyConfig::new(8787),
             codex: ToolProxyConfig::new(8788),
             gemini_cli: ToolProxyConfig::new(8789),
+            amp_code: ToolProxyConfig::new(8790),
             metadata: ProxyMetadata {
                 last_updated: Utc::now(),
             },
@@ -90,6 +111,7 @@ impl ProxyStore {
             "claude-code" => Some(&self.claude_code),
             "codex" => Some(&self.codex),
             "gemini-cli" => Some(&self.gemini_cli),
+            "amp-code" => Some(&self.amp_code),
             _ => None,
         }
     }
@@ -100,6 +122,7 @@ impl ProxyStore {
             "claude-code" => Some(&mut self.claude_code),
             "codex" => Some(&mut self.codex),
             "gemini-cli" => Some(&mut self.gemini_cli),
+            "amp-code" => Some(&mut self.amp_code),
             _ => None,
         }
     }
@@ -110,6 +133,7 @@ impl ProxyStore {
             "claude-code" => self.claude_code = config,
             "codex" => self.codex = config,
             "gemini-cli" => self.gemini_cli = config,
+            "amp-code" => self.amp_code = config,
             _ => {}
         }
         self.metadata.last_updated = Utc::now();

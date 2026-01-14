@@ -1,3 +1,4 @@
+pub mod amp_commands; // AMP 用户认证命令
 pub mod analytics_commands; // Token统计分析命令（Phase 4）
 pub mod balance_commands;
 pub mod config_commands;
@@ -21,6 +22,7 @@ pub mod update_commands;
 pub mod window_commands;
 
 // 重新导出所有命令函数
+pub use amp_commands::*; // AMP 用户认证命令
 pub use analytics_commands::*; // Token统计分析命令（Phase 4）
 pub use balance_commands::*;
 pub use config_commands::*;

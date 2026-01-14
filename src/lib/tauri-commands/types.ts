@@ -223,6 +223,7 @@ export interface ToolProxyConfig {
   allow_public: boolean;
   session_endpoint_config_enabled: boolean; // 工具级：是否允许会话自定义端点
   auto_start: boolean; // 应用启动时自动运行代理（默认关闭）
+  tavily_api_key?: string | null; // Tavily API Key（用于本地搜索，可选）
 }
 
 export interface TransparentProxyStatus {
@@ -299,3 +300,11 @@ export interface BalanceConfigBackend {
 
 // 前端 BalanceConfig 格式（camelCase）- 从 BalancePage 导入
 export type { BalanceConfig } from '@/pages/BalancePage/types';
+
+// AMP 用户信息
+export interface AmpUserInfo {
+  id: string;
+  email: string | null;
+  name: string | null;
+  username: string | null;
+}

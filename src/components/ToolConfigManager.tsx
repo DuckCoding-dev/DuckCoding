@@ -278,7 +278,7 @@ export function ToolConfigManager({
           const isCompound = isCompoundField(schema, currentValue);
 
           return (
-            <Card key={key} className="border border-slate-200/80">
+            <Card key={key} className="border">
               {isCompound ? (
                 <>
                   <CardHeader className="flex flex-row items-start justify-between space-y-0">
@@ -361,7 +361,7 @@ export function ToolConfigManager({
   };
 
   return (
-    <Card className="border border-slate-200/80 shadow-lg">
+    <Card className="border shadow-lg">
       <CardHeader className="space-y-4">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -391,7 +391,7 @@ export function ToolConfigManager({
             </Button>
           </div>
         </div>
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
           每个配置选项下方都会展示 JSON Schema 提供的描述信息，若显示「未提供描述」表示该子选项未在
           schema 中定义或为自定义子选项。
         </div>
@@ -495,15 +495,12 @@ export function ToolConfigManager({
           </DialogHeader>
           <div className="max-h-[420px] space-y-3 overflow-y-auto">
             {diffEntries.length === 0 && (
-              <div className="rounded-md border border-slate-200 p-4 text-sm text-muted-foreground">
+              <div className="rounded-md border p-4 text-sm text-muted-foreground">
                 没有检测到差异
               </div>
             )}
             {diffEntries.map((diff) => (
-              <div
-                key={diff.path + diff.type}
-                className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs"
-              >
+              <div key={diff.path + diff.type} className="rounded-md border bg-muted p-3 text-xs">
                 <div className="flex items-center justify-between font-semibold">
                   <span className="font-mono text-sm">{diff.path}</span>
                   <Badge variant={diff.type === 'changed' ? 'default' : 'secondary'}>
@@ -513,13 +510,13 @@ export function ToolConfigManager({
                 <div className="mt-2 grid gap-2 md:grid-cols-2">
                   <div>
                     <p className="text-[11px] text-muted-foreground">之前</p>
-                    <pre className="mt-1 overflow-x-auto rounded-md bg-white p-2">
+                    <pre className="mt-1 overflow-x-auto rounded-md bg-background p-2">
                       {formatJson(diff.before)}
                     </pre>
                   </div>
                   <div>
                     <p className="text-[11px] text-muted-foreground">之后</p>
-                    <pre className="mt-1 overflow-x-auto rounded-md bg-white p-2">
+                    <pre className="mt-1 overflow-x-auto rounded-md bg-background p-2">
                       {formatJson(diff.after)}
                     </pre>
                   </div>

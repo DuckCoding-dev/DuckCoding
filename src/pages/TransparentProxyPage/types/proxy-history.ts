@@ -14,9 +14,9 @@ export interface ProxySessionRecord {
 }
 
 /**
- * 工具 ID 类型（严格限制为三个支持的工具）
+ * 工具 ID 类型（严格限制为四个支持的工具）
  */
-export type ToolId = 'claude-code' | 'codex' | 'gemini-cli';
+export type ToolId = 'claude-code' | 'codex' | 'gemini-cli' | 'amp-code';
 
 /**
  * 工具元数据（用于 UI 展示）
