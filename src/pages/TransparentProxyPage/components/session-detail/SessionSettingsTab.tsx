@@ -117,7 +117,7 @@ export function SessionSettingsTab({ session, toolId, onBack }: SessionSettingsT
       setSavingConfig(true);
 
       if (configMode === 'global') {
-        await updateSessionConfig(session.session_id, 'global', null);
+        await updateSessionConfig(session.session_id, 'global', null, session.url, session.api_key);
       } else {
         if (!profileName) {
           toast({
@@ -127,7 +127,13 @@ export function SessionSettingsTab({ session, toolId, onBack }: SessionSettingsT
           });
           return;
         }
-        await updateSessionConfig(session.session_id, 'custom', profileName);
+        await updateSessionConfig(
+          session.session_id,
+          'custom',
+          profileName,
+          session.url,
+          session.api_key,
+        );
       }
 
       toast({

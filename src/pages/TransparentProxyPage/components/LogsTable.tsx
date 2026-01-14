@@ -81,10 +81,10 @@ export function LogsTable({
 
   // 自定义时间范围状态
   const [timeRangeMode, setTimeRangeMode] = useState<'preset' | 'custom'>('preset');
-  const [customStartTime, setCustomStartTime] = useState<Date>(
+  const [customStartTime, setCustomStartTime] = useState<Date | null>(
     new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
   );
-  const [customEndTime, setCustomEndTime] = useState<Date>(new Date());
+  const [customEndTime, setCustomEndTime] = useState<Date | null>(new Date());
   const [showCustomDialog, setShowCustomDialog] = useState(false);
 
   // 视图状态

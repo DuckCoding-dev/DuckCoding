@@ -80,7 +80,7 @@ export interface TokenStatsConfig {
 /**
  * 工具类型 ID
  */
-export type ToolType = 'claude-code' | 'codex' | 'gemini-cli';
+export type ToolType = 'claude-code' | 'codex' | 'gemini-cli' | 'amp-code';
 
 /**
  * 工具类型显示名称映射
@@ -89,6 +89,7 @@ export const TOOL_TYPE_NAMES: Record<ToolType, string> = {
   'claude-code': 'Claude Code',
   codex: 'CodeX',
   'gemini-cli': 'Gemini CLI',
+  'amp-code': 'AMP Code',
 };
 
 /**
@@ -98,6 +99,7 @@ export const TOOL_TYPE_COLORS: Record<ToolType, string> = {
   'claude-code': 'text-orange-600 bg-orange-50 border-orange-200',
   codex: 'text-green-600 bg-green-50 border-green-200',
   'gemini-cli': 'text-blue-600 bg-blue-50 border-blue-200',
+  'amp-code': 'text-purple-600 bg-purple-50 border-purple-200',
 };
 
 /**

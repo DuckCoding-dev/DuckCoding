@@ -71,7 +71,7 @@ export function useTimeRangeControl(): UseTimeRangeControlReturn {
   const [showCustomDialog, setShowCustomDialog] = useState(false);
 
   // 计算允许的粒度选项
-  const allowedGranularities = useMemo(() => {
+  const allowedGranularities = useMemo<TimeGranularity[]>(() => {
     if (mode === 'preset') {
       return PRESET_ALLOWED_GRANULARITIES[presetRange];
     } else {
@@ -82,7 +82,7 @@ export function useTimeRangeControl(): UseTimeRangeControlReturn {
           confirmedCustomEnd.getTime(),
         );
       }
-      return ['day']; // 兜底
+      return ['day'] as TimeGranularity[]; // 兜底
     }
   }, [mode, presetRange, confirmedCustomStart, confirmedCustomEnd]);
 

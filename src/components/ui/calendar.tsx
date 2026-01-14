@@ -4,7 +4,6 @@
  */
 
 import * as React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
 
 import { cn } from '@/lib/utils';
@@ -48,10 +47,6 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         day_range_middle: 'aria-selected:bg-accent aria-selected:text-accent-foreground',
         day_hidden: 'invisible',
         ...classNames,
-      }}
-      components={{
-        IconLeft: (_props) => <ChevronLeft className="h-4 w-4" />,
-        IconRight: (_props) => <ChevronRight className="h-4 w-4" />,
       }}
       {...props}
     />
