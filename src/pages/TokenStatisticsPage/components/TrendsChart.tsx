@@ -96,6 +96,9 @@ function detectGranularity(data: TrendDataPoint[]): 'hour' | 'day' | 'week' | 'm
  */
 const CustomTooltip: React.FC<
   TooltipProps<number, string> & {
+    active?: boolean;
+    payload?: Array<{ payload: TrendDataPoint }>;
+    label?: string | number;
     dataKeys: DataKey[];
     granularity: 'hour' | 'day' | 'week' | 'month';
   }

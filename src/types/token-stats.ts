@@ -24,6 +24,12 @@ export interface TokenLog {
   response_type: 'sse' | 'json' | 'unknown'; // 响应类型
   error_type?: 'parse_error' | 'request_interrupted' | 'upstream_error'; // 错误类型
   error_detail?: string; // 错误详情
+  // 成本相关字段（Phase 6）
+  total_cost: number; // 总成本
+  input_price?: number; // 输入价格
+  output_price?: number; // 输出价格
+  cache_write_price?: number; // 缓存写入价格
+  cache_read_price?: number; // 缓存读取价格
 }
 
 /**

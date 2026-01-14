@@ -15,6 +15,8 @@ import type { PricingTemplate } from '@/types/pricing';
 import { Loader2 } from 'lucide-react';
 
 interface PricingTemplateSelectorProps {
+  /** 工具 ID（可选，用于工具特定逻辑） */
+  toolId?: string;
   /** 当前选中的模板 ID */
   value?: string;
   /** 值变更回调 */
@@ -29,12 +31,15 @@ interface PricingTemplateSelectorProps {
  * 自动加载所有可用模板，支持"使用默认模板"选项
  */
 export function PricingTemplateSelector({
+  toolId: _toolId, // 预留用于工具特定逻辑
   value,
   onChange,
   disabled,
 }: PricingTemplateSelectorProps) {
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<PricingTemplate[]>([]);
+
+  // TODO: 使用 _toolId 实现工具特定的模板过滤逻辑
 
   useEffect(() => {
     listPricingTemplates()

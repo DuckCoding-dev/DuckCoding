@@ -74,21 +74,6 @@ const MetricCard: React.FC<MetricCardProps> = ({
 };
 
 /**
- * 格式化成本（USD）
- * @deprecated 已废弃，保留用于未来可能的单项成本展示
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function formatCost(cost: number): string {
-  if (cost >= 1) {
-    return `$${cost.toFixed(2)}`;
-  }
-  if (cost >= 0.01) {
-    return `$${cost.toFixed(4)}`;
-  }
-  return `$${cost.toFixed(6)}`;
-}
-
-/**
  * 格式化总成本（向上舍入到2位小数）
  */
 function formatTotalCost(cost: number): string {

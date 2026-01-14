@@ -35,6 +35,8 @@ export interface TrendQuery {
   end_time?: number;
   /** 工具类型过滤（可选） */
   tool_type?: string;
+  /** 会话 ID 过滤（可选） */
+  session_id?: string;
   /** 模型过滤（可选） */
   model?: string;
   /** 配置名称过滤（可选） */
