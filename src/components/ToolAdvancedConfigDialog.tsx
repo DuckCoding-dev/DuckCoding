@@ -29,17 +29,16 @@ export function ToolAdvancedConfigDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-[90vw] max-h-[90vh] overflow-y-auto"
+        className="sm:max-w-[90vw] max-h-[90vh] flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <DialogHeader>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <img src={logoMap[toolId]} alt={toolName} className="w-5 h-5" />
             <span>{toolName} 高级配置</span>
           </DialogTitle>
         </DialogHeader>
-        <div className="mt-4">
+        <div className="mt-4 flex-1 overflow-y-auto min-h-0">
           {toolId === 'claude-code' && <ClaudeConfigManager />}
           {toolId === 'codex' && <CodexConfigManager />}
           {toolId === 'gemini-cli' && <GeminiConfigManager />}

@@ -84,7 +84,7 @@ export function CodexConfigManager({ refreshSignal }: CodexConfigManagerProps) {
         computeExternalDiffs={computeAuthDiffs}
       />
 
-      <Card className="border border-slate-200/80">
+      <Card className="border">
         <CardHeader>
           <CardTitle>Codex API Key</CardTitle>
           <CardDescription>读取并编辑 auth.json，用于 Codex CLI 请求。</CardDescription>

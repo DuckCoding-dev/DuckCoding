@@ -106,7 +106,7 @@ export function GeminiConfigManager({ refreshSignal }: GeminiConfigManagerProps)
         computeExternalDiffs={computeEnvDiffs}
       />
 
-      <Card className="border border-slate-200/80">
+      <Card className="border">
         <CardHeader>
           <CardTitle>Gemini .env</CardTitle>
           <CardDescription>读取并编辑 .env，管理 Base URL、API Key 与默认模型。</CardDescription>
