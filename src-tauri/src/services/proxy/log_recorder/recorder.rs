@@ -65,7 +65,7 @@ impl LogRecorder {
                 &context.client_ip,
                 &context.request_body,
                 ResponseData::Sse(data_lines),
-                Some(context.elapsed_ms()),
+                context.response_time_ms,
                 context.pricing_template_id.clone(),
             )
             .await
@@ -98,7 +98,7 @@ impl LogRecorder {
                         "parse_error",
                         &error_detail,
                         "sse",
-                        Some(context.elapsed_ms()),
+                        context.response_time_ms,
                     )
                     .await
             }
@@ -120,7 +120,7 @@ impl LogRecorder {
                 &context.client_ip,
                 &context.request_body,
                 ResponseData::Json(data),
-                Some(context.elapsed_ms()),
+                context.response_time_ms,
                 context.pricing_template_id.clone(),
             )
             .await
@@ -153,7 +153,7 @@ impl LogRecorder {
                         "parse_error",
                         &error_detail,
                         "json",
-                        Some(context.elapsed_ms()),
+                        context.response_time_ms,
                     )
                     .await
             }
@@ -186,7 +186,7 @@ impl LogRecorder {
                 "parse_error",
                 &error_detail,
                 response_type,
-                Some(context.elapsed_ms()),
+                context.response_time_ms,
             )
             .await
     }
@@ -213,7 +213,7 @@ impl LogRecorder {
                 "upstream_error",
                 detail,
                 response_type, // 根据请求体的 stream 字段判断
-                Some(context.elapsed_ms()),
+                context.response_time_ms,
             )
             .await
     }
@@ -250,7 +250,7 @@ impl LogRecorder {
                 "upstream_error",
                 &error_detail,
                 response_type, // 根据请求体的 stream 字段判断
-                Some(context.elapsed_ms()),
+                context.response_time_ms,
             )
             .await
     }
