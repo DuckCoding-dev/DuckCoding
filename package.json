@@ -1,6 +1,6 @@
 {
   "name": "duckcoding-setup",
-  "version": "1.5.3",
+  "version": "1.5.4",
   "description": "DuckCoding 一键安装配置工具 - 支持 Claude Code, CodeX, Gemini CLI",
   "main": "index.js",
   "scripts": {

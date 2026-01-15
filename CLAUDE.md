@@ -271,7 +271,15 @@ last-updated: 2025-12-16
     - 定期清理任务：每小时清理 30 天未活跃会话和超过 1000 条的旧会话
   - **测试覆盖**：10 个单元测试（5 个 db_utils 转换测试 + 2 个 models 测试 + 3 个 manager 集成测试）
   - **代码减少**：从 366 行（db.rs）减少到 ~320 行（manager.rs 250 行 + db_utils.rs 70 行工具函数）
-- 前端透明代理页面：`TransparentProxyPage` 通过 `SESSION_MANAGER` 记录每个代理会话的 endpoint/API Key，支持按工具启停代理、查看历史并启用「会话级 Endpoint 配置」开关。页面内的 `ProxyControlBar`、`ProxySettingsDialog`、`ProxyConfigDialog` 负责代理启停、配置切换、工具级设置并内建缺失配置提示。
+- **Token 统计与成本分析系统（2026-01-14）**：
+  - **后端模块**：`services/token_stats/*`（日志记录、统计分析、趋势聚合）、`services/pricing/*`（价格模板与成本计算）、`services/proxy/log_recorder/*`（请求日志与 Token 提取），数据库表 `token_logs` 支持保留天数与条数上限清理
+  - **命令层**：新增 `analytics_commands.rs`、`token_stats_commands.rs`、`pricing_commands.rs`；支持趋势/成本汇总、日志分页查询、会话级统计
+  - **配置扩展**：`ToolProxyConfig` 新增 `pricing_template_id`，Profile/会话配置支持覆盖价格模板
+  - **前端页面**：`TokenStatisticsPage`（Dashboard + TrendsChart）、`SettingsPage` 新增 `TokenStatsTab` 与 `PricingTab`；统一分析 Hook `useAnalyticsStats` + 时间范围控制 `useTimeRangeControl`
+- **透明代理页面重构（2026-01-14）**：
+  - `TransparentProxyPage` 采用 Tab 驱动架构（`types/tab-types.ts`），支持主视图/会话详情双模式，URL 查询参数与 ViewState 双向同步
+  - 主视图 Tabs：`SessionListTab` / `GlobalStatsTab` / `GlobalLogsTab`；会话详情 Tabs：`SessionStatsTab` / `SessionLogsTab` / `SessionSettingsTab`
+  - 共享组件：`LogsTable`、`RealtimeStats`、`CustomTimeRangeDialog`；会话详情页隐藏代理控制栏，简化布局
 - **余额监控页面（BalancePage）**：
   - 后端提供通用 `fetch_api` 命令（位于 `commands/api_commands.rs`），支持 GET/POST、自定义 headers、超时控制
   - 前端使用 JavaScript `Function` 构造器执行用户自定义的 extractor 脚本（位于 `utils/extractor.ts`）
