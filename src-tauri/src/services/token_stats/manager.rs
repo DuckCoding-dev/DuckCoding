@@ -361,6 +361,26 @@ impl TokenStatsManager {
         tracing::info!(chunks_count = chunks.len(), "开始解析 SSE chunks");
 
         for (i, chunk) in chunks.iter().enumerate() {
+            // 记录每个chunk的类型（前100个字符）
+            let chunk_preview = chunk.chars().take(100).collect::<String>();
+
+            // 尝试提取事件类型用于日志
+            let event_type = if let Ok(json) = serde_json::from_str::<serde_json::Value>(chunk) {
+                json.get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            } else {
+                "parse_error".to_string()
+            };
+
+            tracing::debug!(
+                chunk_index = i,
+                event_type = %event_type,
+                preview = %chunk_preview,
+                "处理 SSE chunk"
+            );
+
             match extractor.extract_from_sse_chunk(chunk) {
                 Ok(Some(data)) => {
                     if let Some(start) = data.message_start {
@@ -403,6 +423,13 @@ impl TokenStatsManager {
             tracing::error!(
                 chunks_count = chunks.len(),
                 "所有 SSE chunks 中未找到 message_start 事件"
+            );
+        }
+
+        if message_delta.is_none() {
+            tracing::warn!(
+                chunks_count = chunks.len(),
+                "所有 SSE chunks 中未找到 message_delta 事件（可能流未完成或被截断）"
             );
         }
 
