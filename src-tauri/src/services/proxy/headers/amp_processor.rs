@@ -20,9 +20,11 @@ use futures_util::StreamExt;
 use hyper::HeaderMap as HyperHeaderMap;
 use once_cell::sync::Lazy;
 use reqwest::redirect::Policy;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 use std::net::IpAddr;
 use url::Url;
+use uuid::Uuid;
 
 /// 全局 HTTP Client（复用连接池，禁止重定向，允许系统代理）
 static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
@@ -689,6 +691,130 @@ impl AmpHeadersProcessor {
             body: Bytes::from(body_bytes),
         })
     }
+
+    /// 生成 64 位 hex 用户指纹：SHA256(API_Key + UA)
+    /// 使用完整 API Key 避免不同 key 碰撞，UA 作为辅助区分
+    fn generate_user_hash(headers: &HyperHeaderMap, api_key: &str) -> String {
+        let ua = headers
+            .get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown");
+
+        let mut hasher = Sha256::new();
+        // 使用完整 API Key 作为主要标识，UA 作为辅助
+        hasher.update(format!("{}:{}", api_key, ua));
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// 生成 UUID 格式会话标识
+    /// - 有消息内容：基于前3条消息的 SHA256（支持会话复用）
+    /// - 无消息内容：使用随机 UUID v4（避免碰撞）
+    fn generate_session_uuid(messages: &Value) -> String {
+        let content = messages
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .take(3)
+                    .filter_map(|m| {
+                        // 支持字符串和数组格式的 content
+                        let c = m.get("content")?;
+                        if let Some(s) = c.as_str() {
+                            Some(s.to_string())
+                        } else if let Some(arr) = c.as_array() {
+                            // 多模态内容：提取 text 类型
+                            Some(
+                                arr.iter()
+                                    .filter_map(|item| {
+                                        if item.get("type")?.as_str()? == "text" {
+                                            item.get("text")?.as_str().map(|s| s.to_string())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(""),
+                            )
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join("|")
+            })
+            .unwrap_or_default();
+
+        // 空消息时使用随机 UUID，避免所有空请求共享同一 session
+        if content.is_empty() {
+            return Uuid::new_v4().to_string();
+        }
+
+        let mut hasher = Sha256::new();
+        hasher.update(&content);
+        let hash = format!("{:x}", hasher.finalize());
+
+        // 转 UUID 格式：8-4-4-4-12
+        format!(
+            "{}-{}-{}-{}-{}",
+            &hash[0..8],
+            &hash[8..12],
+            &hash[12..16],
+            &hash[16..20],
+            &hash[20..32]
+        )
+    }
+
+    /// 注入 metadata.user_id 并保持字段顺序
+    fn inject_metadata_with_order(body: &[u8], user_id: &str) -> Result<Vec<u8>> {
+        let json: Value = serde_json::from_slice(body)?;
+        let obj = json
+            .as_object()
+            .ok_or_else(|| anyhow!("请求体不是 JSON 对象"))?;
+
+        // 定义字段顺序（官方顺序）
+        let field_order = [
+            "model",
+            "system",
+            "messages",
+            "tools",
+            "metadata",
+            "max_tokens",
+            "temperature",
+            "top_p",
+            "top_k",
+            "thinking",
+            "stream",
+        ];
+
+        let mut ordered: Map<String, Value> = Map::new();
+
+        // 按顺序插入已有字段
+        for &key in &field_order {
+            if let Some(val) = obj.get(key) {
+                if key == "metadata" {
+                    // 注入 user_id 到 metadata
+                    let mut meta = val.as_object().cloned().unwrap_or_default();
+                    if !meta.contains_key("user_id") {
+                        meta.insert("user_id".into(), json!(user_id));
+                    }
+                    ordered.insert(key.into(), Value::Object(meta));
+                } else {
+                    ordered.insert(key.into(), val.clone());
+                }
+            } else if key == "metadata" {
+                // metadata 不存在则创建
+                ordered.insert(key.into(), json!({ "user_id": user_id }));
+            }
+        }
+
+        // 保留其他未知字段（放末尾）
+        for (k, v) in obj.iter() {
+            if !ordered.contains_key(k) {
+                ordered.insert(k.clone(), v.clone());
+            }
+        }
+
+        Ok(serde_json::to_vec(&ordered)?)
+    }
 }
 
 /// DuckDuckGo 搜索结果
@@ -749,6 +875,35 @@ impl RequestProcessor for AmpHeadersProcessor {
                 tracing::info!("AMP Code → Claude: {}{}", p.base_url, llm_path);
                 let prefixed_body = Self::add_tool_prefix(body);
 
+                // 检查并注入 metadata.user_id
+                let final_body = if let Ok(json) = serde_json::from_slice::<Value>(&prefixed_body) {
+                    let has_user_id = json
+                        .get("metadata")
+                        .and_then(|m| m.get("user_id"))
+                        .and_then(|u| u.as_str())
+                        .map(|s| !s.is_empty())
+                        .unwrap_or(false);
+
+                    if has_user_id {
+                        // 已有 user_id，保持原样
+                        prefixed_body
+                    } else {
+                        // 生成 user_id: user_{64位hex}_account__session_{uuid}
+                        let user_hash = Self::generate_user_hash(original_headers, &p.api_key);
+                        let session_uuid = Self::generate_session_uuid(&json["messages"]);
+                        let user_id =
+                            format!("user_{}_account__session_{}", user_hash, session_uuid);
+
+                        tracing::debug!("AMP Code 生成 user_id: {}", user_id);
+
+                        // 注入并保持字段顺序
+                        Self::inject_metadata_with_order(&prefixed_body, &user_id)
+                            .unwrap_or(prefixed_body)
+                    }
+                } else {
+                    prefixed_body
+                };
+
                 let mut result = ClaudeHeadersProcessor
                     .process_outgoing_request(
                         &p.base_url,
@@ -756,7 +911,7 @@ impl RequestProcessor for AmpHeadersProcessor {
                         &llm_path,
                         query,
                         original_headers,
-                        &prefixed_body,
+                        &final_body,
                     )
                     .await?;
 
