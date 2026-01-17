@@ -165,7 +165,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
         response_status: u16,
         response_body: &[u8],
         is_sse: bool,
-        _response_time_ms: Option<i64>,
+        response_time_ms: Option<i64>,
     ) -> Result<()> {
         use crate::services::proxy::log_recorder::{
             LogRecorder, RequestLogContext, ResponseParser,
@@ -178,6 +178,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
             client_ip,
             proxy_pricing_template_id,
             request_body,
+            response_time_ms,
         );
 
         // 2. 解析响应

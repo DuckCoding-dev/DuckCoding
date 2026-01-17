@@ -4,7 +4,6 @@
 
 use crate::services::session::manager::SESSION_MANAGER;
 use crate::services::session::models::ProxySession;
-use std::time::Instant;
 
 /// 请求日志上下文（在请求处理早期提取）
 #[derive(Debug, Clone)]
@@ -17,7 +16,7 @@ pub struct RequestLogContext {
     pub model: Option<String>,               // 从 request_body 提取
     pub is_stream: bool,                     // 从 request_body 提取 stream 字段
     pub request_body: Vec<u8>,               // 保留原始请求体
-    pub start_time: Instant,
+    pub response_time_ms: Option<i64>,       // 响应时间（毫秒）
 }
 
 impl RequestLogContext {
@@ -28,6 +27,7 @@ impl RequestLogContext {
         client_ip: &str,
         proxy_pricing_template_id: Option<&str>,
         request_body: &[u8],
+        response_time_ms: Option<i64>,
     ) -> Self {
         // 提取 user_id（完整）、display_id（用于日志）、model 和 stream（仅解析一次）
         let (user_id, session_id, model, is_stream) = if !request_body.is_empty() {
@@ -70,7 +70,7 @@ impl RequestLogContext {
             model,
             is_stream,
             request_body: request_body.to_vec(),
-            start_time: Instant::now(),
+            response_time_ms,
         }
     }
 
@@ -106,9 +106,5 @@ impl RequestLogContext {
             proxy_config_name.to_string(),
             proxy_template_id.map(|s| s.to_string()),
         )
-    }
-
-    pub fn elapsed_ms(&self) -> i64 {
-        self.start_time.elapsed().as_millis() as i64
     }
 }

@@ -482,6 +482,9 @@ async fn handle_request_inner(
         let sse_chunks = Arc::new(Mutex::new(Vec::new()));
         let sse_chunks_clone = Arc::clone(&sse_chunks);
 
+        // 创建一个通道,在流完全消费后触发统计
+        let (stream_end_tx, stream_end_rx) = tokio::sync::oneshot::channel::<()>();
+
         let stream = upstream_res.bytes_stream();
 
         // amp-code 需要移除工具名前缀
@@ -489,40 +492,76 @@ async fn handle_request_inner(
         let prefix_regex = Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).ok();
 
         // 拦截流数据并收集
-        let mapped_stream = stream.map(move |result| {
-            if let Ok(chunk) = &result {
-                if let Ok(mut chunks) = sse_chunks_clone.lock() {
-                    chunks.push(chunk.clone());
+        let mapped_stream = stream
+            .map(move |result| {
+                match &result {
+                    Ok(chunk) => {
+                        if let Ok(mut chunks) = sse_chunks_clone.lock() {
+                            chunks.push(chunk.clone());
+                        }
+                    }
+                    Err(_) => {
+                        // 流错误 - 注意: stream_completed_clone 已被移除,不再需要通知
+                    }
                 }
-            }
-            result
-                .map(|bytes| {
-                    if is_amp_code {
-                        if let Some(ref re) = prefix_regex {
-                            let text = String::from_utf8_lossy(&bytes);
-                            let cleaned = re.replace_all(&text, r#""name": "$1""#);
-                            Frame::data(Bytes::from(cleaned.into_owned()))
+
+                result
+                    .map(|bytes| {
+                        if is_amp_code {
+                            if let Some(ref re) = prefix_regex {
+                                let text = String::from_utf8_lossy(&bytes);
+                                let cleaned = re.replace_all(&text, r#""name": "$1""#);
+                                Frame::data(Bytes::from(cleaned.into_owned()))
+                            } else {
+                                Frame::data(bytes)
+                            }
                         } else {
                             Frame::data(bytes)
                         }
-                    } else {
-                        Frame::data(bytes)
-                    }
-                })
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-        });
+                    })
+                    .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            })
+            // 在流的最后一个元素之后插入完成信号
+            .chain(futures_util::stream::once(async move {
+                // 发送流完成信号
+                let _ = stream_end_tx.send(());
+                tracing::debug!("SSE 流已完全消费完毕,发送完成信号");
+                // 返回一个永远不会被使用的 Err,会被下游过滤掉
+                Err(Box::new(std::io::Error::other("__stream_end_marker__"))
+                    as Box<dyn std::error::Error + Send + Sync>)
+            }))
+            // 过滤掉结束标记
+            .filter(|item| {
+                let is_end_marker = item
+                    .as_ref()
+                    .err()
+                    .and_then(|e| e.downcast_ref::<std::io::Error>())
+                    .map(|e| e.to_string().contains("__stream_end_marker__"))
+                    .unwrap_or(false);
+                futures_util::future::ready(!is_end_marker)
+            });
 
-        // 在流结束后异步记录日志
+        // 在流真正结束后异步记录日志
         let processor_clone = Arc::clone(&processor);
         let client_ip_clone = client_ip.clone();
         let request_body_clone = processed.body.clone();
         let response_status = status.as_u16();
-        let start_time_clone = start_time; // 捕获 start_time 用于计算响应时间
+        let start_time_clone = start_time;
         let proxy_pricing_template_id_clone = proxy_pricing_template_id.clone();
 
         tokio::spawn(async move {
-            // 等待流结束（延迟确保所有 chunks 已收集）
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            // 等待流完全消费的信号(无超时,真正等待流结束)
+            match stream_end_rx.await {
+                Ok(_) => {
+                    tracing::info!("✓ 收到 SSE 流完成信号,流已完全消费");
+                }
+                Err(_) => {
+                    tracing::warn!("✗ 未收到 SSE 流完成信号(sender 被 drop),可能流被提前取消");
+                }
+            }
+
+            // 小延迟确保最后的 chunk 写入完成(异步锁竞争)
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
             let chunks = match sse_chunks.lock() {
                 Ok(guard) => guard.clone(),
@@ -532,13 +571,18 @@ async fn handle_request_inner(
                 }
             };
 
+            tracing::info!(
+                chunks_count = chunks.len(),
+                "开始处理 SSE chunks 进行 token 统计"
+            );
+
             // 将所有 chunk 合并为完整响应体
             let mut full_data = Vec::new();
             for chunk in &chunks {
                 full_data.extend_from_slice(chunk);
             }
 
-            // 计算响应时间
+            // 计算响应时间(从请求开始到流完全消费的总时间)
             let response_time_ms = start_time_clone.elapsed().as_millis() as i64;
 
             // 调用工具特定的日志记录
