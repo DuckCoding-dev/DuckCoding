@@ -9,14 +9,19 @@ import type {
   RemoteToken,
   RemoteTokenGroup,
   TokenImportStatus,
+  TokenListResponse,
   UpdateRemoteTokenRequest,
 } from '@/types/remote-token';
 
 /**
- * 获取指定供应商的远程令牌列表
+ * 获取指定供应商的远程令牌列表（支持分页）
  */
-export async function fetchProviderTokens(provider: Provider): Promise<RemoteToken[]> {
-  return invoke<RemoteToken[]>('fetch_provider_tokens', { provider });
+export async function fetchProviderTokens(
+  provider: Provider,
+  page = 1,
+  pageSize = 10,
+): Promise<TokenListResponse> {
+  return invoke<TokenListResponse>('fetch_provider_tokens', { provider, page, pageSize });
 }
 
 /**

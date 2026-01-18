@@ -4,7 +4,8 @@
 
 use ::duckcoding::models::provider::Provider;
 use ::duckcoding::models::remote_token::{
-    CreateRemoteTokenRequest, RemoteToken, RemoteTokenGroup, UpdateRemoteTokenRequest,
+    CreateRemoteTokenRequest, RemoteToken, RemoteTokenGroup, TokenListData,
+    UpdateRemoteTokenRequest,
 };
 use ::duckcoding::services::profile_manager::types::TokenImportStatus;
 use ::duckcoding::services::{
@@ -27,11 +28,18 @@ pub async fn check_token_import_status(
         .map_err(|e| e.to_string())
 }
 
-/// 获取指定供应商的远程令牌列表
+/// 获取指定供应商的远程令牌列表（支持分页）
 #[tauri::command]
-pub async fn fetch_provider_tokens(provider: Provider) -> Result<Vec<RemoteToken>, String> {
+pub async fn fetch_provider_tokens(
+    provider: Provider,
+    page: i32,
+    page_size: i32,
+) -> Result<TokenListData, String> {
     let client = NewApiClient::new(provider).map_err(|e| e.to_string())?;
-    client.list_tokens().await.map_err(|e| e.to_string())
+    client
+        .list_tokens(page, page_size)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 获取指定供应商的令牌分组列表
