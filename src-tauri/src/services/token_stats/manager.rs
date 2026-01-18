@@ -358,15 +358,50 @@ impl TokenStatsManager {
         let mut message_start: Option<MessageStartData> = None;
         let mut message_delta: Option<MessageDeltaData> = None;
 
+        tracing::info!(chunks_count = chunks.len(), "开始解析 SSE chunks");
+
         for (i, chunk) in chunks.iter().enumerate() {
+            // 记录每个chunk的类型（前100个字符）
+            let chunk_preview = chunk.chars().take(100).collect::<String>();
+
+            // 尝试提取事件类型用于日志
+            let event_type = if let Ok(json) = serde_json::from_str::<serde_json::Value>(chunk) {
+                json.get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string()
+            } else {
+                "parse_error".to_string()
+            };
+
+            tracing::debug!(
+                chunk_index = i,
+                event_type = %event_type,
+                preview = %chunk_preview,
+                "处理 SSE chunk"
+            );
+
             match extractor.extract_from_sse_chunk(chunk) {
                 Ok(Some(data)) => {
                     if let Some(start) = data.message_start {
-                        tracing::debug!(chunk_index = i, "找到 message_start 事件");
+                        tracing::info!(
+                            chunk_index = i,
+                            input_tokens = start.input_tokens,
+                            output_tokens = start.output_tokens,
+                            cache_creation = start.cache_creation_tokens,
+                            cache_read = start.cache_read_tokens,
+                            "✓ 找到 message_start 事件"
+                        );
                         message_start = Some(start);
                     }
                     if let Some(delta) = data.message_delta {
-                        tracing::debug!(chunk_index = i, "找到 message_delta 事件");
+                        tracing::info!(
+                            chunk_index = i,
+                            output_tokens = delta.output_tokens,
+                            cache_creation = delta.cache_creation_tokens,
+                            cache_read = delta.cache_read_tokens,
+                            "✓ 找到 message_delta 事件"
+                        );
                         message_delta = Some(delta);
                     }
                 }
@@ -377,7 +412,7 @@ impl TokenStatsManager {
                     tracing::warn!(
                         chunk_index = i,
                         error = ?e,
-                        chunk_preview = %chunk.chars().take(100).collect::<String>(),
+                        chunk_preview = %chunk.chars().take(200).collect::<String>(),
                         "SSE chunk 解析失败"
                     );
                 }
@@ -391,9 +426,34 @@ impl TokenStatsManager {
             );
         }
 
+        if message_delta.is_none() {
+            tracing::warn!(
+                chunks_count = chunks.len(),
+                "所有 SSE chunks 中未找到 message_delta 事件（可能流未完成或被截断）"
+            );
+        }
+
         let start = message_start.context("Missing message_start in SSE stream")?;
 
-        Ok(ResponseTokenInfo::from_sse_data(start, message_delta))
+        // 添加日志查看最终使用的值
+        tracing::info!(
+            has_delta = message_delta.is_some(),
+            start_output = start.output_tokens,
+            delta_output = message_delta.as_ref().map(|d| d.output_tokens),
+            "合并前: start vs delta"
+        );
+
+        let result = ResponseTokenInfo::from_sse_data(start, message_delta);
+
+        tracing::info!(
+            final_input = result.input_tokens,
+            final_output = result.output_tokens,
+            final_cache_creation = result.cache_creation_tokens,
+            final_cache_read = result.cache_read_tokens,
+            "合并后: 最终 Token 信息"
+        );
+
+        Ok(result)
     }
 
     /// 查询会话实时统计

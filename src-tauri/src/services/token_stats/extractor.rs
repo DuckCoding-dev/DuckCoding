@@ -126,6 +126,8 @@ impl TokenExtractor for ClaudeTokenExtractor {
 
         let event_type = json.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
+        tracing::debug!(event_type = event_type, "解析 SSE 事件");
+
         let mut result = SseTokenData::default();
 
         match event_type {
@@ -193,47 +195,57 @@ impl TokenExtractor for ClaudeTokenExtractor {
                 }
             }
             "message_delta" => {
-                // 检查是否有 stop_reason（任何值都接受：end_turn, tool_use, max_tokens 等）
-                if let Some(delta) = json.get("delta") {
-                    if delta.get("stop_reason").and_then(|v| v.as_str()).is_some() {
-                        if let Some(usage) = json.get("usage") {
-                            // 提取缓存创建 token：优先读取扁平字段，回退到嵌套对象
-                            let cache_creation = usage
-                                .get("cache_creation_input_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_else(|| {
-                                    if let Some(cache_obj) = usage.get("cache_creation") {
-                                        let ephemeral_5m = cache_obj
-                                            .get("ephemeral_5m_input_tokens")
-                                            .and_then(|v| v.as_i64())
-                                            .unwrap_or(0);
-                                        let ephemeral_1h = cache_obj
-                                            .get("ephemeral_1h_input_tokens")
-                                            .and_then(|v| v.as_i64())
-                                            .unwrap_or(0);
-                                        ephemeral_5m + ephemeral_1h
-                                    } else {
-                                        0
-                                    }
-                                });
+                tracing::info!("检测到 message_delta 事件");
 
-                            let cache_read = usage
-                                .get("cache_read_input_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
+                // message_delta 事件包含最终的usage统计
+                // 条件：必须有 usage 字段（无论是否有 stop_reason）
+                if let Some(usage) = json.get("usage") {
+                    tracing::info!("message_delta 包含 usage 字段");
 
-                            let output_tokens = usage
-                                .get("output_tokens")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or(0);
+                    // 提取缓存创建 token：优先读取扁平字段，回退到嵌套对象
+                    let cache_creation = usage
+                        .get("cache_creation_input_tokens")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or_else(|| {
+                            if let Some(cache_obj) = usage.get("cache_creation") {
+                                let ephemeral_5m = cache_obj
+                                    .get("ephemeral_5m_input_tokens")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or(0);
+                                let ephemeral_1h = cache_obj
+                                    .get("ephemeral_1h_input_tokens")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or(0);
+                                ephemeral_5m + ephemeral_1h
+                            } else {
+                                0
+                            }
+                        });
 
-                            result.message_delta = Some(MessageDeltaData {
-                                cache_creation_tokens: cache_creation,
-                                cache_read_tokens: cache_read,
-                                output_tokens,
-                            });
-                        }
-                    }
+                    let cache_read = usage
+                        .get("cache_read_input_tokens")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
+
+                    let output_tokens = usage
+                        .get("output_tokens")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0);
+
+                    tracing::info!(
+                        output_tokens = output_tokens,
+                        cache_creation = cache_creation,
+                        cache_read = cache_read,
+                        "message_delta 提取成功"
+                    );
+
+                    result.message_delta = Some(MessageDeltaData {
+                        cache_creation_tokens: cache_creation,
+                        cache_read_tokens: cache_read,
+                        output_tokens,
+                    });
+                } else {
+                    tracing::warn!("message_delta 事件缺少 usage 字段");
                 }
             }
             _ => {}
