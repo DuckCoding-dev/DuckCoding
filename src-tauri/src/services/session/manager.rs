@@ -151,26 +151,26 @@ impl SessionManager {
                     timestamp,
                 } => {
                     // 提取 display_id
-                    if let Some(display_id) = ProxySession::extract_display_id(&session_id) {
-                        // Upsert 会话
-                        if let Ok(db) = manager.sqlite(db_path) {
-                            if db
-                                .execute(
-                                    "INSERT INTO claude_proxy_sessions (
-                                    session_id, display_id, tool_id, config_name, url, api_key,
-                                    first_seen_at, last_seen_at, request_count,
-                                    created_at, updated_at
-                                ) VALUES (?1, ?2, ?3, 'global', '', '', ?4, ?4, 1, ?4, ?4)
-                                ON CONFLICT(session_id) DO UPDATE SET
-                                    last_seen_at = ?4,
-                                    request_count = request_count + 1,
-                                    updated_at = ?4",
-                                    &[&session_id, &display_id, &tool_id, &timestamp.to_string()],
-                                )
-                                .is_ok()
-                            {
-                                has_writes = true;
-                            }
+                    let display_id = ProxySession::extract_display_id(&session_id);
+
+                    // Upsert 会话
+                    if let Ok(db) = manager.sqlite(db_path) {
+                        if db
+                            .execute(
+                                "INSERT INTO claude_proxy_sessions (
+                                session_id, display_id, tool_id, config_name, url, api_key,
+                                first_seen_at, last_seen_at, request_count,
+                                created_at, updated_at
+                            ) VALUES (?1, ?2, ?3, 'global', '', '', ?4, ?4, 1, ?4, ?4)
+                            ON CONFLICT(session_id) DO UPDATE SET
+                                last_seen_at = ?4,
+                                request_count = request_count + 1,
+                                updated_at = ?4",
+                                &[&session_id, &display_id, &tool_id, &timestamp.to_string()],
+                            )
+                            .is_ok()
+                        {
+                            has_writes = true;
                         }
                     }
                 }

@@ -49,3 +49,4 @@ DEPLOYMENT*.md
 mirror-server/
 /nul
 /.claude/
+/src-tauri/NUL

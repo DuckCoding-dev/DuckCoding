@@ -29,37 +29,45 @@ impl RequestLogContext {
         request_body: &[u8],
         response_time_ms: Option<i64>,
     ) -> Self {
-        // 提取 user_id（完整）、display_id（用于日志）、model 和 stream（仅解析一次）
-        let (user_id, session_id, model, is_stream) = if !request_body.is_empty() {
+        // 提取 session_id（完整）、display_id（用于日志）、model 和 stream（仅解析一次）
+        let (full_session_id, session_id, model, is_stream) = if !request_body.is_empty() {
             match serde_json::from_slice::<serde_json::Value>(request_body) {
                 Ok(json) => {
-                    // 提取完整 user_id（用于查询配置）
-                    let user_id = json["metadata"]["user_id"]
-                        .as_str()
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                    // 根据工具类型提取 session_id
+                    let full_session_id = if tool_id == "codex" {
+                        // Codex: 从 prompt_cache_key 提取
+                        json["prompt_cache_key"]
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+                    } else {
+                        // Claude 和其他: 从 metadata.user_id 提取
+                        json["metadata"]["user_id"]
+                            .as_str()
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+                    };
 
                     // 提取 display_id（用于存储日志）
-                    let session_id = ProxySession::extract_display_id(&user_id)
-                        .unwrap_or_else(|| user_id.clone());
+                    let session_id = ProxySession::extract_display_id(&full_session_id);
 
                     let model = json["model"].as_str().map(|s| s.to_string());
                     let is_stream = json["stream"].as_bool().unwrap_or(false);
-                    (user_id, session_id, model, is_stream)
+                    (full_session_id, session_id, model, is_stream)
                 }
                 Err(_) => {
                     let fallback_id = uuid::Uuid::new_v4().to_string();
-                    (fallback_id.clone(), fallback_id, None, false)
+                    (fallback_id.clone(), fallback_id.clone(), None, false)
                 }
             }
         } else {
             let fallback_id = uuid::Uuid::new_v4().to_string();
-            (fallback_id.clone(), fallback_id, None, false)
+            (fallback_id.clone(), fallback_id.clone(), None, false)
         };
 
-        // 查询会话级别的配置（优先级：会话 > 代理），使用完整 user_id 查询
+        // 查询会话级别的配置（优先级：会话 > 代理），使用完整 session_id 查询
         let (config_name, pricing_template_id) =
-            Self::resolve_session_config(&user_id, config_name, proxy_pricing_template_id);
+            Self::resolve_session_config(&full_session_id, config_name, proxy_pricing_template_id);
 
         Self {
             tool_id: tool_id.to_string(),

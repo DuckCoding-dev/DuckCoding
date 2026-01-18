@@ -228,6 +228,27 @@ last-updated: 2025-12-16
     - **GlobalConfig 清理**：删除 6 个废弃字段（`transparent_proxy_enabled`、`transparent_proxy_port`、`transparent_proxy_api_key`、`transparent_proxy_allow_public`、`transparent_proxy_real_api_key`、`transparent_proxy_real_base_url`）
     - **迁移逻辑**：`migrations/proxy_config.rs` 使用 `serde_json::Value` 手动操作 JSON，保持向后兼容
     - **代码质量**：遵循 DRY 原则，所有检查通过（Clippy + fmt + ESLint + Prettier），测试 199 通过
+  - **Codex 会话管理与计费系统（2026-01-18）**：
+    - **会话 ID 提取**：从请求体的 `prompt_cache_key` 字段提取（区别于 Claude 的 `metadata.user_id`）
+    - **SSE 事件结构**：
+      - `"type": "response.created"` → 提取 `response.id`（消息 ID）
+      - `"type": "response.completed"` → 提取完整 `response.usage`（所有 token 统计）
+    - **Token 字段映射**：
+      - `input_tokens` → input_tokens
+      - `input_tokens_details.cached_tokens` → cache_read_tokens
+      - `output_tokens` → output_tokens
+      - `output_tokens_details.reasoning_tokens` → 记录日志（暂不计费）
+      - `cache_creation_tokens` → 0（Codex 不报告缓存创建）
+    - **扩展式提取器架构**：
+      - 独立的 `CodexTokenExtractor` 实现（位于 `services/token_stats/extractor.rs`）
+      - 不影响 Claude 的 `ClaudeTokenExtractor` 逻辑
+      - 工厂函数 `create_extractor("codex")` 返回 Codex 提取器
+    - **会话模型增强**：
+      - `ProxySession::extract_display_id()` 支持多种格式：
+        - Claude 格式：`user_xxx_session_<uuid>` → 提取 UUID
+        - Codex 格式：`prompt_cache_key` → 使用前 12 字符
+      - `RequestLogContext` 根据 tool_id 自动选择提取逻辑
+    - **代码质量**：新增 8 个单元测试（Codex SSE/JSON 解析），所有检查通过
   - **配置管理机制（2025-12-12）**：
     - 代理启动时自动创建内置 Profile（`dc_proxy_*`），通过 `ProfileManager` 切换配置
     - 内置 Profile 在 UI 中不可见（列表查询时过滤 `dc_proxy_` 前缀）

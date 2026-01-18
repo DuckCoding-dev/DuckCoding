@@ -21,6 +21,10 @@ pub struct ModelPrice {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_read_price_per_1m: Option<f64>,
 
+    /// 推理输出价格（USD/百万 Token，可选，如 OpenAI o1 系列）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_output_price_per_1m: Option<f64>,
+
     /// 货币类型（默认：USD）
     #[serde(default = "default_currency")]
     pub currency: String,
@@ -39,6 +43,7 @@ impl ModelPrice {
         output_price_per_1m: f64,
         cache_write_price_per_1m: Option<f64>,
         cache_read_price_per_1m: Option<f64>,
+        reasoning_output_price_per_1m: Option<f64>,
         aliases: Vec<String>,
     ) -> Self {
         Self {
@@ -47,6 +52,7 @@ impl ModelPrice {
             output_price_per_1m,
             cache_write_price_per_1m,
             cache_read_price_per_1m,
+            reasoning_output_price_per_1m,
             currency: default_currency(),
             aliases,
         }
@@ -224,6 +230,7 @@ mod tests {
             15.0,
             Some(3.75),
             Some(0.3),
+            None,  // No reasoning price
             vec![
                 "claude-sonnet-4.5".to_string(),
                 "claude-sonnet-4-5".to_string(),
@@ -258,7 +265,7 @@ mod tests {
         let mut custom_models = HashMap::new();
         custom_models.insert(
             "model1".to_string(),
-            ModelPrice::new("provider1".to_string(), 1.0, 2.0, None, None, vec![]),
+            ModelPrice::new("provider1".to_string(), 1.0, 2.0, None, None, None, vec![]),
         );
 
         let full_custom = PricingTemplate::new(

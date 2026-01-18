@@ -442,6 +442,7 @@ mod tests {
                 50,
                 10,
                 20,
+                0,    // reasoning_tokens
                 "success".to_string(),
                 "json".to_string(),
                 None,
@@ -451,6 +452,7 @@ mod tests {
                 Some(0.002),
                 Some(0.0001),
                 Some(0.0002),
+                None, // reasoning_price
                 0.0033,
                 Some("test_template".to_string()),
             );
@@ -504,6 +506,7 @@ mod tests {
                     50,
                     10,
                     20,
+                    0,    // reasoning_tokens
                     "success".to_string(),
                     "json".to_string(),
                     None,
@@ -513,6 +516,7 @@ mod tests {
                     Some(0.002),
                     Some(0.0001),
                     Some(0.0002),
+                    None, // reasoning_price
                     0.0033,
                     Some("test_template".to_string()),
                 );

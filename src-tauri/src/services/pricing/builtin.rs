@@ -16,6 +16,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             25.0,
             Some(6.25), // Cache write: 5.0 * 1.25
             Some(0.5),  // Cache read: 5.0 * 0.1
+            None,       // No reasoning tokens
             vec![
                 "claude-opus-4.5".to_string(),
                 "claude-opus-4-5".to_string(),
@@ -34,6 +35,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             75.0,
             Some(18.75), // Cache write: 15.0 * 1.25
             Some(1.5),   // Cache read: 15.0 * 0.1
+            None,        // No reasoning tokens
             vec![
                 "claude-opus-4.1".to_string(),
                 "claude-opus-4-1".to_string(),
@@ -51,6 +53,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             75.0,
             Some(18.75), // Cache write: 15.0 * 1.25
             Some(1.5),   // Cache read: 15.0 * 0.1
+            None,        // No reasoning tokens
             vec![
                 "claude-opus-4".to_string(),
                 "claude-opus-4-20250514".to_string(),
@@ -67,6 +70,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             15.0,
             Some(3.75), // Cache write: 3.0 * 1.25
             Some(0.3),  // Cache read: 3.0 * 0.1
+            None,       // No reasoning tokens
             vec![
                 "claude-sonnet-4.5".to_string(),
                 "claude-sonnet-4-5".to_string(),
@@ -84,6 +88,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             15.0,
             Some(3.75), // Cache write: 3.0 * 1.25
             Some(0.3),  // Cache read: 3.0 * 0.1
+            None,       // No reasoning tokens
             vec![
                 "claude-sonnet-4".to_string(),
                 "claude-sonnet-4-20250514".to_string(),
@@ -100,6 +105,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             15.0,
             Some(3.75), // Cache write: 3.0 * 1.25
             Some(0.3),  // Cache read: 3.0 * 0.1
+            None,       // No reasoning tokens
             vec![
                 "claude-3-7-sonnet".to_string(),
                 "claude-3-7-sonnet-20250219".to_string(),
@@ -118,6 +124,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             5.0,
             Some(1.25), // Cache write: 1.0 * 1.25
             Some(0.1),  // Cache read: 1.0 * 0.1
+            None,       // No reasoning tokens
             vec![
                 "claude-haiku-4.5".to_string(),
                 "claude-haiku-4-5".to_string(),
@@ -135,6 +142,7 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             4.0,
             Some(1.0),  // Cache write: 0.8 * 1.25
             Some(0.08), // Cache read: 0.8 * 0.1
+            None,       // No reasoning tokens
             vec![
                 "claude-haiku-3.5".to_string(),
                 "claude-haiku-3-5".to_string(),

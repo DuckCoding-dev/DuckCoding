@@ -25,6 +25,7 @@ mod tests {
             output_tokens,
             cache_creation_tokens,
             cache_read_tokens,
+            0, // reasoning_tokens
         );
 
         // 验证计算成功
@@ -73,7 +74,7 @@ mod tests {
         // 测试不同模型的成本计算
 
         // Claude Opus 4.5: $5 input / $25 output
-        let opus_result = PRICING_MANAGER.calculate_cost(None, "claude-opus-4.5", 1000, 500, 0, 0);
+        let opus_result = PRICING_MANAGER.calculate_cost(None, "claude-opus-4.5", 1000, 500, 0, 0, 0);
         assert!(opus_result.is_ok());
         let opus_breakdown = opus_result.unwrap();
         assert!((opus_breakdown.input_price - 0.005).abs() < 1e-9); // 1000 * 5 / 1M
@@ -81,7 +82,7 @@ mod tests {
 
         // Claude Sonnet 4.5: $3 input / $15 output
         let sonnet_result =
-            PRICING_MANAGER.calculate_cost(None, "claude-sonnet-4.5", 1000, 500, 0, 0);
+            PRICING_MANAGER.calculate_cost(None, "claude-sonnet-4.5", 1000, 500, 0, 0, 0);
         assert!(sonnet_result.is_ok());
         let sonnet_breakdown = sonnet_result.unwrap();
         assert!((sonnet_breakdown.input_price - 0.003).abs() < 1e-9); // 1000 * 3 / 1M
@@ -89,7 +90,7 @@ mod tests {
 
         // Claude Haiku 3.5: $0.8 input / $4 output
         let haiku_result =
-            PRICING_MANAGER.calculate_cost(None, "claude-haiku-3.5", 1000, 500, 0, 0);
+            PRICING_MANAGER.calculate_cost(None, "claude-haiku-3.5", 1000, 500, 0, 0, 0);
         assert!(haiku_result.is_ok());
         let haiku_breakdown = haiku_result.unwrap();
         assert!((haiku_breakdown.input_price - 0.0008).abs() < 1e-9); // 1000 * 0.8 / 1M
@@ -152,6 +153,7 @@ mod tests {
             token_info.output_tokens,
             token_info.cache_creation_tokens,
             token_info.cache_read_tokens,
+            0, // reasoning_tokens
         );
 
         assert!(result.is_ok());

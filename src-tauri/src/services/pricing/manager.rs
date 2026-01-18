@@ -30,6 +30,10 @@ pub struct CostBreakdown {
     #[serde(with = "price_precision")]
     pub cache_read_price: f64,
 
+    /// 推理输出部分价格（USD）
+    #[serde(with = "price_precision")]
+    pub reasoning_price: f64,
+
     /// 总成本（USD）
     #[serde(with = "price_precision")]
     pub total_cost: f64,
@@ -252,6 +256,7 @@ impl PricingManager {
     /// - `output_tokens`: 输出 Token 数量
     /// - `cache_creation_tokens`: 缓存创建 Token 数量
     /// - `cache_read_tokens`: 缓存读取 Token 数量
+    /// - `reasoning_tokens`: 推理 Token 数量
     ///
     /// # 返回
     ///
@@ -264,6 +269,7 @@ impl PricingManager {
         output_tokens: i64,
         cache_creation_tokens: i64,
         cache_read_tokens: i64,
+        reasoning_tokens: i64,
     ) -> Result<CostBreakdown> {
         // 1. 获取模板
         let template = if let Some(id) = template_id {
@@ -286,14 +292,25 @@ impl PricingManager {
             * model_price.cache_read_price_per_1m.unwrap_or(0.0)
             / 1_000_000.0;
 
+        // 计算推理 Token 价格（如果有专用价格则使用，否则使用普通输出价格）
+        let reasoning_price =
+            if let Some(reasoning_price_per_1m) = model_price.reasoning_output_price_per_1m {
+                reasoning_tokens as f64 * reasoning_price_per_1m / 1_000_000.0
+            } else {
+                // 回退：使用普通输出价格
+                reasoning_tokens as f64 * model_price.output_price_per_1m / 1_000_000.0
+            };
+
         // 4. 计算总成本
-        let total_cost = input_price + output_price + cache_write_price + cache_read_price;
+        let total_cost =
+            input_price + output_price + cache_write_price + cache_read_price + reasoning_price;
 
         Ok(CostBreakdown {
             input_price,
             output_price,
             cache_write_price,
             cache_read_price,
+            reasoning_price,
             total_cost,
             template_id: template.id.clone(),
         })
@@ -336,6 +353,9 @@ impl PricingManager {
                                 .map(|p| p * inherited.multiplier),
                             cache_read_price_per_1m: base_price
                                 .cache_read_price_per_1m
+                                .map(|p| p * inherited.multiplier),
+                            reasoning_output_price_per_1m: base_price
+                                .reasoning_output_price_per_1m
                                 .map(|p| p * inherited.multiplier),
                             currency: base_price.currency,
                             aliases: base_price.aliases,
@@ -416,6 +436,7 @@ mod tests {
                 500,  // output
                 100,  // cache write
                 200,  // cache read
+                0,    // reasoning_tokens
             )
             .unwrap();
 
@@ -493,7 +514,7 @@ mod tests {
 
         // 不指定模板 ID，应使用默认模板
         let breakdown = manager
-            .calculate_cost(None, "claude-sonnet-4.5", 1000, 500, 0, 0)
+            .calculate_cost(None, "claude-sonnet-4.5", 1000, 500, 0, 0, 0)
             .unwrap();
 
         assert_eq!(breakdown.template_id, "builtin_claude");

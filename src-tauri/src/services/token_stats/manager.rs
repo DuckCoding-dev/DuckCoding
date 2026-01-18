@@ -204,6 +204,7 @@ impl TokenStatsManager {
             final_output_price,
             final_cache_write_price,
             final_cache_read_price,
+            final_reasoning_price,
             final_total_cost,
             final_pricing_template_id,
         ) = match PRICING_MANAGER.calculate_cost(
@@ -213,6 +214,7 @@ impl TokenStatsManager {
             token_info.output_tokens,
             token_info.cache_creation_tokens,
             token_info.cache_read_tokens,
+            token_info.reasoning_tokens,
         ) {
             Ok(breakdown) => {
                 tracing::debug!(
@@ -221,6 +223,7 @@ impl TokenStatsManager {
                     total_cost = breakdown.total_cost,
                     input_tokens = token_info.input_tokens,
                     output_tokens = token_info.output_tokens,
+                    reasoning_tokens = token_info.reasoning_tokens,
                     "成本计算成功"
                 );
                 (
@@ -228,6 +231,7 @@ impl TokenStatsManager {
                     Some(breakdown.output_price),
                     Some(breakdown.cache_write_price),
                     Some(breakdown.cache_read_price),
+                    Some(breakdown.reasoning_price),
                     breakdown.total_cost,
                     Some(breakdown.template_id),
                 )
@@ -240,7 +244,7 @@ impl TokenStatsManager {
                     error = ?e,
                     "成本计算失败，使用默认值 0"
                 );
-                (None, None, None, None, 0.0, None)
+                (None, None, None, None, None, 0.0, None)
             }
         };
 
@@ -258,6 +262,7 @@ impl TokenStatsManager {
             token_info.output_tokens,
             token_info.cache_creation_tokens,
             token_info.cache_read_tokens,
+            token_info.reasoning_tokens,
             "success".to_string(),
             response_type.to_string(),
             None,
@@ -267,6 +272,7 @@ impl TokenStatsManager {
             final_output_price,
             final_cache_write_price,
             final_cache_read_price,
+            final_reasoning_price,
             final_total_cost,
             final_pricing_template_id,
         );
@@ -328,6 +334,7 @@ impl TokenStatsManager {
             0,
             0,
             0,
+            0, // reasoning_tokens
             "failed".to_string(),
             response_type.to_string(),
             Some(error_type.to_string()),
@@ -337,7 +344,8 @@ impl TokenStatsManager {
             None,
             None,
             None,
-            0.0, // 失败时成本为 0
+            None, // reasoning_price
+            0.0,  // 失败时成本为 0
             None,
         );
 
@@ -509,6 +517,9 @@ mod tests {
     async fn test_log_request_with_json() {
         let manager = TokenStatsManager::get();
 
+        // 使用唯一的 session_id 避免测试间干扰
+        let session_id = format!("test_session_json_{}", uuid::Uuid::new_v4());
+
         let request_body = json!({
             "model": "claude-sonnet-4-5-20250929",
             "messages": []
@@ -529,7 +540,7 @@ mod tests {
         let result = manager
             .log_request(
                 "claude_code",
-                "test_session",
+                &session_id,
                 "default",
                 "127.0.0.1",
                 request_body.as_bytes(),
@@ -542,11 +553,11 @@ mod tests {
         assert!(result.is_ok());
 
         // 等待异步插入完成
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
 
         // 验证统计数据
         let stats = manager
-            .get_session_stats("claude_code", "test_session")
+            .get_session_stats("claude_code", &session_id)
             .unwrap();
         assert_eq!(stats.total_input, 100);
         assert_eq!(stats.total_output, 50);
@@ -588,6 +599,7 @@ mod tests {
             50,
             10,
             20,
+            0,    // reasoning_tokens
             "success".to_string(),
             "json".to_string(),
             None,
@@ -597,6 +609,7 @@ mod tests {
             None,
             None,
             None,
+            None, // reasoning_price
             0.0,
             None,
         );
