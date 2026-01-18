@@ -49,9 +49,14 @@ impl NewApiClient {
         headers
     }
 
-    /// 获取所有远程令牌列表
-    pub async fn list_tokens(&self) -> Result<Vec<RemoteToken>> {
-        let url = format!("{}/api/token", self.base_url());
+    /// 获取远程令牌列表（支持分页）
+    pub async fn list_tokens(&self, page: i32, page_size: i32) -> Result<TokenListData> {
+        let url = format!(
+            "{}/api/token?p={}&page_size={}",
+            self.base_url(),
+            page,
+            page_size
+        );
         let response = self
             .client
             .get(&url)
@@ -82,14 +87,19 @@ impl NewApiClient {
         }
 
         // 标准化 API Key，确保所有令牌都有 sk- 前缀
-        let mut tokens = api_response.data.map(|d| d.items).unwrap_or_default();
-        for token in &mut tokens {
+        let mut data = api_response.data.unwrap_or_else(|| TokenListData {
+            page,
+            page_size,
+            total: 0,
+            items: vec![],
+        });
+        for token in &mut data.items {
             if !token.key.starts_with("sk-") {
                 token.key = format!("sk-{}", token.key);
             }
         }
 
-        Ok(tokens)
+        Ok(data)
     }
 
     /// 获取所有令牌分组

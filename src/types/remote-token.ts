@@ -129,3 +129,13 @@ export interface TokenImportStatus {
   /** 已导入的 Profile 名称（如果已导入） */
   imported_profile_name?: string;
 }
+
+/**
+ * 令牌列表分页响应
+ */
+export interface TokenListResponse {
+  page: number;
+  page_size: number;
+  total: number;
+  items: RemoteToken[];
+}

@@ -30,10 +30,10 @@ export function TokenDetailCard({ token, group }: TokenDetailCardProps) {
   };
 
   /**
-   * 格式化额度（microdollars 转美元）
+   * 格式化额度（500000 = $1）
    */
-  const formatQuota = (microdollars: number): string => {
-    return `$${(microdollars / 1000000).toFixed(2)}`;
+  const formatQuota = (quota: number): string => {
+    return `$${(quota / 500000).toFixed(2)}`;
   };
 
   return (
@@ -57,18 +57,14 @@ export function TokenDetailCard({ token, group }: TokenDetailCardProps) {
         </div>
       </div>
 
-      {/* 剩余额度 */}
+      {/* 剩余额度 / 总额度 */}
       <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">剩余额度:</span>
+        <span className="text-muted-foreground">额度:</span>
         <span className="font-medium">
-          {token.unlimited_quota ? '无限' : formatQuota(token.remain_quota)}
+          {token.unlimited_quota
+            ? '无限'
+            : `${formatQuota(token.remain_quota)} / ${formatQuota(token.remain_quota + token.used_quota)}`}
         </span>
-      </div>
-
-      {/* 已用额度 */}
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">已用额度:</span>
-        <span className="font-medium">{formatQuota(token.used_quota)}</span>
       </div>
 
       {/* 过期时间 */}

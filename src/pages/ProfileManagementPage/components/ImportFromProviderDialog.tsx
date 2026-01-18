@@ -159,7 +159,7 @@ export const ImportFromProviderDialog = forwardRef<
       setLoadingTokens(true);
       const result = await fetchProviderTokens(provider);
       // 自动为没有 sk- 前缀的令牌添加前缀
-      const normalizedTokens = result.map((token) => ({
+      const normalizedTokens = result.items.map((token: RemoteToken) => ({
         ...token,
         key: token.key.startsWith('sk-') ? token.key : `sk-${token.key}`,
       }));
@@ -327,7 +327,7 @@ export const ImportFromProviderDialog = forwardRef<
         // 重新加载令牌列表并获取最新数据
         const updatedTokens = await fetchProviderTokens(selectedProvider);
         // 自动为没有 sk- 前缀的令牌添加前缀
-        const normalizedTokens = updatedTokens.map((token) => ({
+        const normalizedTokens = updatedTokens.items.map((token: RemoteToken) => ({
           ...token,
           key: token.key.startsWith('sk-') ? token.key : `sk-${token.key}`,
         }));
@@ -339,7 +339,7 @@ export const ImportFromProviderDialog = forwardRef<
           ? result.api_key
           : `sk-${result.api_key}`;
         if (normalizedTokens.length > 0) {
-          const newToken = normalizedTokens.find((t) => t.key === normalizedApiKey);
+          const newToken = normalizedTokens.find((t: RemoteToken) => t.key === normalizedApiKey);
           if (newToken) {
             setTokenId(newToken.id);
           } else {
@@ -539,15 +539,15 @@ export const ImportFromProviderDialog = forwardRef<
       // 重新获取令牌列表
       const updatedTokens = await fetchProviderTokens(selectedProvider);
       // 自动为没有 sk- 前缀的令牌添加前缀
-      const normalizedTokens = updatedTokens.map((token) => ({
+      const normalizedTokens = updatedTokens.items.map((token: RemoteToken) => ({
         ...token,
         key: token.key.startsWith('sk-') ? token.key : `sk-${token.key}`,
       }));
 
       // 按 ID 降序排序，找到名称匹配的第一个（最新创建的）
       const sortedTokens = normalizedTokens
-        .filter((t) => t.name === newTokenName)
-        .sort((a, b) => b.id - a.id);
+        .filter((t: RemoteToken) => t.name === newTokenName)
+        .sort((a: RemoteToken, b: RemoteToken) => b.id - a.id);
 
       if (sortedTokens.length === 0) {
         toast({
