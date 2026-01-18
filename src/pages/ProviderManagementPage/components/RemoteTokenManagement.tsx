@@ -199,7 +199,7 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium">远程令牌</h4>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={loadTokens} disabled={loading}>
+          <Button size="sm" variant="outline" onClick={() => loadTokens()} disabled={loading}>
             <RefreshCw className={`mr-2 h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
             刷新
           </Button>
