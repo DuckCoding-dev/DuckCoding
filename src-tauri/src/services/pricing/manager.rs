@@ -1,6 +1,6 @@
 use crate::data::DataManager;
 use crate::models::pricing::{DefaultTemplatesConfig, ModelPrice, PricingTemplate};
-use crate::services::pricing::builtin::builtin_claude_official_template;
+use crate::services::pricing::builtin::{builtin_claude_official_template, builtin_openai_official_template};
 use crate::utils::precision::price_precision;
 use anyhow::{anyhow, Context, Result};
 use lazy_static::lazy_static;
@@ -106,14 +106,18 @@ impl PricingManager {
             .context("Failed to create templates directory")?;
 
         // 保存内置 Claude 官方模板
-        let builtin_template = builtin_claude_official_template();
-        self.save_template(&builtin_template)?;
+        let builtin_claude_template = builtin_claude_official_template();
+        self.save_template(&builtin_claude_template)?;
+
+        // 保存内置 OpenAI 官方模板
+        let builtin_openai_template = builtin_openai_official_template();
+        self.save_template(&builtin_openai_template)?;
 
         // 初始化默认模板配置（如果不存在）
         if !self.default_templates_path.exists() {
             let mut config = DefaultTemplatesConfig::new();
             config.set_default("claude-code".to_string(), "builtin_claude".to_string());
-            config.set_default("codex".to_string(), "builtin_claude".to_string());
+            config.set_default("codex".to_string(), "builtin_openai".to_string());
             config.set_default("gemini-cli".to_string(), "builtin_claude".to_string());
 
             let value = serde_json::to_value(&config)
@@ -251,6 +255,7 @@ impl PricingManager {
     /// # 参数
     ///
     /// - `template_id`: 价格模板 ID（None 时使用工具默认模板）
+    /// - `tool_id`: 工具 ID（用于获取默认模板，当 template_id 为 None 时必须提供）
     /// - `model`: 模型名称
     /// - `input_tokens`: 输入 Token 数量
     /// - `output_tokens`: 输出 Token 数量
@@ -264,6 +269,7 @@ impl PricingManager {
     pub fn calculate_cost(
         &self,
         template_id: Option<&str>,
+        tool_id: Option<&str>,
         model: &str,
         input_tokens: i64,
         output_tokens: i64,
@@ -275,8 +281,9 @@ impl PricingManager {
         let template = if let Some(id) = template_id {
             self.get_template(id)?
         } else {
-            // 使用 claude-code 的默认模板作为回退
-            self.get_default_template("claude-code")?
+            // 使用工具的默认模板（回退到 claude-code）
+            let default_tool_id = tool_id.unwrap_or("claude-code");
+            self.get_default_template(default_tool_id)?
         };
 
         // 2. 解析模型价格（别名 → 继承 → 倍率）
@@ -431,6 +438,7 @@ mod tests {
         let breakdown = manager
             .calculate_cost(
                 Some("builtin_claude"),
+                None, // 工具 ID（已指定模板则可选）
                 "claude-sonnet-4.5",
                 1000, // input
                 500,  // output
@@ -514,7 +522,16 @@ mod tests {
 
         // 不指定模板 ID，应使用默认模板
         let breakdown = manager
-            .calculate_cost(None, "claude-sonnet-4.5", 1000, 500, 0, 0, 0)
+            .calculate_cost(
+                None,
+                Some("claude-code"),
+                "claude-sonnet-4.5",
+                1000,
+                500,
+                0,
+                0,
+                0,
+            )
             .unwrap();
 
         assert_eq!(breakdown.template_id, "builtin_claude");

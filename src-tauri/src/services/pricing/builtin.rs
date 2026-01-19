@@ -1,6 +1,43 @@
 use crate::models::pricing::{ModelPrice, PricingTemplate};
 use std::collections::HashMap;
 
+/// 生成内置 OpenAI/Codex 价格模板
+///
+/// 包含 OpenAI/Codex 模型的定价
+pub fn builtin_openai_official_template() -> PricingTemplate {
+    let mut custom_models = HashMap::new();
+
+    // GPT-5.2 Codex: $3 input / $12 output
+    // 注意：OpenAI 的缓存机制不同，没有 cache_creation，只有 cached_tokens（读取）
+    custom_models.insert(
+        "gpt-5.2-codex".to_string(),
+        ModelPrice::new(
+            "openai".to_string(),
+            3.0,
+            12.0,
+            None,       // OpenAI 不收费缓存创建
+            Some(1.5),  // Cache read: input * 0.5 (OpenAI 标准)
+            None,       // 标准模型无推理 tokens
+            vec![
+                "gpt-5.2-codex".to_string(),
+                "gpt-5.2".to_string(),
+                "gpt-5-2-codex".to_string(),
+            ],
+        ),
+    );
+
+    PricingTemplate::new(
+        "builtin_openai".to_string(),
+        "内置OpenAI价格".to_string(),
+        "OpenAI 官方定价，包含 GPT/Codex 模型".to_string(),
+        "1.0".to_string(),
+        vec![], // 内置模板不使用继承
+        custom_models,
+        vec!["official".to_string(), "openai".to_string(), "codex".to_string()],
+        true, // 标记为内置预设模板
+    )
+}
+
 /// 生成内置 Claude 价格模板
 ///
 /// 包含 8 个 Claude 模型的官方定价
@@ -261,5 +298,33 @@ mod tests {
                 model_price.input_price_per_1m
             );
         }
+    }
+
+    #[test]
+    fn test_builtin_openai_template() {
+        let template = builtin_openai_official_template();
+
+        // 验证基本信息
+        assert_eq!(template.id, "builtin_openai");
+        assert!(template.is_default_preset);
+        assert!(template.is_full_custom());
+
+        // 验证包含 1 个模型
+        assert_eq!(template.custom_models.len(), 1);
+
+        // 验证 GPT-5.2 Codex 价格
+        let gpt_5_2 = template.custom_models.get("gpt-5.2-codex").unwrap();
+        assert_eq!(gpt_5_2.provider, "openai");
+        assert_eq!(gpt_5_2.input_price_per_1m, 3.0);
+        assert_eq!(gpt_5_2.output_price_per_1m, 12.0);
+        assert_eq!(gpt_5_2.cache_write_price_per_1m, None); // OpenAI 不收费缓存创建
+        assert_eq!(gpt_5_2.cache_read_price_per_1m, Some(1.5));
+        assert_eq!(gpt_5_2.reasoning_output_price_per_1m, None);
+        assert_eq!(gpt_5_2.aliases.len(), 3);
+
+        // 验证别名
+        assert!(gpt_5_2.aliases.contains(&"gpt-5.2-codex".to_string()));
+        assert!(gpt_5_2.aliases.contains(&"gpt-5.2".to_string()));
+        assert!(gpt_5_2.aliases.contains(&"gpt-5-2-codex".to_string()));
     }
 }

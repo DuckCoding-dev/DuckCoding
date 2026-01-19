@@ -3,7 +3,8 @@
 // 职责：统一的日志记录接口，处理成功/失败/解析错误等所有场景
 
 use super::{ParsedResponse, RequestLogContext};
-use crate::services::token_stats::manager::{ResponseData, TokenStatsManager};
+use crate::services::token_stats::logger::create_logger;
+use crate::services::token_stats::manager::TokenStatsManager;
 use anyhow::Result;
 use hyper::StatusCode;
 
@@ -55,22 +56,19 @@ impl LogRecorder {
         context: &RequestLogContext,
         data_lines: Vec<String>,
     ) -> Result<()> {
+        let logger = create_logger(&context.tool_id)?;
         let manager = TokenStatsManager::get();
 
-        match manager
-            .log_request(
-                &context.tool_id,
-                &context.session_id,
-                &context.config_name,
-                &context.client_ip,
-                &context.request_body,
-                ResponseData::Sse(data_lines),
-                context.response_time_ms,
-                context.pricing_template_id.clone(),
-            )
-            .await
-        {
-            Ok(_) => {
+        match logger.log_sse_response(
+            &context.request_body,
+            data_lines,
+            context.session_id.clone(),
+            context.config_name.clone(),
+            context.client_ip.clone(),
+            context.response_time_ms,
+        ) {
+            Ok(log) => {
+                manager.write_log(log);
                 tracing::debug!(
                     tool_id = %context.tool_id,
                     session_id = %context.session_id,
@@ -88,19 +86,17 @@ impl LogRecorder {
 
                 // Token 提取失败，记录为 parse_error
                 let error_detail = format!("SSE Token 提取失败: {}", e);
-                manager
-                    .log_failed_request(
-                        &context.tool_id,
-                        &context.session_id,
-                        &context.config_name,
-                        &context.client_ip,
-                        &context.request_body,
-                        "parse_error",
-                        &error_detail,
-                        "sse",
-                        context.response_time_ms,
-                    )
-                    .await
+                let failed_log = logger.log_failed_request(
+                    &context.request_body,
+                    context.session_id.clone(),
+                    context.config_name.clone(),
+                    context.client_ip.clone(),
+                    context.response_time_ms,
+                    "parse_error".to_string(),
+                    error_detail,
+                )?;
+                manager.write_log(failed_log);
+                Ok(())
             }
         }
     }
@@ -110,22 +106,19 @@ impl LogRecorder {
         context: &RequestLogContext,
         data: serde_json::Value,
     ) -> Result<()> {
+        let logger = create_logger(&context.tool_id)?;
         let manager = TokenStatsManager::get();
 
-        match manager
-            .log_request(
-                &context.tool_id,
-                &context.session_id,
-                &context.config_name,
-                &context.client_ip,
-                &context.request_body,
-                ResponseData::Json(data),
-                context.response_time_ms,
-                context.pricing_template_id.clone(),
-            )
-            .await
-        {
-            Ok(_) => {
+        match logger.log_json_response(
+            &context.request_body,
+            &data,
+            context.session_id.clone(),
+            context.config_name.clone(),
+            context.client_ip.clone(),
+            context.response_time_ms,
+        ) {
+            Ok(log) => {
+                manager.write_log(log);
                 tracing::debug!(
                     tool_id = %context.tool_id,
                     session_id = %context.session_id,
@@ -143,19 +136,17 @@ impl LogRecorder {
 
                 // Token 提取失败，记录为 parse_error
                 let error_detail = format!("JSON Token 提取失败: {}", e);
-                manager
-                    .log_failed_request(
-                        &context.tool_id,
-                        &context.session_id,
-                        &context.config_name,
-                        &context.client_ip,
-                        &context.request_body,
-                        "parse_error",
-                        &error_detail,
-                        "json",
-                        context.response_time_ms,
-                    )
-                    .await
+                let failed_log = logger.log_failed_request(
+                    &context.request_body,
+                    context.session_id.clone(),
+                    context.config_name.clone(),
+                    context.client_ip.clone(),
+                    context.response_time_ms,
+                    "parse_error".to_string(),
+                    error_detail,
+                )?;
+                manager.write_log(failed_log);
+                Ok(())
             }
         }
     }
@@ -176,19 +167,18 @@ impl LogRecorder {
             "响应解析失败"
         );
 
-        TokenStatsManager::get()
-            .log_failed_request(
-                &context.tool_id,
-                &context.session_id,
-                &context.config_name,
-                &context.client_ip,
-                &context.request_body,
-                "parse_error",
-                &error_detail,
-                response_type,
-                context.response_time_ms,
-            )
-            .await
+        let logger = create_logger(&context.tool_id)?;
+        let failed_log = logger.log_failed_request(
+            &context.request_body,
+            context.session_id.clone(),
+            context.config_name.clone(),
+            context.client_ip.clone(),
+            context.response_time_ms,
+            "parse_error".to_string(),
+            error_detail,
+        )?;
+        TokenStatsManager::get().write_log(failed_log);
+        Ok(())
     }
 
     /// 记录上游错误（空响应或连接失败）
@@ -201,21 +191,18 @@ impl LogRecorder {
             "上游请求失败"
         );
 
-        let response_type = if context.is_stream { "sse" } else { "json" };
-
-        TokenStatsManager::get()
-            .log_failed_request(
-                &context.tool_id,
-                &context.session_id,
-                &context.config_name,
-                &context.client_ip,
-                &context.request_body,
-                "upstream_error",
-                detail,
-                response_type, // 根据请求体的 stream 字段判断
-                context.response_time_ms,
-            )
-            .await
+        let logger = create_logger(&context.tool_id)?;
+        let failed_log = logger.log_failed_request(
+            &context.request_body,
+            context.session_id.clone(),
+            context.config_name.clone(),
+            context.client_ip.clone(),
+            context.response_time_ms,
+            "upstream_error".to_string(),
+            detail.to_string(),
+        )?;
+        TokenStatsManager::get().write_log(failed_log);
+        Ok(())
     }
 
     /// 记录 HTTP 错误（4xx/5xx）
@@ -238,20 +225,17 @@ impl LogRecorder {
             "HTTP 错误响应"
         );
 
-        let response_type = if context.is_stream { "sse" } else { "json" };
-
-        TokenStatsManager::get()
-            .log_failed_request(
-                &context.tool_id,
-                &context.session_id,
-                &context.config_name,
-                &context.client_ip,
-                &context.request_body,
-                "upstream_error",
-                &error_detail,
-                response_type, // 根据请求体的 stream 字段判断
-                context.response_time_ms,
-            )
-            .await
+        let logger = create_logger(&context.tool_id)?;
+        let failed_log = logger.log_failed_request(
+            &context.request_body,
+            context.session_id.clone(),
+            context.config_name.clone(),
+            context.client_ip.clone(),
+            context.response_time_ms,
+            "upstream_error".to_string(),
+            error_detail,
+        )?;
+        TokenStatsManager::get().write_log(failed_log);
+        Ok(())
     }
 }

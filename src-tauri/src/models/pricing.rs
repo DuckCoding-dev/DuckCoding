@@ -174,26 +174,45 @@ impl PricingTemplate {
 /// 工具默认模板配置（存储在 default_templates.json）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefaultTemplatesConfig {
+    /// 配置版本号（用于自动迁移）
+    #[serde(default = "default_config_version")]
+    pub version: u32,
+
     /// 工具 -> 默认模板 ID 的映射
     ///
     /// 例如：
     /// ```json
     /// {
-    ///   "claude-code": "claude_official_2025_01",
-    ///   "codex": "claude_official_2025_01",
-    ///   "gemini-cli": "claude_official_2025_01"
+    ///   "version": 2,
+    ///   "claude-code": "builtin_claude",
+    ///   "codex": "builtin_openai",
+    ///   "gemini-cli": "builtin_claude"
     /// }
     /// ```
     #[serde(flatten)]
     pub tool_defaults: HashMap<String, String>,
 }
 
+/// 当前配置版本号
+const CURRENT_CONFIG_VERSION: u32 = 2;
+
+/// 默认配置版本号
+fn default_config_version() -> u32 {
+    1 // 旧配置默认为版本 1
+}
+
 impl DefaultTemplatesConfig {
-    /// 创建新的默认模板配置
+    /// 创建新的默认模板配置（使用最新版本）
     pub fn new() -> Self {
         Self {
+            version: CURRENT_CONFIG_VERSION,
             tool_defaults: HashMap::new(),
         }
+    }
+
+    /// 获取当前配置版本号
+    pub fn current_version() -> u32 {
+        CURRENT_CONFIG_VERSION
     }
 
     /// 获取工具的默认模板 ID
