@@ -274,10 +274,12 @@ async fn handle_request_inner(
     };
 
     // 验证本地 API Key
+    // 支持多种鉴权方式：authorization (Bearer), x-api-key, x-goog-api-key
     let auth_header = req
         .headers()
         .get("authorization")
         .or_else(|| req.headers().get("x-api-key"))
+        .or_else(|| req.headers().get("x-goog-api-key"))
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
