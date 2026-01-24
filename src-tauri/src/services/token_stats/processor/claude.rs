@@ -187,7 +187,11 @@ impl ToolProcessor for ClaudeProcessor {
                 // 回退到请求体
                 serde_json::from_slice::<Value>(request_body)
                     .ok()
-                    .and_then(|req| req.get("model").and_then(|v| v.as_str()).map(|s| s.to_string()))
+                    .and_then(|req| {
+                        req.get("model")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    })
             })
             .context("Missing 'model' field in both response and request")?;
 
@@ -199,7 +203,9 @@ impl ToolProcessor for ClaudeProcessor {
             .to_string();
 
         // 3. 提取 usage
-        let usage = json.get("usage").context("Missing 'usage' field in response")?;
+        let usage = json
+            .get("usage")
+            .context("Missing 'usage' field in response")?;
 
         let input_tokens = usage
             .get("input_tokens")

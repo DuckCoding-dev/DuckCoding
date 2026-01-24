@@ -1,6 +1,8 @@
 use crate::data::DataManager;
 use crate::models::pricing::{DefaultTemplatesConfig, ModelPrice, PricingTemplate};
-use crate::services::pricing::builtin::{builtin_claude_official_template, builtin_openai_official_template};
+use crate::services::pricing::builtin::{
+    builtin_claude_official_template, builtin_openai_official_template,
+};
 use crate::utils::precision::price_precision;
 use anyhow::{anyhow, Context, Result};
 use lazy_static::lazy_static;

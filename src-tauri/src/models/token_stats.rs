@@ -292,7 +292,7 @@ mod tests {
             500,
             100,
             200,
-            0,  // reasoning_tokens
+            0, // reasoning_tokens
             "success".to_string(),
             "sse".to_string(),
             None,
@@ -302,7 +302,7 @@ mod tests {
             Some(0.0075),
             Some(0.000375),
             Some(0.00006),
-            None,  // reasoning_price
+            None, // reasoning_price
             0.011235,
             Some("builtin_claude".to_string()),
         );
@@ -323,7 +323,7 @@ mod tests {
             total_output: 5000,
             total_cache_creation: 1000,
             total_cache_read: 2000,
-            total_reasoning: 0,  // 新增字段
+            total_reasoning: 0, // 新增字段
             request_count: 10,
         };
 

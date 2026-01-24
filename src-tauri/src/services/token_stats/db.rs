@@ -137,20 +137,27 @@ impl TokenStatsDb {
             .context("Failed to get SQLite manager for migration")?;
 
         // 检查 reasoning_tokens 字段是否存在
-        let check_query = "SELECT COUNT(*) FROM pragma_table_info('token_logs') WHERE name='reasoning_tokens'";
-        let rows = manager.query(check_query, &[]).context("Failed to check reasoning_tokens column")?;
+        let check_query =
+            "SELECT COUNT(*) FROM pragma_table_info('token_logs') WHERE name='reasoning_tokens'";
+        let rows = manager
+            .query(check_query, &[])
+            .context("Failed to check reasoning_tokens column")?;
 
-        let exists = rows.first()
+        let exists = rows
+            .first()
             .and_then(|row| row.values.first())
             .and_then(|v| v.as_i64())
-            .unwrap_or(0) > 0;
+            .unwrap_or(0)
+            > 0;
 
         if !exists {
             eprintln!("Migrating database: adding reasoning_tokens and reasoning_price columns");
 
             // 添加 reasoning_tokens 字段
             manager
-                .execute_raw("ALTER TABLE token_logs ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0")
+                .execute_raw(
+                    "ALTER TABLE token_logs ADD COLUMN reasoning_tokens INTEGER NOT NULL DEFAULT 0",
+                )
                 .context("Failed to add reasoning_tokens column")?;
 
             // 添加 reasoning_price 字段
@@ -665,7 +672,7 @@ mod tests {
             500,
             100,
             200,
-            0,    // reasoning_tokens
+            0, // reasoning_tokens
             "success".to_string(),
             "json".to_string(),
             None,
@@ -708,7 +715,7 @@ mod tests {
                 50,
                 10,
                 20,
-                0,    // reasoning_tokens
+                0, // reasoning_tokens
                 "success".to_string(),
                 "sse".to_string(),
                 None,
@@ -763,7 +770,7 @@ mod tests {
             50,
             0,
             0,
-            0,    // reasoning_tokens
+            0, // reasoning_tokens
             "success".to_string(),
             "json".to_string(),
             None,
@@ -791,7 +798,7 @@ mod tests {
             100,
             0,
             0,
-            0,    // reasoning_tokens
+            0, // reasoning_tokens
             "success".to_string(),
             "json".to_string(),
             None,

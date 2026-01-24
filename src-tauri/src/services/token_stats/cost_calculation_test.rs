@@ -147,10 +147,7 @@ mod tests {
         });
 
         let token_info = processor
-            .process_json_response(
-                &serde_json::to_vec(&request_body).unwrap(),
-                &response_json,
-            )
+            .process_json_response(&serde_json::to_vec(&request_body).unwrap(), &response_json)
             .unwrap();
 
         assert_eq!(token_info.input_tokens, 100);
@@ -185,10 +182,7 @@ mod tests {
 
         // 步骤1: 提取 Token
         let token_info = processor
-            .process_json_response(
-                &serde_json::to_vec(&request_body).unwrap(),
-                &response_json,
-            )
+            .process_json_response(&serde_json::to_vec(&request_body).unwrap(), &response_json)
             .unwrap();
 
         // 步骤2: 计算成本
@@ -277,10 +271,7 @@ mod tests {
 
         // 步骤1: 提取 Token
         let token_info = processor
-            .process_json_response(
-                &serde_json::to_vec(&request_body).unwrap(),
-                &response_json,
-            )
+            .process_json_response(&serde_json::to_vec(&request_body).unwrap(), &response_json)
             .unwrap();
 
         // 验证 Token 提取正确（新输入 = 总输入 - 缓存）

@@ -15,9 +15,9 @@ pub fn builtin_openai_official_template() -> PricingTemplate {
             "openai".to_string(),
             3.0,
             12.0,
-            None,       // OpenAI 不收费缓存创建
-            Some(1.5),  // Cache read: input * 0.5 (OpenAI 标准)
-            None,       // 标准模型无推理 tokens
+            None,      // OpenAI 不收费缓存创建
+            Some(1.5), // Cache read: input * 0.5 (OpenAI 标准)
+            None,      // 标准模型无推理 tokens
             vec![
                 "gpt-5.2-codex".to_string(),
                 "gpt-5.2".to_string(),
@@ -33,7 +33,11 @@ pub fn builtin_openai_official_template() -> PricingTemplate {
         "1.0".to_string(),
         vec![], // 内置模板不使用继承
         custom_models,
-        vec!["official".to_string(), "openai".to_string(), "codex".to_string()],
+        vec![
+            "official".to_string(),
+            "openai".to_string(),
+            "codex".to_string(),
+        ],
         true, // 标记为内置预设模板
     )
 }

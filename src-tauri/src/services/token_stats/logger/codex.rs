@@ -24,7 +24,7 @@ impl CodexLogger {
     ) -> Result<TokenLog> {
         // 计算成本
         let cost_result = PRICING_MANAGER.calculate_cost(
-            None,    // 使用默认模板
+            None,          // 使用默认模板
             Some("codex"), // 工具 ID
             &token_info.model,
             token_info.input_tokens,
@@ -155,7 +155,11 @@ impl TokenLogger for CodexLogger {
         // 尝试从请求体提取 model
         let model = serde_json::from_slice::<serde_json::Value>(request_body)
             .ok()
-            .and_then(|req| req.get("model").and_then(|v| v.as_str()).map(|s| s.to_string()))
+            .and_then(|req| {
+                req.get("model")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
             .unwrap_or_else(|| "unknown".to_string());
 
         Ok(TokenLog::new(

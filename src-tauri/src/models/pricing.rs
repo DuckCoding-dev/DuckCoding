@@ -249,7 +249,7 @@ mod tests {
             15.0,
             Some(3.75),
             Some(0.3),
-            None,  // No reasoning price
+            None, // No reasoning price
             vec![
                 "claude-sonnet-4.5".to_string(),
                 "claude-sonnet-4-5".to_string(),

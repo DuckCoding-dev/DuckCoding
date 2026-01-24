@@ -219,7 +219,7 @@ mod tests {
             50,
             10,
             20,
-            0,    // reasoning_tokens
+            0, // reasoning_tokens
             "success".to_string(),
             "json".to_string(),
             None,
@@ -258,7 +258,7 @@ mod tests {
             50,
             10,
             20,
-            0,    // reasoning_tokens
+            0, // reasoning_tokens
             "success".to_string(),
             "json".to_string(),
             None,

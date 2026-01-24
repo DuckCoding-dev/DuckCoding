@@ -142,7 +142,11 @@ mod tests {
             "gemini-cli": "builtin_claude"
         });
 
-        fs::write(&config_path, serde_json::to_string_pretty(&old_config).unwrap()).unwrap();
+        fs::write(
+            &config_path,
+            serde_json::to_string_pretty(&old_config).unwrap(),
+        )
+        .unwrap();
 
         // 执行迁移
         let manager = DataManager::new();
