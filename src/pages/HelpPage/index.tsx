@@ -2,19 +2,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { BookOpen, Github, MessageCircle, FileText, HelpCircle } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-shell';
+import { PageContainer } from '@/components/layout/PageContainer';
 
-interface HelpPageProps {
-  onShowOnboarding: () => void;
-}
+export function HelpPage() {
+  const onShowOnboarding = () => {
+    window.dispatchEvent(new CustomEvent('request-show-onboarding'));
+  };
 
-export function HelpPage({ onShowOnboarding }: HelpPageProps) {
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">帮助中心</h1>
-        <p className="text-muted-foreground">获取使用帮助、查看文档或反馈问题</p>
-      </div>
-
+    <PageContainer
+      title="帮助中心"
+      description="获取使用帮助、查看文档或反馈问题"
+    >
       <div className="grid gap-6 md:grid-cols-2">
         {/* 新手引导 */}
         <Card className="hover:shadow-lg transition-shadow">
@@ -137,6 +136,6 @@ export function HelpPage({ onShowOnboarding }: HelpPageProps) {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

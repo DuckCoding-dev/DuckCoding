@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { PageContainer } from '@/components/layout/PageContainer';
-import { Separator } from '@/components/ui/separator';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useBalanceConfigs } from './hooks/useBalanceConfigs';
 import { useApiKeys } from './hooks/useApiKeys';
@@ -10,6 +9,8 @@ import { BalanceConfig, BalanceFormValues } from './types';
 import { EmptyState } from './components/EmptyState';
 import { ConfigCard } from './components/ConfigCard';
 import { ConfigFormDialog } from './components/ConfigFormDialog';
+import { BalanceTable } from './components/BalanceTable';
+import { ViewToggle, ViewMode } from '@/components/common/ViewToggle';
 import { useToast } from '@/hooks/use-toast';
 
 function createId() {
@@ -24,6 +25,7 @@ export function BalancePage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<BalanceConfig | null>(null);
   const [refreshingAll, setRefreshingAll] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const { toast } = useToast();
 
   const { stateMap, refreshOne, refreshAll } = useBalanceMonitor(configs, getApiKey, true);
@@ -139,6 +141,18 @@ export function BalancePage() {
       return <EmptyState onAdd={() => setDialogOpen(true)} />;
     }
 
+    if (viewMode === 'list') {
+      return (
+        <BalanceTable
+          configs={sortedConfigs}
+          stateMap={stateMap}
+          onRefresh={refreshOne}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      );
+    }
+
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {sortedConfigs.map((config) => (
@@ -155,50 +169,46 @@ export function BalancePage() {
     );
   };
 
+  const pageActions = (
+    <div className="flex gap-2 items-center">
+      <ViewToggle mode={viewMode} onChange={setViewMode} />
+      <div className="h-6 w-px bg-border mx-1" />
+      <Button
+        variant="outline"
+        onClick={handleRefreshAll}
+        disabled={!sortedConfigs.length || refreshingAll}
+      >
+        {refreshingAll ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            刷新中...
+          </>
+        ) : (
+          <>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            刷新全部
+          </>
+        )}
+      </Button>
+      <Button
+        onClick={() => {
+          setEditingConfig(null);
+          setDialogOpen(true);
+        }}
+      >
+        <Plus className="mr-2 h-4 w-4" />
+        添加配置
+      </Button>
+    </div>
+  );
+
   return (
-    <PageContainer>
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">余额监控</h1>
-            <p className="text-sm text-muted-foreground">
-              管理多个 API 余额配置，支持自定义提取器脚本（API Key 可选择保存到文件）
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleRefreshAll}
-              disabled={!sortedConfigs.length || refreshingAll}
-            >
-              {refreshingAll ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  刷新中...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  刷新全部
-                </>
-              )}
-            </Button>
-            <Button
-              onClick={() => {
-                setEditingConfig(null);
-                setDialogOpen(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              添加配置
-            </Button>
-          </div>
-        </div>
-
-        <Separator />
-
-        {renderContent()}
-      </div>
+    <PageContainer
+      title="余额监控"
+      description="管理多个 API 余额配置，支持自定义提取器脚本（API Key 可选择保存到文件）"
+      actions={pageActions}
+    >
+      {renderContent()}
 
       <ConfigFormDialog
         open={dialogOpen}

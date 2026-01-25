@@ -31,6 +31,8 @@ import { fetchProviderTokens, deleteProviderToken } from '@/lib/tauri-commands/t
 import { useToast } from '@/hooks/use-toast';
 import { TokenFormDialog } from './TokenFormDialog';
 import { ImportTokenDialog } from './ImportTokenDialog';
+import { TokenCard } from './TokenCard';
+import { ViewToggle, ViewMode } from '@/components/common/ViewToggle';
 
 interface RemoteTokenManagementProps {
   provider: Provider;
@@ -52,6 +54,7 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingToken, setDeletingToken] = useState<RemoteToken | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   /**
    * 加载令牌列表
@@ -166,6 +169,8 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium">远程令牌</h4>
         <div className="flex items-center gap-2">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+          <div className="h-6 w-px bg-border mx-1" />
           <Button size="sm" variant="outline" onClick={loadTokens} disabled={loading}>
             <RefreshCw className={`mr-2 h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
             刷新
@@ -193,6 +198,18 @@ export function RemoteTokenManagement({ provider }: RemoteTokenManagementProps) 
       ) : tokens.length === 0 ? (
         <div className="text-center py-6 text-muted-foreground">
           <p className="text-sm">暂无令牌，请点击「创建令牌」按钮添加</p>
+        </div>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {tokens.map((token) => (
+            <TokenCard
+              key={token.id}
+              token={token}
+              onEdit={handleEdit}
+              onImport={handleImport}
+              onDelete={handleDelete}
+            />
+          ))}
         </div>
       ) : (
         <div className="rounded-md border">

@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Save } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { useToast } from '@/hooks/use-toast';
+import { useAppContext } from '@/contexts/AppContext';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
@@ -11,28 +12,24 @@ import { LogSettingsTab } from './components/LogSettingsTab';
 import { ConfigGuardTab } from './components/ConfigGuardTab';
 import { TokenStatsTab } from './components/TokenStatsTab';
 import { PricingTab } from './components/PricingTab';
-import type { GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
 
-interface SettingsPageProps {
-  globalConfig: GlobalConfig | null;
-  configLoading: boolean;
-  onConfigChange: () => void;
-  updateInfo?: UpdateInfo | null;
-  initialTab?: string;
-  restrictToTab?: string; // 限制只能访问特定 tab
-  onUpdateCheck?: () => void;
-}
-
-export function SettingsPage({
-  globalConfig,
-  onConfigChange,
-  updateInfo: _updateInfo,
-  initialTab = 'basic',
-  restrictToTab,
-  onUpdateCheck: _onUpdateCheck,
-}: SettingsPageProps) {
+export function SettingsPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const { 
+    globalConfig, 
+    refreshGlobalConfig: onConfigChange,
+    settingsInitialTab,
+    settingsRestrictToTab: restrictToTab
+  } = useAppContext();
+
+  const [activeTab, setActiveTab] = useState(settingsInitialTab || 'basic');
+
+  // Update activeTab when initialTab changes in context
+  useEffect(() => {
+    if (settingsInitialTab) {
+      setActiveTab(settingsInitialTab);
+    }
+  }, [settingsInitialTab]);
 
   // 如果有 restrictToTab，阻止切换到其他 tab
   const handleTabChange = (value: string) => {
@@ -108,7 +105,10 @@ export function SettingsPage({
   };
 
   return (
-    <PageContainer>
+    <PageContainer
+      title="全局设置"
+      description="配置 DuckCoding 的全局参数和功能"
+    >
       {/* 引导模式提示 */}
       {restrictToTab && (
         <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
@@ -136,11 +136,6 @@ export function SettingsPage({
           </div>
         </div>
       )}
-
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold mb-1">全局设置</h2>
-        <p className="text-sm text-muted-foreground">配置 DuckCoding 的全局参数和功能</p>
-      </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
         <TabsList>

@@ -3,9 +3,9 @@
  */
 
 import { useState } from 'react';
-import { Check, MoreVertical, Pencil, Power, Trash2, Tag, AlertCircle } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, AlertCircle, Play, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import type { ProfileDescriptor } from '@/types/profile';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface ProfileCardProps {
   profile: ProfileDescriptor;
@@ -90,63 +91,49 @@ export function ProfileCard({
   };
 
   const sourceInfo = getSourceInfo();
+  const isActive = profile.is_active;
 
   return (
     <>
-      <Card className={profile.is_active && !proxyRunning ? 'border-primary' : ''}>
+      <Card 
+        className={cn(
+          "transition-all duration-200",
+          isActive 
+            ? "border-primary/50 bg-primary/5 shadow-sm ring-1 ring-primary/20" 
+            : "hover:border-primary/30 hover:shadow-sm"
+        )}
+      >
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-base font-semibold">{profile.name}</CardTitle>
-              {profile.is_active && !proxyRunning && (
-                <Badge variant="default" className="h-5 whitespace-nowrap">
-                  <Check className="mr-1 h-3 w-3" />
-                  激活中
-                </Badge>
-              )}
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                {profile.name}
+                {isActive && !proxyRunning && (
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                )}
+              </CardTitle>
+            </div>
+            <CardDescription className="text-xs flex items-center gap-2">
               <Badge
                 variant={sourceInfo.variant}
-                className="h-5 whitespace-nowrap"
+                className="h-5 whitespace-nowrap px-1.5 font-normal"
                 title={sourceInfo.tooltip}
               >
-                <Tag className="mr-1 h-3 w-3" />
                 {sourceInfo.text}
               </Badge>
-            </div>
-            <CardDescription className="text-xs">
-              API Key: {profile.api_key_preview}
             </CardDescription>
           </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
+              <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {(!profile.is_active || proxyRunning) && (
-                <>
-                  <DropdownMenuItem
-                    onClick={proxyRunning ? undefined : onActivate}
-                    disabled={proxyRunning}
-                    className={proxyRunning ? 'cursor-not-allowed opacity-50' : ''}
-                  >
-                    <Power className="mr-2 h-4 w-4" />
-                    激活
-                  </DropdownMenuItem>
-                  {proxyRunning && (
-                    <div className="px-2 py-1.5 text-xs text-muted-foreground flex items-center gap-1">
-                      <AlertCircle className="h-3 w-3" />
-                      透明代理运行中，请先停止代理
-                    </div>
-                  )}
-                  <DropdownMenuSeparator />
-                </>
-              )}
               <DropdownMenuItem onClick={onEdit}>
                 <Pencil className="mr-2 h-4 w-4" />
-                编辑
+                编辑配置
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -160,24 +147,49 @@ export function ProfileCard({
           </DropdownMenu>
         </CardHeader>
 
-        <CardContent className="space-y-2 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">Base URL:</span>
-            <span className="truncate max-w-[200px]" title={profile.base_url}>
-              {profile.base_url}
-            </span>
+        <CardContent className="space-y-3 text-sm pb-3">
+          <div className="grid grid-cols-1 gap-2">
+             <div className="flex flex-col space-y-1">
+                <span className="text-xs text-muted-foreground">API Key</span>
+                <code className="text-xs bg-muted px-1.5 py-0.5 rounded w-fit">{profile.api_key_preview}</code>
+             </div>
+             <div className="flex flex-col space-y-1">
+                <span className="text-xs text-muted-foreground">Base URL</span>
+                <span className="text-xs truncate text-foreground/80 font-medium" title={profile.base_url}>
+                  {profile.base_url}
+                </span>
+             </div>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>创建于 {formatTime(profile.created_at)}</span>
+          <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2 mt-2">
+            <span>{isActive ? '切换于' : '创建于'} {isActive && profile.switched_at ? formatTime(profile.switched_at) : formatTime(profile.created_at)}</span>
           </div>
-
-          {profile.is_active && profile.switched_at && (
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>切换于 {formatTime(profile.switched_at)}</span>
-            </div>
-          )}
         </CardContent>
+
+        {/* Footer Actions */}
+        {!isActive && (
+           <CardFooter className="pt-0 pb-4">
+              <Button 
+                className="w-full" 
+                variant={proxyRunning ? "outline" : "default"}
+                size="sm"
+                onClick={proxyRunning ? undefined : onActivate}
+                disabled={proxyRunning}
+              >
+                {proxyRunning ? (
+                   <>
+                     <AlertCircle className="mr-2 h-3.5 w-3.5" />
+                     代理运行中
+                   </>
+                ) : (
+                   <>
+                     <Play className="mr-2 h-3.5 w-3.5" />
+                     激活配置
+                   </>
+                )}
+              </Button>
+           </CardFooter>
+        )}
       </Card>
 
       {/* 删除确认对话框 */}
