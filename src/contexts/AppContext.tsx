@@ -1,6 +1,14 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { checkInstallations, getGlobalConfig, checkForAppUpdates } from '@/lib/tauri-commands';
+import {
+  checkInstallations,
+  getGlobalConfig,
+  checkForAppUpdates,
+  type GlobalConfig,
+  type ToolStatus,
+  type UpdateInfo,
+} from '@/lib/tauri-commands';
 import { AppContext, type TabType } from '@/contexts/AppContext.types';
+import type { ToolType } from '@/types/token-stats';
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   // Navigation State
