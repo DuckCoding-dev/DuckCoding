@@ -87,7 +87,6 @@ impl Migration for PricingDefaultTemplatesMigration {
                             "codex".to_string(),
                             serde_json::Value::String("builtin_openai".to_string()),
                         );
-                        migrated = true;
                     }
                 }
 

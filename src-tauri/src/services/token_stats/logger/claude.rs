@@ -12,6 +12,7 @@ pub struct ClaudeLogger;
 
 impl ClaudeLogger {
     /// 从 TokenInfo 构建 TokenLog
+    #[allow(clippy::too_many_arguments)]
     fn build_log(
         &self,
         token_info: TokenInfo,

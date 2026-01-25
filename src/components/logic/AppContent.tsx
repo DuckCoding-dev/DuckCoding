@@ -1,4 +1,4 @@
-import { useAppContext } from '@/contexts/AppContext';
+import { useAppContext } from '@/hooks/useAppContext';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { InstallationPage } from '@/pages/InstallationPage';
 import ProfileManagementPage from '@/pages/ProfileManagementPage';
@@ -15,11 +15,7 @@ import { AboutPage } from '@/pages/AboutPage';
 // For now, we'll try to get what we can from context.
 
 export function AppContent() {
-  const { 
-    activeTab, 
-    tokenStatsParams,
-    selectedProxyToolId,
-  } = useAppContext();
+  const { activeTab, tokenStatsParams, selectedProxyToolId } = useAppContext();
 
   // Note: Some pages might need props that were handled in App.tsx (like onUpdateCheck)
   // We will need to handle those interactions via context or a global event bus later.

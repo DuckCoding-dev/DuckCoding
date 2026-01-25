@@ -1,53 +1,6 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { checkInstallations, getGlobalConfig, checkForAppUpdates } from '@/lib/tauri-commands';
-import type { ToolStatus, GlobalConfig, UpdateInfo } from '@/lib/tauri-commands';
-import type { ToolType } from '@/types/token-stats';
-
-export type TabType =
-  | 'dashboard'
-  | 'tool-management'
-  | 'install'
-  | 'profile-management'
-  | 'balance'
-  | 'transparent-proxy'
-  | 'token-statistics'
-  | 'provider-management'
-  | 'settings'
-  | 'help'
-  | 'about';
-
-interface AppContextType {
-  // Navigation
-  activeTab: TabType;
-  setActiveTab: (tab: TabType) => void;
-  selectedProxyToolId: string | undefined;
-  setSelectedProxyToolId: (id: string | undefined) => void;
-  settingsInitialTab: string;
-  setSettingsInitialTab: (tab: string) => void;
-  settingsRestrictToTab: string | undefined;
-  setSettingsRestrictToTab: (tab: string | undefined) => void;
-  restrictedPage: string | undefined;
-  setRestrictedPage: (page: string | undefined) => void;
-  tokenStatsParams: { sessionId?: string; toolType?: ToolType };
-  setTokenStatsParams: (params: { sessionId?: string; toolType?: ToolType }) => void;
-
-  // Global Data
-  tools: ToolStatus[];
-  toolsLoading: boolean;
-  refreshTools: () => Promise<void>;
-  globalConfig: GlobalConfig | null;
-  configLoading: boolean;
-  refreshGlobalConfig: () => Promise<void>;
-
-  // Updates
-  updateInfo: UpdateInfo | null;
-  setUpdateInfo: (info: UpdateInfo | null) => void;
-  isUpdateDialogOpen: boolean;
-  setIsUpdateDialogOpen: (open: boolean) => void;
-  checkAppUpdates: (force?: boolean) => Promise<void>;
-}
-
-const AppContext = createContext<AppContextType | undefined>(undefined);
+import { AppContext, type TabType } from '@/contexts/AppContext.types';
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   // Navigation State
@@ -121,7 +74,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     refreshTools();
     refreshGlobalConfig();
-    
+
     // Initial update check delay
     const timer = setTimeout(() => {
       checkAppUpdates();
@@ -156,12 +109,4 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-}
-
-export function useAppContext() {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useAppContext must be used within an AppProvider');
-  }
-  return context;
 }

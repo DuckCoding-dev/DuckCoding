@@ -116,16 +116,17 @@ export function ProviderManagementPage() {
     setActiveTab('tokens');
   };
 
-  const pageActions = activeTab === 'providers' ? (
-    <div className="flex gap-2 items-center">
-      <ViewToggle mode={viewMode} onChange={setViewMode} />
-      <div className="h-6 w-px bg-border mx-1" />
-      <Button onClick={handleAdd} size="sm">
-        <Plus className="mr-2 h-4 w-4" />
-        新增供应商
-      </Button>
-    </div>
-  ) : null;
+  const pageActions =
+    activeTab === 'providers' ? (
+      <div className="flex gap-2 items-center">
+        <ViewToggle mode={viewMode} onChange={setViewMode} />
+        <div className="h-6 w-px bg-border mx-1" />
+        <Button onClick={handleAdd} size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          新增供应商
+        </Button>
+      </div>
+    ) : null;
 
   return (
     <PageContainer

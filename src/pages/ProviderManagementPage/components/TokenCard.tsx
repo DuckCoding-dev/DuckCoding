@@ -19,12 +19,7 @@ interface TokenCardProps {
   onDelete: (token: RemoteToken) => void;
 }
 
-export function TokenCard({
-  token,
-  onEdit,
-  onImport,
-  onDelete,
-}: TokenCardProps) {
+export function TokenCard({ token, onEdit, onImport, onDelete }: TokenCardProps) {
   const formatTimestamp = (timestamp: number) => {
     if (timestamp === -1 || timestamp === 0) return '永不过期';
     return new Date(timestamp * 1000).toLocaleString('zh-CN');
@@ -44,7 +39,10 @@ export function TokenCard({
               {token.name}
             </CardTitle>
             <CardDescription className="mt-1">
-              <Badge variant={TOKEN_STATUS_VARIANT[token.status as TokenStatus]} className="text-[10px] px-1 h-5">
+              <Badge
+                variant={TOKEN_STATUS_VARIANT[token.status as TokenStatus]}
+                className="text-[10px] px-1 h-5"
+              >
                 {TOKEN_STATUS_TEXT[token.status as TokenStatus]}
               </Badge>
             </CardDescription>

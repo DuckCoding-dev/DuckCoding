@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, emit } from '@tauri-apps/api/event';
-import { useAppContext } from '@/contexts/AppContext';
+import { useAppContext } from '@/hooks/useAppContext';
 import { useToast } from '@/hooks/use-toast';
 import OnboardingOverlay from '@/components/Onboarding/OnboardingOverlay';
 import {
@@ -10,16 +10,12 @@ import {
   CURRENT_ONBOARDING_VERSION,
 } from '@/components/Onboarding/config/versions';
 import type { OnboardingStatus, OnboardingStep } from '@/types/onboarding';
-import type { TabType } from '@/contexts/AppContext';
+import type { TabType } from '@/contexts/AppContext.types';
 
 export function OnboardingManager() {
-  const { 
-    setActiveTab, 
-    setSettingsInitialTab, 
-    setSettingsRestrictToTab, 
-    setRestrictedPage 
-  } = useAppContext();
-  
+  const { setActiveTab, setSettingsInitialTab, setSettingsRestrictToTab, setRestrictedPage } =
+    useAppContext();
+
   const { toast } = useToast();
 
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -79,11 +75,11 @@ export function OnboardingManager() {
 
   // Listen for onboarding events
   useEffect(() => {
-     const unlistenRequest = listen('request-show-onboarding', () => {
-        handleShowOnboarding();
-     });
+    const unlistenRequest = listen('request-show-onboarding', () => {
+      handleShowOnboarding();
+    });
 
-     const unlistenNavigate = listen<{
+    const unlistenNavigate = listen<{
       targetPage: string;
       restrictToTab?: string;
       autoAction?: string;
@@ -112,11 +108,17 @@ export function OnboardingManager() {
     });
 
     return () => {
-        unlistenRequest.then(fn => fn());
-        unlistenNavigate.then(fn => fn());
-        unlistenClear.then(fn => fn());
+      unlistenRequest.then((fn) => fn());
+      unlistenNavigate.then((fn) => fn());
+      unlistenClear.then((fn) => fn());
     };
-  }, [handleShowOnboarding, setActiveTab, setRestrictedPage, setSettingsInitialTab, setSettingsRestrictToTab]);
+  }, [
+    handleShowOnboarding,
+    setActiveTab,
+    setRestrictedPage,
+    setSettingsInitialTab,
+    setSettingsRestrictToTab,
+  ]);
 
   return (
     <>

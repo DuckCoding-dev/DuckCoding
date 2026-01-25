@@ -5,7 +5,14 @@
 import { useState } from 'react';
 import { MoreVertical, Pencil, Trash2, AlertCircle, Play, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -95,12 +102,12 @@ export function ProfileCard({
 
   return (
     <>
-      <Card 
+      <Card
         className={cn(
-          "transition-all duration-200",
-          isActive 
-            ? "border-primary/50 bg-primary/5 shadow-sm ring-1 ring-primary/20" 
-            : "hover:border-primary/30 hover:shadow-sm"
+          'transition-all duration-200',
+          isActive
+            ? 'border-primary/50 bg-primary/5 shadow-sm ring-1 ring-primary/20'
+            : 'hover:border-primary/30 hover:shadow-sm',
         )}
       >
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
@@ -108,9 +115,7 @@ export function ProfileCard({
             <div className="flex items-center gap-2">
               <CardTitle className="text-base font-semibold flex items-center gap-2">
                 {profile.name}
-                {isActive && !proxyRunning && (
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                )}
+                {isActive && !proxyRunning && <CheckCircle2 className="h-4 w-4 text-primary" />}
               </CardTitle>
             </div>
             <CardDescription className="text-xs flex items-center gap-2">
@@ -149,46 +154,56 @@ export function ProfileCard({
 
         <CardContent className="space-y-3 text-sm pb-3">
           <div className="grid grid-cols-1 gap-2">
-             <div className="flex flex-col space-y-1">
-                <span className="text-xs text-muted-foreground">API Key</span>
-                <code className="text-xs bg-muted px-1.5 py-0.5 rounded w-fit">{profile.api_key_preview}</code>
-             </div>
-             <div className="flex flex-col space-y-1">
-                <span className="text-xs text-muted-foreground">Base URL</span>
-                <span className="text-xs truncate text-foreground/80 font-medium" title={profile.base_url}>
-                  {profile.base_url}
-                </span>
-             </div>
+            <div className="flex flex-col space-y-1">
+              <span className="text-xs text-muted-foreground">API Key</span>
+              <code className="text-xs bg-muted px-1.5 py-0.5 rounded w-fit">
+                {profile.api_key_preview}
+              </code>
+            </div>
+            <div className="flex flex-col space-y-1">
+              <span className="text-xs text-muted-foreground">Base URL</span>
+              <span
+                className="text-xs truncate text-foreground/80 font-medium"
+                title={profile.base_url}
+              >
+                {profile.base_url}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2 mt-2">
-            <span>{isActive ? '切换于' : '创建于'} {isActive && profile.switched_at ? formatTime(profile.switched_at) : formatTime(profile.created_at)}</span>
+            <span>
+              {isActive ? '切换于' : '创建于'}{' '}
+              {isActive && profile.switched_at
+                ? formatTime(profile.switched_at)
+                : formatTime(profile.created_at)}
+            </span>
           </div>
         </CardContent>
 
         {/* Footer Actions */}
         {!isActive && (
-           <CardFooter className="pt-0 pb-4">
-              <Button 
-                className="w-full" 
-                variant={proxyRunning ? "outline" : "default"}
-                size="sm"
-                onClick={proxyRunning ? undefined : onActivate}
-                disabled={proxyRunning}
-              >
-                {proxyRunning ? (
-                   <>
-                     <AlertCircle className="mr-2 h-3.5 w-3.5" />
-                     代理运行中
-                   </>
-                ) : (
-                   <>
-                     <Play className="mr-2 h-3.5 w-3.5" />
-                     激活配置
-                   </>
-                )}
-              </Button>
-           </CardFooter>
+          <CardFooter className="pt-0 pb-4">
+            <Button
+              className="w-full"
+              variant={proxyRunning ? 'outline' : 'default'}
+              size="sm"
+              onClick={proxyRunning ? undefined : onActivate}
+              disabled={proxyRunning}
+            >
+              {proxyRunning ? (
+                <>
+                  <AlertCircle className="mr-2 h-3.5 w-3.5" />
+                  代理运行中
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-3.5 w-3.5" />
+                  激活配置
+                </>
+              )}
+            </Button>
+          </CardFooter>
         )}
       </Card>
 

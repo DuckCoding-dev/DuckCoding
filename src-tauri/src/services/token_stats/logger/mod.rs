@@ -75,6 +75,7 @@ pub trait TokenLogger: Send + Sync {
     ///
     /// # 返回
     /// - TokenLog: 日志记录对象
+    #[allow(clippy::too_many_arguments)]
     fn log_failed_request(
         &self,
         request_body: &[u8],

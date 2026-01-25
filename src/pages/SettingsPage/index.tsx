@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Save } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { useToast } from '@/hooks/use-toast';
-import { useAppContext } from '@/contexts/AppContext';
+import { useAppContext } from '@/hooks/useAppContext';
 import { useSettingsForm } from './hooks/useSettingsForm';
 import { BasicSettingsTab } from './components/BasicSettingsTab';
 import { ProxySettingsTab } from './components/ProxySettingsTab';
@@ -15,11 +15,11 @@ import { PricingTab } from './components/PricingTab';
 
 export function SettingsPage() {
   const { toast } = useToast();
-  const { 
-    globalConfig, 
+  const {
+    globalConfig,
     refreshGlobalConfig: onConfigChange,
     settingsInitialTab,
-    settingsRestrictToTab: restrictToTab
+    settingsRestrictToTab: restrictToTab,
   } = useAppContext();
 
   const [activeTab, setActiveTab] = useState(settingsInitialTab || 'basic');
@@ -105,10 +105,7 @@ export function SettingsPage() {
   };
 
   return (
-    <PageContainer
-      title="全局设置"
-      description="配置 DuckCoding 的全局参数和功能"
-    >
+    <PageContainer title="全局设置" description="配置 DuckCoding 的全局参数和功能">
       {/* 引导模式提示 */}
       {restrictToTab && (
         <div className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">

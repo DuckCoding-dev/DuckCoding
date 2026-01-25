@@ -27,6 +27,7 @@ impl LogStatus {
     }
 
     /// 从字符串解析
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "success" => LogStatus::Success,
@@ -60,6 +61,7 @@ impl ResponseType {
     }
 
     /// 从字符串解析
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "sse" => ResponseType::Sse,

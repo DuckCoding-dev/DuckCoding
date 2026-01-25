@@ -45,11 +45,12 @@ export function BalanceTable({
   const getStatusIcon = (state?: BalanceRuntimeState) => {
     if (!state) return <span className="text-muted-foreground">-</span>;
     if (state.loading) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-    if (state.error) return (
-      <span title={state.error}>
-        <AlertCircle className="h-4 w-4 text-destructive" />
-      </span>
-    );
+    if (state.error)
+      return (
+        <span title={state.error}>
+          <AlertCircle className="h-4 w-4 text-destructive" />
+        </span>
+      );
     if (state.lastResult) return <CheckCircle className="h-4 w-4 text-green-500" />;
     return <span className="text-muted-foreground">-</span>;
   };
@@ -100,7 +101,9 @@ export function BalanceTable({
                   {data?.total ? (
                     <div className="flex items-center gap-2">
                       <Progress value={percentage} className="h-2 w-24" />
-                      <span className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</span>
+                      <span className="text-xs text-muted-foreground">
+                        {percentage.toFixed(1)}%
+                      </span>
                     </div>
                   ) : (
                     <span className="text-xs text-muted-foreground">-</span>

@@ -14,16 +14,16 @@ interface PageContainerProps {
  * Enhanced Page Container Component
  * Provides a unified layout structure for all pages with optional header, title, and description.
  */
-export function PageContainer({ 
-  children, 
-  className = '', 
+export function PageContainer({
+  children,
+  className = '',
   header,
   title,
   description,
-  actions
+  actions,
 }: PageContainerProps) {
   return (
-    <div className={cn("space-y-6 pb-8", className)}>
+    <div className={cn('space-y-6 pb-8', className)}>
       {/* Optional Standard Header Section */}
       {(title || header || actions) && (
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -32,18 +32,12 @@ export function PageContainer({
             {description && <p className="text-sm text-muted-foreground">{description}</p>}
             {header}
           </div>
-          {actions && (
-            <div className="flex items-center gap-2">
-              {actions}
-            </div>
-          )}
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       )}
-      
+
       {/* Main Content */}
-      <div className="space-y-6">
-        {children}
-      </div>
+      <div className="space-y-6">{children}</div>
     </div>
   );
 }

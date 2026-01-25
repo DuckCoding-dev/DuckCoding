@@ -262,16 +262,16 @@ export default function TokenStatisticsPage({
 
       {/* 返回按钮 */}
       <Button variant="ghost" size="sm" onClick={handleGoBack}>
-          <ArrowLeft className="h-4 w-4" />
-          返回
+        <ArrowLeft className="h-4 w-4" />
+        返回
       </Button>
     </div>
   );
 
   return (
     <div className="space-y-6">
-      <PageContainer 
-        title="Token 统计" 
+      <PageContainer
+        title="Token 统计"
         description="查看透明代理的 Token 使用情况和请求历史"
         actions={pageActions}
       >

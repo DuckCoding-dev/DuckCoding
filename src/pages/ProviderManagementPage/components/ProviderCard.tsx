@@ -18,12 +18,7 @@ interface ProviderCardProps {
   onViewTokens: (providerId: string) => void;
 }
 
-export function ProviderCard({
-  provider,
-  onEdit,
-  onDelete,
-  onViewTokens,
-}: ProviderCardProps) {
+export function ProviderCard({ provider, onEdit, onDelete, onViewTokens }: ProviderCardProps) {
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString('zh-CN');
   };
@@ -72,7 +67,10 @@ export function ProviderCard({
           <span className="text-xs text-muted-foreground flex items-center gap-1">
             <User className="h-3 w-3" /> 用户名
           </span>
-          <div className="bg-muted/50 p-2 rounded text-xs font-mono truncate" title={provider.username || '-'}>
+          <div
+            className="bg-muted/50 p-2 rounded text-xs font-mono truncate"
+            title={provider.username || '-'}
+          >
             {provider.username || '-'}
           </div>
         </div>

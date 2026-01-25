@@ -137,9 +137,9 @@ export function TransparentProxyPage({ selectedToolId: initialToolId }: Transpar
       <Tabs value={selectedToolId} onValueChange={(val) => setSelectedToolId(val as ToolId)}>
         <TabsList className="grid w-full grid-cols-4 mb-6 h-11 p-1 bg-muted/50 rounded-lg">
           {SUPPORTED_TOOLS.map((tool) => (
-            <TabsTrigger 
-              key={tool.id} 
-              value={tool.id} 
+            <TabsTrigger
+              key={tool.id}
+              value={tool.id}
               className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
             >
               <img src={tool.icon} alt={tool.name} className="w-4 h-4" />

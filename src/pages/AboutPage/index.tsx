@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Info, RefreshCw, Github, Globe } from 'lucide-react';
 import { getCurrentAppVersion } from '@/services/update';
 import { PageContainer } from '@/components/layout/PageContainer';
-import { useAppContext } from '@/contexts/AppContext';
+import { useAppContext } from '@/hooks/useAppContext';
 import duckLogo from '@/assets/duck-logo.png';
 
 export function AboutPage() {
@@ -27,10 +27,7 @@ export function AboutPage() {
   };
 
   return (
-    <PageContainer
-      title="关于 DuckCoding"
-      description="应用信息与版本管理"
-    >
+    <PageContainer title="关于 DuckCoding" description="应用信息与版本管理">
       <div className="space-y-6">
         <Card>
           <CardHeader>

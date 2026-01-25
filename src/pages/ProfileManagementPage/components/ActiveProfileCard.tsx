@@ -3,7 +3,19 @@
  */
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Loader2, Server, Terminal, Laptop, Settings, RefreshCw, CheckCircle2, Zap, Download } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Server,
+  Terminal,
+  Laptop,
+  Settings,
+  RefreshCw,
+  CheckCircle2,
+  Zap,
+  Download,
+} from 'lucide-react';
 import type { ProfileGroup } from '@/types/profile';
 import type { ToolInstance, ToolType } from '@/types/tool-management';
 import { getToolInstances, checkUpdate, updateToolInstance } from '@/lib/tauri-commands';
@@ -90,7 +102,7 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
         setLatestVersion(null);
         toast({ title: '已是最新版本' });
       }
-    } catch (error) {
+    } catch {
       toast({ title: '检测失败', variant: 'destructive' });
     } finally {
       setCheckingUpdate(false);
@@ -111,7 +123,7 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
       } else {
         toast({ title: '更新失败', description: result.message, variant: 'destructive' });
       }
-    } catch (error) {
+    } catch {
       toast({ title: '更新失败', variant: 'destructive' });
     } finally {
       setUpdating(false);
@@ -119,27 +131,38 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
   };
 
   return (
-    <Card className={cn(
-      "mb-6 shadow-sm overflow-hidden border transition-colors",
-      proxyRunning ? "border-indigo-200/50 dark:border-indigo-800/50 bg-indigo-50/10" : 
-      activeProfile ? "border-border bg-card" : 
-      "border-border bg-muted/5"
-    )}>
+    <Card
+      className={cn(
+        'mb-6 shadow-sm overflow-hidden border transition-colors',
+        proxyRunning
+          ? 'border-indigo-200/50 dark:border-indigo-800/50 bg-indigo-50/10'
+          : activeProfile
+            ? 'border-border bg-card'
+            : 'border-border bg-muted/5',
+      )}
+    >
       <CardContent className="p-0">
         <div className="flex flex-col lg:flex-row lg:items-center lg:h-20">
-          
           {/* Left: Info Area */}
           <div className="flex-1 p-4 lg:pl-6 flex items-center gap-4">
             {/* Icon Box */}
-            <div className={cn(
-              "w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm",
-              proxyRunning ? "bg-indigo-50 border-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:border-indigo-900 dark:text-indigo-400" :
-              activeProfile ? "bg-background border-border text-foreground" :
-              "bg-muted border-transparent text-muted-foreground"
-            )}>
-              {proxyRunning ? <Zap className="w-5 h-5 fill-current" /> : <CheckCircle2 className="w-5 h-5 text-green-500" />}
+            <div
+              className={cn(
+                'w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm',
+                proxyRunning
+                  ? 'bg-indigo-50 border-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:border-indigo-900 dark:text-indigo-400'
+                  : activeProfile
+                    ? 'bg-background border-border text-foreground'
+                    : 'bg-muted border-transparent text-muted-foreground',
+              )}
+            >
+              {proxyRunning ? (
+                <Zap className="w-5 h-5 fill-current" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              )}
             </div>
-            
+
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-lg leading-none tracking-tight">{group.tool_name}</h3>
@@ -163,14 +186,14 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
                 ) : (
                   <span className="text-muted-foreground">未激活任何配置</span>
                 )}
-                
+
                 {selectedInstance?.version && (
                   <div className="hidden sm:flex items-center text-muted-foreground/60 text-xs">
                     <span className="mx-2 h-3 w-px bg-border"></span>
                     <span>v{selectedInstance.version}</span>
                   </div>
                 )}
-                
+
                 {hasUpdate && latestVersion && (
                   <div className="hidden sm:flex items-center text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded">
                     New v{latestVersion}
@@ -182,7 +205,6 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
 
           {/* Right: Controls Area */}
           <div className="px-4 pb-4 lg:p-0 lg:pr-6 flex items-center gap-3 justify-end lg:border-l lg:border-border/40 lg:h-12 lg:pl-6">
-            
             {/* Instance Selector */}
             {!loading && toolInstances.length > 0 && (
               <Select value={selectedInstanceId || ''} onValueChange={handleInstanceChange}>
@@ -197,7 +219,11 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
                         <div className="flex items-center gap-2">
                           <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                           <span className="truncate">
-                            {instance.tool_type === 'WSL' ? instance.wsl_distro : instance.tool_type === 'SSH' ? instance.ssh_config?.display_name : 'Local'}
+                            {instance.tool_type === 'WSL'
+                              ? instance.wsl_distro
+                              : instance.tool_type === 'SSH'
+                                ? instance.ssh_config?.display_name
+                                : 'Local'}
                           </span>
                         </div>
                       </SelectItem>
@@ -222,12 +248,14 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
                 variant="ghost"
                 size="icon"
                 className={cn(
-                  "h-9 w-9",
-                  hasUpdate ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50" : "text-muted-foreground hover:text-foreground"
+                  'h-9 w-9',
+                  hasUpdate
+                    ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
                 onClick={hasUpdate ? handleUpdate : handleCheckUpdate}
                 disabled={checkingUpdate || updating || !selectedInstance}
-                title={hasUpdate ? "立即更新" : "检查更新"}
+                title={hasUpdate ? '立即更新' : '检查更新'}
               >
                 {checkingUpdate || updating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -237,16 +265,20 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
                   <RefreshCw className="w-4 h-4" />
                 )}
               </Button>
-              
+
               {activeProfile && (
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 text-muted-foreground hover:text-foreground"
                   onClick={() => setDetailsExpanded(!detailsExpanded)}
-                  title={detailsExpanded ? "收起详情" : "展开详情"}
+                  title={detailsExpanded ? '收起详情' : '展开详情'}
                 >
-                  {detailsExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  {detailsExpanded ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
                 </Button>
               )}
             </div>
@@ -258,9 +290,16 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
           <>
             <Separator />
             <div className="bg-muted/10 px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-1">
-               <DetailItem label="API Key" value={activeProfile.api_key_preview} />
-               <DetailItem label="Base URL" value={activeProfile.base_url} />
-               <DetailItem label="来源" value={activeProfile.source.type === 'Custom' ? '自定义' : activeProfile.source.provider_name} />
+              <DetailItem label="API Key" value={activeProfile.api_key_preview} />
+              <DetailItem label="Base URL" value={activeProfile.base_url} />
+              <DetailItem
+                label="来源"
+                value={
+                  activeProfile.source.type === 'Custom'
+                    ? '自定义'
+                    : activeProfile.source.provider_name
+                }
+              />
             </div>
           </>
         )}
@@ -278,8 +317,12 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
-      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">{label}</span>
-      <p className="text-sm font-medium text-foreground truncate" title={value}>{value}</p>
+      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">
+        {label}
+      </span>
+      <p className="text-sm font-medium text-foreground truncate" title={value}>
+        {value}
+      </p>
     </div>
   );
 }

@@ -80,14 +80,9 @@ export function ProxySettingsTab({
                 <Globe className="h-5 w-5 text-primary" />
                 启用网络代理
               </CardTitle>
-              <CardDescription>
-                通过代理服务器转发所有网络请求，适用于受限网络环境
-              </CardDescription>
+              <CardDescription>通过代理服务器转发所有网络请求，适用于受限网络环境</CardDescription>
             </div>
-            <Switch
-              checked={proxyEnabled}
-              onCheckedChange={setProxyEnabled}
-            />
+            <Switch checked={proxyEnabled} onCheckedChange={setProxyEnabled} />
           </div>
         </CardHeader>
       </Card>

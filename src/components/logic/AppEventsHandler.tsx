@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { useAppContext } from '@/contexts/AppContext';
+import { useAppContext } from '@/hooks/useAppContext';
 import { useToast } from '@/hooks/use-toast';
 import { useAppEvents } from '@/hooks/useAppEvents';
 import { useCloseAction } from '@/hooks/useCloseAction';
 import { CloseActionDialog } from '@/components/dialogs/CloseActionDialog';
 import type { UpdateInfo, CloseAction } from '@/lib/tauri-commands';
 import type { ToolType } from '@/types/token-stats';
-import type { TabType } from '@/contexts/AppContext';
+import type { TabType } from '@/contexts/AppContext.types';
 
 export function AppEventsHandler() {
   const {
@@ -20,7 +20,7 @@ export function AppEventsHandler() {
     setIsUpdateDialogOpen,
     refreshTools,
   } = useAppContext();
-  
+
   const { toast } = useToast();
 
   const {
@@ -92,14 +92,14 @@ export function AppEventsHandler() {
         const restrictToTab = event.payload?.restrictToTab || false;
         setSettingsInitialTab(tab);
         if (restrictToTab) {
-           setSettingsRestrictToTab(tab);
+          setSettingsRestrictToTab(tab);
         } else {
-           setSettingsRestrictToTab(undefined);
+          setSettingsRestrictToTab(undefined);
         }
         setActiveTab('settings');
-      }
+      },
     );
-    
+
     // TODO: Add Onboarding Navigation Logic here or in OnboardingManager
 
     const unlistenAppNavigate = listen<{
@@ -125,13 +125,13 @@ export function AppEventsHandler() {
       unlistenAppNavigate.then((fn) => fn());
     };
   }, [
-    setActiveTab, 
-    setSettingsInitialTab, 
-    setSettingsRestrictToTab, 
-    setIsUpdateDialogOpen, 
-    setUpdateInfo, 
+    setActiveTab,
+    setSettingsInitialTab,
+    setSettingsRestrictToTab,
+    setIsUpdateDialogOpen,
+    setUpdateInfo,
     setTokenStatsParams,
-    toast
+    toast,
   ]);
 
   return (

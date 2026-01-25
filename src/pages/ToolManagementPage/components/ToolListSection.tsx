@@ -165,7 +165,10 @@ export function ToolListSection({
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]" title={instance.install_path || ''}>
+                <TableCell
+                  className="text-xs text-muted-foreground truncate max-w-[200px]"
+                  title={instance.install_path || ''}
+                >
                   {instance.install_path || '-'}
                 </TableCell>
                 <TableCell className="text-right">
@@ -188,9 +191,7 @@ export function ToolListSection({
                         onClick={() => onCheckUpdate(instance.instance_id)}
                         title="检测是否有新版本"
                       >
-                        <RefreshCw
-                          className={`h-3 w-3 mr-1 ${isChecking ? 'animate-spin' : ''}`}
-                        />
+                        <RefreshCw className={`h-3 w-3 mr-1 ${isChecking ? 'animate-spin' : ''}`} />
                         {isChecking ? '检测中...' : '检测更新'}
                       </Button>
                     )}

@@ -116,7 +116,9 @@ export function BasicSettingsTab() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
             <div className="space-y-0.5">
-              <Label htmlFor="startup" className="text-base">开机自启动</Label>
+              <Label htmlFor="startup" className="text-base">
+                开机自启动
+              </Label>
               <p className="text-sm text-muted-foreground">
                 系统启动时自动运行 DuckCoding，方便快速访问。更改后立即生效。
               </p>
@@ -143,7 +145,9 @@ export function BasicSettingsTab() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
             <div className="space-y-0.5">
-              <Label htmlFor="single-instance" className="text-base">单实例模式</Label>
+              <Label htmlFor="single-instance" className="text-base">
+                单实例模式
+              </Label>
               <p className="text-sm text-muted-foreground">
                 启用后，尝试打开第二个实例时会聚焦到现有窗口。禁用可允许同时运行多个实例。
               </p>

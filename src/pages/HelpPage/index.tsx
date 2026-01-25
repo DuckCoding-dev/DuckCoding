@@ -10,10 +10,7 @@ export function HelpPage() {
   };
 
   return (
-    <PageContainer
-      title="帮助中心"
-      description="获取使用帮助、查看文档或反馈问题"
-    >
+    <PageContainer title="帮助中心" description="获取使用帮助、查看文档或反馈问题">
       <div className="grid gap-6 md:grid-cols-2">
         {/* 新手引导 */}
         <Card className="hover:shadow-lg transition-shadow">

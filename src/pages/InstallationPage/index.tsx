@@ -5,7 +5,7 @@ import { MirrorStaleDialog } from '@/components/dialogs/MirrorStaleDialog';
 import { ToolCard } from './components/ToolCard';
 import { useInstallation } from './hooks/useInstallation';
 import { useToast } from '@/hooks/use-toast';
-import { useAppContext } from '@/contexts/AppContext';
+import { useAppContext } from '@/hooks/useAppContext';
 import type { ToolStatus } from '@/lib/tauri-commands';
 
 export function InstallationPage() {
@@ -99,10 +99,7 @@ export function InstallationPage() {
   };
 
   return (
-    <PageContainer
-      title="安装工具"
-      description="选择并安装您需要的 AI 开发工具"
-    >
+    <PageContainer title="安装工具" description="选择并安装您需要的 AI 开发工具">
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />

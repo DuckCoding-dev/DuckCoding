@@ -153,9 +153,9 @@ export default function ProfileManagementPage() {
           <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as ToolId)}>
             <TabsList className="grid w-full grid-cols-4 mb-6 h-11 p-1 bg-muted/50 rounded-lg">
               {profileGroups.map((group) => (
-                <TabsTrigger 
-                  key={group.tool_id} 
-                  value={group.tool_id} 
+                <TabsTrigger
+                  key={group.tool_id}
+                  value={group.tool_id}
                   className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
                 >
                   <img src={logoMap[group.tool_id]} alt={group.tool_name} className="w-4 h-4" />
@@ -163,8 +163,8 @@ export default function ProfileManagementPage() {
                 </TabsTrigger>
               ))}
               {/* AMP Code Tab */}
-              <TabsTrigger 
-                value="amp-code" 
+              <TabsTrigger
+                value="amp-code"
                 className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
               >
                 <img src={logoMap['amp-code']} alt="AMP Code" className="w-4 h-4" />
@@ -182,63 +182,63 @@ export default function ProfileManagementPage() {
                 />
 
                 <div className="space-y-4">
-                    {/* 创建按钮 */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-muted-foreground">
-                          {group.profiles.length === 0
-                            ? '暂无 Profile，点击创建新配置'
-                            : `共 ${group.profiles.length} 个配置`}
-                          {group.active_profile && ` · 当前激活: ${group.active_profile.name}`}
-                        </p>
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button size="sm" disabled={selectedTab !== group.tool_id}>
-                            创建 Profile
-                            <ChevronDown className="ml-2 h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setCustomProfileDialogOpen(true)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            手动创建
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
-                            <Download className="mr-2 h-4 w-4" />
-                            从供应商导入
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                  {/* 创建按钮 */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        {group.profiles.length === 0
+                          ? '暂无 Profile，点击创建新配置'
+                          : `共 ${group.profiles.length} 个配置`}
+                        {group.active_profile && ` · 当前激活: ${group.active_profile.name}`}
+                      </p>
                     </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="sm" disabled={selectedTab !== group.tool_id}>
+                          创建 Profile
+                          <ChevronDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setCustomProfileDialogOpen(true)}>
+                          <Plus className="mr-2 h-4 w-4" />
+                          手动创建
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
+                          <Download className="mr-2 h-4 w-4" />
+                          从供应商导入
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
 
-                    {/* Profile 列表 (Grid 或 Table) */}
-                    {group.profiles.length === 0 ? (
-                      <div className="rounded-lg border border-dashed p-12 text-center bg-muted/20">
-                        <p className="text-sm text-muted-foreground">暂无 Profile 配置</p>
-                      </div>
-                    ) : viewMode === 'grid' ? (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {group.profiles.map((profile) => (
-                          <ProfileCard
-                            key={profile.name}
-                            profile={profile}
-                            onActivate={() => handleActivateProfile(profile.name)}
-                            onEdit={() => handleEditProfile(profile)}
-                            onDelete={() => handleDeleteProfile(profile.name)}
-                            proxyRunning={allProxyStatus[group.tool_id]?.running || false}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <ProfileTable 
-                        profiles={group.profiles}
-                        onActivate={handleActivateProfile}
-                        onEdit={handleEditProfile}
-                        onDelete={handleDeleteProfile}
-                        proxyRunning={allProxyStatus[group.tool_id]?.running || false}
-                      />
-                    )}
+                  {/* Profile 列表 (Grid 或 Table) */}
+                  {group.profiles.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-12 text-center bg-muted/20">
+                      <p className="text-sm text-muted-foreground">暂无 Profile 配置</p>
+                    </div>
+                  ) : viewMode === 'grid' ? (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {group.profiles.map((profile) => (
+                        <ProfileCard
+                          key={profile.name}
+                          profile={profile}
+                          onActivate={() => handleActivateProfile(profile.name)}
+                          onEdit={() => handleEditProfile(profile)}
+                          onDelete={() => handleDeleteProfile(profile.name)}
+                          proxyRunning={allProxyStatus[group.tool_id]?.running || false}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <ProfileTable
+                      profiles={group.profiles}
+                      onActivate={handleActivateProfile}
+                      onEdit={handleEditProfile}
+                      onDelete={handleDeleteProfile}
+                      proxyRunning={allProxyStatus[group.tool_id]?.running || false}
+                    />
+                  )}
                 </div>
               </TabsContent>
             ))}

@@ -268,6 +268,7 @@ impl PricingManager {
     /// # 返回
     ///
     /// 成本分解结果
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_cost(
         &self,
         template_id: Option<&str>,

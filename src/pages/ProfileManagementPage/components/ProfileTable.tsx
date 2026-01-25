@@ -27,12 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ProfileDescriptor } from '@/types/profile';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -67,9 +62,17 @@ export function ProfileTable({
 
   const getSourceBadge = (profile: ProfileDescriptor) => {
     if (profile.source.type === 'Custom') {
-      return <Badge variant="secondary" className="text-xs">自定义</Badge>;
+      return (
+        <Badge variant="secondary" className="text-xs">
+          自定义
+        </Badge>
+      );
     }
-    return <Badge variant="outline" className="text-xs">导入: {profile.source.provider_name}</Badge>;
+    return (
+      <Badge variant="outline" className="text-xs">
+        导入: {profile.source.provider_name}
+      </Badge>
+    );
   };
 
   return (
@@ -121,24 +124,32 @@ export function ProfileTable({
                           <span tabIndex={0} className="inline-flex">
                             <Button
                               size="sm"
-                              variant={proxyRunning ? "ghost" : "default"}
+                              variant={proxyRunning ? 'ghost' : 'default'}
                               disabled={proxyRunning}
                               onClick={() => onActivate(profile.name)}
                               className={`h-8 ${proxyRunning ? 'text-muted-foreground opacity-50' : ''}`}
                             >
-                              {proxyRunning ? <AlertCircle className="h-4 w-4" /> : <Power className="h-3 w-3" />}
+                              {proxyRunning ? (
+                                <AlertCircle className="h-4 w-4" />
+                              ) : (
+                                <Power className="h-3 w-3" />
+                              )}
                               <span className="sr-only">激活</span>
                             </Button>
                           </span>
                         </TooltipTrigger>
                         {proxyRunning && (
                           <TooltipContent side="top">
-                            <p>透明代理模式运行中<br/>无法切换本地配置</p>
+                            <p>
+                              透明代理模式运行中
+                              <br />
+                              无法切换本地配置
+                            </p>
                           </TooltipContent>
                         )}
                       </Tooltip>
                     )}
-                    
+
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -168,7 +179,10 @@ export function ProfileTable({
         </Table>
       </div>
 
-      <AlertDialog open={!!profileToDelete} onOpenChange={(open) => !open && setProfileToDelete(null)}>
+      <AlertDialog
+        open={!!profileToDelete}
+        onOpenChange={(open) => !open && setProfileToDelete(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除</AlertDialogTitle>

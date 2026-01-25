@@ -16,8 +16,8 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
         variant="ghost"
         size="icon"
         className={cn(
-          "h-7 w-7 rounded-sm",
-          mode === 'grid' && "bg-background shadow-sm hover:bg-background"
+          'h-7 w-7 rounded-sm',
+          mode === 'grid' && 'bg-background shadow-sm hover:bg-background',
         )}
         onClick={() => onChange('grid')}
         title="卡片视图"
@@ -28,8 +28,8 @@ export function ViewToggle({ mode, onChange }: ViewToggleProps) {
         variant="ghost"
         size="icon"
         className={cn(
-          "h-7 w-7 rounded-sm",
-          mode === 'list' && "bg-background shadow-sm hover:bg-background"
+          'h-7 w-7 rounded-sm',
+          mode === 'list' && 'bg-background shadow-sm hover:bg-background',
         )}
         onClick={() => onChange('list')}
         title="列表视图"

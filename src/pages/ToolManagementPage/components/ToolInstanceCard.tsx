@@ -1,10 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Trash2, History, Download, Monitor, Terminal, Server } from 'lucide-react';
@@ -58,9 +52,17 @@ export function ToolInstanceCard({
 
   const getSourceBadge = (source: ToolSource) => {
     if (source === ToolSource.DuckCodingManaged) {
-      return <Badge variant="secondary" className="text-[10px]">DuckCoding</Badge>;
+      return (
+        <Badge variant="secondary" className="text-[10px]">
+          DuckCoding
+        </Badge>
+      );
     }
-    return <Badge variant="outline" className="text-[10px]">External</Badge>;
+    return (
+      <Badge variant="outline" className="text-[10px]">
+        External
+      </Badge>
+    );
   };
 
   return (
@@ -68,17 +70,16 @@ export function ToolInstanceCard({
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-muted rounded-md">
-              {getTypeIcon(instance.tool_type)}
-            </div>
+            <div className="p-2 bg-muted rounded-md">{getTypeIcon(instance.tool_type)}</div>
             <div>
-              <CardTitle className="text-base font-medium">
-                {instance.tool_type}
-              </CardTitle>
+              <CardTitle className="text-base font-medium">{instance.tool_type}</CardTitle>
               <div className="flex gap-2 mt-1">
                 {getSourceBadge(instance.tool_source)}
                 {instance.installed ? (
-                  <Badge variant="outline" className="text-[10px] text-green-600 bg-green-50 border-green-200">
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] text-green-600 bg-green-50 border-green-200"
+                  >
                     已安装
                   </Badge>
                 ) : (
@@ -91,7 +92,7 @@ export function ToolInstanceCard({
           </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="flex-1 pb-3 text-sm space-y-3">
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">版本</span>
@@ -104,10 +105,13 @@ export function ToolInstanceCard({
             )}
           </div>
         </div>
-        
+
         <div className="space-y-1">
           <span className="text-xs text-muted-foreground">路径</span>
-          <div className="bg-muted/50 p-2 rounded text-xs font-mono break-all line-clamp-2" title={instance.install_path || ''}>
+          <div
+            className="bg-muted/50 p-2 rounded text-xs font-mono break-all line-clamp-2"
+            title={instance.install_path || ''}
+          >
             {instance.install_path || '-'}
           </div>
         </div>

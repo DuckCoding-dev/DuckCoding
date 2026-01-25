@@ -10,7 +10,7 @@ import { useDashboard } from './hooks/useDashboard';
 import { useDashboardProviders } from './hooks/useDashboardProviders';
 import { getToolDisplayName } from '@/utils/constants';
 import { useToast } from '@/hooks/use-toast';
-import { useAppContext } from '@/contexts/AppContext';
+import { useAppContext } from '@/hooks/useAppContext';
 import {
   getUserQuota,
   getUsageStats,
@@ -23,7 +23,7 @@ import type { UserQuotaResult, UsageStatsResult } from '@/lib/tauri-commands/typ
 export function DashboardPage() {
   const { toast } = useToast();
   const { tools: toolsProp, toolsLoading: loadingProp, setActiveTab } = useAppContext();
-  
+
   const [loading, setLoading] = useState(loadingProp);
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<UserQuotaResult | null>(null);
@@ -175,7 +175,7 @@ export function DashboardPage() {
 
   // 切换到配置页面
   const switchToConfig = (_toolId?: string) => {
-      setActiveTab('profile-management');
+    setActiveTab('profile-management');
   };
 
   // 切换到安装页面
@@ -253,27 +253,25 @@ export function DashboardPage() {
     );
   });
 
-  const installedCount = displayTools.filter(t => t.installed).length;
-  const updateCount = displayTools.filter(t => t.hasUpdate).length;
+  const installedCount = displayTools.filter((t) => t.installed).length;
+  const updateCount = displayTools.filter((t) => t.hasUpdate).length;
 
   const pageActions = (
     <div className="flex gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleRefreshToolStatus}
-        disabled={refreshing}
-      >
-        {refreshing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+      <Button variant="outline" size="sm" onClick={handleRefreshToolStatus} disabled={refreshing}>
+        {refreshing ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Search className="mr-2 h-4 w-4" />
+        )}
         检测状态
       </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={checkForUpdates}
-        disabled={checkingUpdates}
-      >
-        {checkingUpdates ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+      <Button variant="outline" size="sm" onClick={checkForUpdates} disabled={checkingUpdates}>
+        {checkingUpdates ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <RefreshCw className="mr-2 h-4 w-4" />
+        )}
         检查更新
       </Button>
     </div>
@@ -299,13 +297,17 @@ export function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{installedCount}</div>
-                <p className="text-xs text-muted-foreground">共 {FIXED_TOOL_IDS.length} 个支持工具</p>
+                <p className="text-xs text-muted-foreground">
+                  共 {FIXED_TOOL_IDS.length} 个支持工具
+                </p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">可用更新</CardTitle>
-                <AlertCircle className={`h-4 w-4 ${updateCount > 0 ? "text-amber-500" : "text-muted-foreground"}`} />
+                <AlertCircle
+                  className={`h-4 w-4 ${updateCount > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}
+                />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{updateCount}</div>
@@ -372,7 +374,11 @@ export function DashboardPage() {
                   onClick={handleRefreshProviderData}
                   disabled={quotaLoading || statsLoading}
                 >
-                  {quotaLoading || statsLoading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-2 h-3.5 w-3.5" />}
+                  {quotaLoading || statsLoading ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  )}
                   刷新数据
                 </Button>
               </div>
