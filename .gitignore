@@ -37,6 +37,9 @@ src-tauri/target/
 # Mirror server (不上传到git)
 mirror-server/
 
+# Gemini clipboard artifacts
+.gemini-clipboard/
+
 # 开发文档和记录（不上传到git）
 RELEASE_SUMMARY.md
 *.draft.md
