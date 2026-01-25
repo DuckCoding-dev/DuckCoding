@@ -211,9 +211,11 @@ export function ImportTokenDialog({
               <span>{token.group}</span>
             </div>
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">剩余额度:</span>
+              <span className="text-muted-foreground">额度:</span>
               <span>
-                {token.unlimited_quota ? '无限' : `$${(token.remain_quota / 1000000).toFixed(2)}`}
+                {token.unlimited_quota
+                  ? '无限'
+                  : `$${(token.remain_quota / 500000).toFixed(2)} / $${((token.remain_quota + token.used_quota) / 500000).toFixed(2)}`}
               </span>
             </div>
           </div>

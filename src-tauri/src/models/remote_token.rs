@@ -119,7 +119,7 @@ pub struct NewApiResponse<T> {
 }
 
 /// NEW API 令牌列表响应的 data 部分
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenListData {
     pub page: i32,
     pub page_size: i32,
