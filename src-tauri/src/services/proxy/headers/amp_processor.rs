@@ -36,6 +36,27 @@ static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
         .expect("Failed to create HTTP client")
 });
 
+static MCP_NAME_PREFIX_RE: Lazy<regex::Regex> = Lazy::new(|| {
+    regex::Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).expect("mcp name 前缀正则非法")
+});
+
+static BRAND_SANITIZE_RE: Lazy<regex::Regex> = Lazy::new(|| {
+    // 不区分大小写 + 单词边界替换，避免误伤子串（例如 "example" 中的 "amp"）。
+    regex::Regex::new(r"(?i)\b(?:opencode|amp(?:-?code)?)\b").expect("清洗正则非法")
+});
+
+const CLAUDE_CODE_PREAMBLE: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+pub(crate) fn strip_mcp_name_prefix_bytes(bytes: &Bytes) -> Bytes {
+    let text = String::from_utf8_lossy(bytes);
+    let cleaned = MCP_NAME_PREFIX_RE.replace_all(&text, r#""name": "$1""#);
+    Bytes::from(cleaned.into_owned())
+}
+
+fn sanitize_brand_text(s: &str) -> String {
+    BRAND_SANITIZE_RE.replace_all(s, "Claude Code").into_owned()
+}
+
 /// 最大响应体大小（5MB）
 const MAX_RESPONSE_SIZE: usize = 5 * 1024 * 1024;
 
@@ -165,7 +186,7 @@ impl AmpHeadersProcessor {
 
     fn get_user_agent(api_type: ApiType, path: &str, body: &[u8]) -> String {
         match api_type {
-            ApiType::Claude => "claude-cli/2.0.72 (external, cli)".to_string(),
+            ApiType::Claude => "claude-cli/2.1.2 (external, cli)".to_string(),
             ApiType::Codex => {
                 "codex_cli_rs/0.77.0 (Mac OS 15.7.2; arm64) Apple_Terminal/455.1".to_string()
             }
@@ -194,12 +215,82 @@ impl AmpHeadersProcessor {
             }
         }
 
+        // 0) system 文本清洗 + 注入 Claude Code 身份声明（对齐 JS 插件行为）
+        // - 文本清洗：OpenCode/opencode/ampcode/amp-code/amp（不区分大小写）
+        // - 注入：将声明插到 system 最前面
+        if let Some(system) = json.get_mut("system") {
+            match system {
+                serde_json::Value::Array(items) => {
+                    for item in items.iter_mut() {
+                        if item.get("type").and_then(|t| t.as_str()) != Some("text") {
+                            continue;
+                        }
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            item["text"] = serde_json::Value::String(sanitize_brand_text(text));
+                        }
+                    }
+
+                    let already_prefixed = items
+                        .first()
+                        .and_then(|v| v.get("type").and_then(|t| t.as_str()))
+                        == Some("text")
+                        && items
+                            .first()
+                            .and_then(|v| v.get("text").and_then(|t| t.as_str()))
+                            == Some(CLAUDE_CODE_PREAMBLE);
+                    if !already_prefixed {
+                        items.insert(0, json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }));
+                    }
+                }
+                serde_json::Value::String(s) => {
+                    let cleaned = sanitize_brand_text(s);
+                    if !cleaned.starts_with(CLAUDE_CODE_PREAMBLE) {
+                        *s = format!("{}\n{}", CLAUDE_CODE_PREAMBLE, cleaned);
+                    } else {
+                        *s = cleaned;
+                    }
+                }
+                _ => {
+                    // 其他格式不处理
+                }
+            }
+        } else {
+            json["system"] = json!([{ "type": "text", "text": CLAUDE_CODE_PREAMBLE }]);
+        }
+
+        // 1) tools[].name 加前缀
         if let Some(tools) = json.get_mut("tools").and_then(|t| t.as_array_mut()) {
             for tool in tools.iter_mut() {
                 if let Some(name) = tool.get("name").and_then(|n| n.as_str()) {
                     if !name.starts_with(TOOL_PREFIX) {
                         tool["name"] =
                             serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name));
+                    }
+                }
+            }
+        }
+
+        // 2) messages[].content[] 里 type=="tool_use" 的 name 也要加前缀（保持幂等）
+        if let Some(messages) = json.get_mut("messages").and_then(|m| m.as_array_mut()) {
+            for msg in messages.iter_mut() {
+                let Some(content) = msg.get_mut("content") else {
+                    continue;
+                };
+
+                let Some(arr) = content.as_array_mut() else {
+                    continue;
+                };
+
+                for item in arr.iter_mut() {
+                    if item.get("type").and_then(|t| t.as_str()) != Some("tool_use") {
+                        continue;
+                    }
+
+                    if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                        if !name.starts_with(TOOL_PREFIX) {
+                            item["name"] =
+                                serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name));
+                        }
                     }
                 }
             }
@@ -933,6 +1024,36 @@ impl RequestProcessor for AmpHeadersProcessor {
                     Self::get_user_agent(api_type, path, body).parse().unwrap(),
                 );
                 result.headers.insert("x-app", "cli".parse().unwrap());
+
+                // 保留调用方传入的 anthropic-beta，同时确保必需 beta 存在（对齐 JS 插件行为）
+                {
+                    const REQUIRED_BETAS: [&str; 2] =
+                        ["oauth-2025-04-20", "interleaved-thinking-2025-05-14"];
+                    let incoming = result
+                        .headers
+                        .get("anthropic-beta")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("");
+
+                    let mut betas = std::collections::BTreeSet::new();
+                    for b in incoming
+                        .split(',')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                    {
+                        betas.insert(b.to_string());
+                    }
+                    for b in REQUIRED_BETAS {
+                        betas.insert(b.to_string());
+                    }
+
+                    if !betas.is_empty() {
+                        let merged = betas.into_iter().collect::<Vec<_>>().join(",");
+                        result
+                            .headers
+                            .insert("anthropic-beta", merged.parse().unwrap());
+                    }
+                }
 
                 if !result.target_url.contains("beta=true") {
                     if result.target_url.contains('?') {

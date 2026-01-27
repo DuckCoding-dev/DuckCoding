@@ -468,8 +468,9 @@ async fn handle_request_inner(
 
         // SSE 流式响应：收集响应体并调用 processor.record_request_log
         use futures_util::StreamExt;
-        use regex::Regex;
         use std::sync::{Arc, Mutex};
+
+        use super::headers::strip_mcp_name_prefix_bytes;
 
         let config_name = proxy_config
             .real_profile_name
@@ -489,7 +490,6 @@ async fn handle_request_inner(
 
         // amp-code 需要移除工具名前缀
         let is_amp_code = tool_id == "amp-code";
-        let prefix_regex = Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).ok();
 
         // 拦截流数据并收集
         let mapped_stream = stream
@@ -508,13 +508,7 @@ async fn handle_request_inner(
                 result
                     .map(|bytes| {
                         if is_amp_code {
-                            if let Some(ref re) = prefix_regex {
-                                let text = String::from_utf8_lossy(&bytes);
-                                let cleaned = re.replace_all(&text, r#""name": "$1""#);
-                                Frame::data(Bytes::from(cleaned.into_owned()))
-                            } else {
-                                Frame::data(bytes)
-                            }
+                            Frame::data(strip_mcp_name_prefix_bytes(&bytes))
                         } else {
                             Frame::data(bytes)
                         }
@@ -531,15 +525,17 @@ async fn handle_request_inner(
                     as Box<dyn std::error::Error + Send + Sync>)
             }))
             // 过滤掉结束标记
-            .filter(|item| {
-                let is_end_marker = item
-                    .as_ref()
-                    .err()
-                    .and_then(|e| e.downcast_ref::<std::io::Error>())
-                    .map(|e| e.to_string().contains("__stream_end_marker__"))
-                    .unwrap_or(false);
-                futures_util::future::ready(!is_end_marker)
-            });
+            .filter(
+                |item: &Result<Frame<Bytes>, Box<dyn std::error::Error + Send + Sync>>| {
+                    let is_end_marker = item
+                        .as_ref()
+                        .err()
+                        .and_then(|e| e.downcast_ref::<std::io::Error>())
+                        .map(|e| e.to_string().contains("__stream_end_marker__"))
+                        .unwrap_or(false);
+                    futures_util::future::ready(!is_end_marker)
+                },
+            );
 
         // 在流真正结束后异步记录日志
         let processor_clone = Arc::clone(&processor);
@@ -611,10 +607,7 @@ async fn handle_request_inner(
 
         // amp-code 需要清理响应体中的工具名前缀
         let final_body = if tool_id == "amp-code" {
-            let text = String::from_utf8_lossy(&body_bytes);
-            let re = regex::Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).unwrap();
-            let cleaned = re.replace_all(&text, r#""name": "$1""#);
-            Bytes::from(cleaned.into_owned())
+            super::headers::strip_mcp_name_prefix_bytes(&body_bytes)
         } else {
             body_bytes.clone()
         };
