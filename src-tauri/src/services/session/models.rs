@@ -61,9 +61,20 @@ pub struct SessionListResponse {
 }
 
 impl ProxySession {
-    /// 从 user_id 提取 display_id（_session_ 后的 UUID 部分）
-    pub fn extract_display_id(user_id: &str) -> Option<String> {
-        user_id.split("_session_").nth(1).map(|s| s.to_string())
+    /// 从 session_id 提取 display_id
+    /// - Claude 格式：user_xxx_session_<uuid> → 提取 UUID
+    /// - Codex 格式：prompt_cache_key → 使用前 12 字符
+    pub fn extract_display_id(session_id: &str) -> String {
+        // Claude 格式：提取 _session_ 后的 UUID
+        if let Some(uuid) = session_id.split("_session_").nth(1) {
+            return uuid.to_string();
+        }
+        // Codex/其他格式：使用前 12 字符或完整 ID
+        if session_id.len() <= 12 {
+            session_id.to_string()
+        } else {
+            session_id[..12].to_string()
+        }
     }
 }
 
@@ -72,19 +83,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_display_id() {
+    fn test_extract_display_id_claude() {
         let user_id = "user_42a8ca527d882b0a9b60e27011856f2018295786e9c6dc09cefbb7e0caba49ab_account__session_f7aa73fc-73a9-4148-ba8b-1b9f4aa5ebc3";
         let display_id = ProxySession::extract_display_id(user_id);
-        assert_eq!(
-            display_id,
-            Some("f7aa73fc-73a9-4148-ba8b-1b9f4aa5ebc3".to_string())
-        );
+        assert_eq!(display_id, "f7aa73fc-73a9-4148-ba8b-1b9f4aa5ebc3");
     }
 
     #[test]
-    fn test_extract_display_id_no_session() {
-        let user_id = "user_42a8ca527d882b0a9b60e27011856f20";
-        let display_id = ProxySession::extract_display_id(user_id);
-        assert_eq!(display_id, None);
+    fn test_extract_display_id_codex() {
+        let session_id = "abc123def456ghi789";
+        let display_id = ProxySession::extract_display_id(session_id);
+        assert_eq!(display_id, "abc123def456");
+    }
+
+    #[test]
+    fn test_extract_display_id_short() {
+        let session_id = "short";
+        let display_id = ProxySession::extract_display_id(session_id);
+        assert_eq!(display_id, "short");
     }
 }

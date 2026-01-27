@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -9,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Info, Loader2, AlertCircle, Plus, X } from 'lucide-react';
+import { Info, ShieldCheck, Globe, ListFilter, Plus, X, PlayCircle, Loader2 } from 'lucide-react';
 
 interface ProxySettingsTabProps {
   proxyEnabled: boolean;
@@ -52,19 +53,16 @@ export function ProxySettingsTab({
   proxyBypassUrls,
   setProxyBypassUrls,
 }: ProxySettingsTabProps) {
-  // 添加新的过滤规则
   const addBypassRule = () => {
     const newUrls = [...proxyBypassUrls, ''];
     setProxyBypassUrls(newUrls);
   };
 
-  // 删除过滤规则
   const removeBypassRule = (index: number) => {
     const newUrls = proxyBypassUrls.filter((_, i) => i !== index);
     setProxyBypassUrls(newUrls);
   };
 
-  // 更新过滤规则
   const updateBypassRule = (index: number, value: string) => {
     const newUrls = [...proxyBypassUrls];
     newUrls[index] = value;
@@ -72,183 +70,135 @@ export function ProxySettingsTab({
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-6">
-      <div className="flex items-center gap-2">
-        <Info className="h-5 w-5" />
-        <h3 className="text-lg font-semibold">网络代理配置</h3>
-      </div>
-      <Separator />
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <Label>启用代理</Label>
-            <p className="text-xs text-muted-foreground">通过代理服务器转发所有网络请求</p>
-          </div>
-          <input
-            type="checkbox"
-            checked={proxyEnabled}
-            onChange={(e) => setProxyEnabled(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
-          />
-        </div>
-
-        {proxyEnabled && (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="proxy-type">代理类型</Label>
-              <Select value={proxyType} onValueChange={(v: any) => setProxyType(v)}>
-                <SelectTrigger id="proxy-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="http">HTTP</SelectItem>
-                  <SelectItem value="https">HTTPS</SelectItem>
-                  <SelectItem value="socks5">SOCKS5</SelectItem>
-                </SelectContent>
-              </Select>
+    <div className="space-y-6">
+      {/* 总开关 */}
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Globe className="h-5 w-5 text-primary" />
+                启用网络代理
+              </CardTitle>
+              <CardDescription>通过代理服务器转发所有网络请求，适用于受限网络环境</CardDescription>
             </div>
+            <Switch checked={proxyEnabled} onCheckedChange={setProxyEnabled} />
+          </div>
+        </CardHeader>
+      </Card>
 
-            <div className="grid grid-cols-2 gap-4">
+      {proxyEnabled && (
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* 服务器配置 */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Info className="h-5 w-5 text-primary" />
+                服务器配置
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <Label>代理协议</Label>
+                <Select value={proxyType} onValueChange={(v: any) => setProxyType(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="http">HTTP</SelectItem>
+                    <SelectItem value="https">HTTPS</SelectItem>
+                    <SelectItem value="socks5">SOCKS5</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="proxy-host">代理地址 *</Label>
+                <Label>主机地址 (Host)</Label>
                 <Input
-                  id="proxy-host"
-                  placeholder="127.0.0.1"
+                  placeholder="例如: 127.0.0.1"
                   value={proxyHost}
                   onChange={(e) => setProxyHost(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="proxy-port">端口 *</Label>
+                <Label>端口 (Port)</Label>
                 <Input
-                  id="proxy-port"
-                  placeholder="7890"
+                  placeholder="例如: 7890"
                   value={proxyPort}
                   onChange={(e) => setProxyPort(e.target.value)}
                 />
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div className="grid grid-cols-2 gap-4">
+          {/* 认证信息 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                身份认证 (可选)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="proxy-username">用户名（可选）</Label>
+                <Label>用户名</Label>
                 <Input
-                  id="proxy-username"
-                  placeholder="username"
+                  placeholder="Username"
                   value={proxyUsername}
                   onChange={(e) => setProxyUsername(e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="proxy-password">密码（可选）</Label>
+                <Label>密码</Label>
                 <Input
-                  id="proxy-password"
                   type="password"
-                  placeholder="password"
+                  placeholder="Password"
                   value={proxyPassword}
                   onChange={(e) => setProxyPassword(e.target.value)}
                 />
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            {/* 代理过滤列表 */}
-            <div className="pt-4 border-t space-y-3">
+          {/* 连接测试 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <PlayCircle className="h-5 w-5 text-primary" />
+                连接测试
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>代理过滤列表</Label>
-                <p className="text-xs text-muted-foreground">
-                  这些URL/IP将不使用代理，例如本地地址、内网地址等
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                {proxyBypassUrls.map((url, index) => (
-                  <div key={index} className="flex gap-2">
-                    <Input
-                      value={url}
-                      onChange={(e) => updateBypassRule(index, e.target.value)}
-                      placeholder="例如: 127.0.0.1, localhost, 192.168.*"
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => removeBypassRule(index)}
-                      className="h-9 w-9"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-
-                <Button type="button" variant="outline" onClick={addBypassRule} className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  添加过滤规则
-                </Button>
-              </div>
-
-              <div className="text-xs text-muted-foreground">
-                <p>支持格式示例：</p>
-                <ul className="list-disc list-inside mt-1 space-y-1">
-                  <li>域名: localhost, 127.0.0.1</li>
-                  <li>IP段: 192.168.*, 10.*</li>
-                  <li>通配符: *.local, *.lan</li>
-                </ul>
-              </div>
-            </div>
-
-            {/* 测试代理连接 */}
-            <div className="pt-4 border-t space-y-3">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="proxy-test-url">测试URL</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setProxyTestUrl('https://duckcoding.com/')}
-                      className="h-7 text-xs"
-                    >
-                      DuckCoding
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setProxyTestUrl('https://www.google.com/')}
-                      className="h-7 text-xs"
-                    >
-                      Google
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setProxyTestUrl('https://api.anthropic.com/')}
-                      className="h-7 text-xs"
-                    >
-                      Anthropic
-                    </Button>
-                  </div>
+                <Label>测试目标 URL</Label>
+                <div className="flex gap-2 mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProxyTestUrl('https://www.google.com')}
+                    className="h-6 text-xs px-2"
+                  >
+                    Google
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProxyTestUrl('https://api.openai.com')}
+                    className="h-6 text-xs px-2"
+                  >
+                    OpenAI
+                  </Button>
                 </div>
                 <Input
-                  id="proxy-test-url"
-                  placeholder="https://duckcoding.com/"
                   value={proxyTestUrl}
                   onChange={(e) => setProxyTestUrl(e.target.value)}
+                  placeholder="https://..."
                 />
-                <p className="text-xs text-muted-foreground">选择或输入一个URL来测试代理连接</p>
               </div>
-
               <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onTestProxy}
-                disabled={testingProxy || !proxyHost.trim() || !proxyPort || !proxyTestUrl.trim()}
                 className="w-full"
+                onClick={onTestProxy}
+                disabled={testingProxy || !proxyHost || !proxyPort}
               >
                 {testingProxy ? (
                   <>
@@ -256,16 +206,59 @@ export function ProxySettingsTab({
                     测试中...
                   </>
                 ) : (
-                  <>
-                    <AlertCircle className="mr-2 h-4 w-4" />
-                    测试代理连接
-                  </>
+                  '开始测试'
                 )}
               </Button>
-            </div>
-          </>
-        )}
-      </div>
+            </CardContent>
+          </Card>
+
+          {/* 绕过列表 */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <ListFilter className="h-5 w-5 text-primary" />
+                  绕过列表 (Bypass)
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={addBypassRule}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  添加规则
+                </Button>
+              </div>
+              <CardDescription>
+                以下地址将直接连接，不经过代理服务器。支持 IP、域名和通配符。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {proxyBypassUrls.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+                  <p className="text-sm">暂无规则，所有流量都将经过代理</p>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {proxyBypassUrls.map((url, index) => (
+                    <div key={index} className="flex gap-2">
+                      <Input
+                        value={url}
+                        onChange={(e) => updateBypassRule(index, e.target.value)}
+                        placeholder="例如: localhost"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeBypassRule(index)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,16 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Info, RefreshCw, Github, Globe } from 'lucide-react';
 import { getCurrentAppVersion } from '@/services/update';
 import { PageContainer } from '@/components/layout/PageContainer';
-import type { UpdateInfo } from '@/lib/tauri-commands';
+import { useAppContext } from '@/hooks/useAppContext';
 import duckLogo from '@/assets/duck-logo.png';
 
-interface AboutPageProps {
-  updateInfo?: UpdateInfo | null;
-  onUpdateCheck?: () => void;
-}
-
-export function AboutPage({ onUpdateCheck }: AboutPageProps) {
+export function AboutPage() {
   const [version, setVersion] = useState<string>('Loading...');
+  const { checkAppUpdates } = useAppContext();
 
   useEffect(() => {
     getCurrentAppVersion()
@@ -26,13 +22,12 @@ export function AboutPage({ onUpdateCheck }: AboutPageProps) {
       });
   }, []);
 
-  return (
-    <PageContainer>
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold mb-1">关于 DuckCoding</h2>
-        <p className="text-sm text-muted-foreground">应用信息与版本管理</p>
-      </div>
+  const onUpdateCheck = () => {
+    checkAppUpdates(true);
+  };
 
+  return (
+    <PageContainer title="关于 DuckCoding" description="应用信息与版本管理">
       <div className="space-y-6">
         <Card>
           <CardHeader>

@@ -129,20 +129,19 @@ export function TransparentProxyPage({ selectedToolId: initialToolId }: Transpar
   }
 
   return (
-    <PageContainer>
-      {/* 页面标题 */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold mb-1">透明代理</h2>
-        <p className="text-sm text-muted-foreground">
-          为不同 AI 编程工具提供统一的透明代理服务，支持配置热切换
-        </p>
-      </div>
-
+    <PageContainer
+      title="透明代理"
+      description="为不同 AI 编程工具提供统一的透明代理服务，支持配置热切换"
+    >
       {/* 四工具 Tab 切换 */}
       <Tabs value={selectedToolId} onValueChange={(val) => setSelectedToolId(val as ToolId)}>
-        <TabsList className="grid w-full grid-cols-4 mb-6">
+        <TabsList className="grid w-full grid-cols-4 mb-6 h-11 p-1 bg-muted/50 rounded-lg">
           {SUPPORTED_TOOLS.map((tool) => (
-            <TabsTrigger key={tool.id} value={tool.id} className="gap-2">
+            <TabsTrigger
+              key={tool.id}
+              value={tool.id}
+              className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
+            >
               <img src={tool.icon} alt={tool.name} className="w-4 h-4" />
               {tool.name}
             </TabsTrigger>

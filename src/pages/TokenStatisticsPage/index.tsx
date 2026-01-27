@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { PageContainer } from '@/components/layout/PageContainer';
 import { ArrowLeft, Database, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { RealtimeStats } from '../TransparentProxyPage/components/RealtimeStats';
@@ -198,187 +199,187 @@ export default function TokenStatisticsPage({
     }
   };
 
-  return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* 页头 */}
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
+  const pageActions = (
+    <div className="flex items-center gap-2">
+      {/* 数据库信息 */}
+      {summary && (
+        <div className="hidden xl:flex items-center gap-4 px-4 py-2 rounded-md bg-muted/50 text-sm">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={handleGoBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-2xl font-bold">Token 统计</h1>
+            <Database className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">总记录:</span>
+            <span className="font-medium">{summary.total_logs.toLocaleString('zh-CN')}</span>
           </div>
-          <p className="text-sm text-muted-foreground">查看透明代理的 Token 使用情况和请求历史</p>
+          <div className="h-4 w-px bg-border" />
+          <div className="text-muted-foreground">
+            <span>{formatQueryTimeRange()}</span>
+          </div>
         </div>
+      )}
 
-        {/* 操作按钮 */}
-        <div className="flex items-center gap-2">
-          {/* 数据库信息 */}
-          {summary && (
-            <div className="flex items-center gap-4 px-4 py-2 rounded-md bg-muted/50 text-sm">
-              <div className="flex items-center gap-2">
-                <Database className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">总记录:</span>
-                <span className="font-medium">{summary.total_logs.toLocaleString('zh-CN')}</span>
-              </div>
-              <div className="h-4 w-px bg-border" />
-              <div className="text-muted-foreground">
-                <span>{formatQueryTimeRange()}</span>
-              </div>
+      {/* 时间范围选择器 */}
+      <Select
+        value={timeControl.mode === 'custom' ? 'custom' : timeControl.presetRange}
+        onValueChange={handleTimeRangeChange}
+      >
+        <SelectTrigger className="w-36">
+          <Calendar className="h-4 w-4 mr-2" />
+          <SelectValue placeholder="查询范围" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="fifteen_minutes">最近15分钟</SelectItem>
+          <SelectItem value="thirty_minutes">最近30分钟</SelectItem>
+          <SelectItem value="hour">最近1小时</SelectItem>
+          <SelectItem value="twelve_hours">最近12小时</SelectItem>
+          <SelectItem value="day">最近1天</SelectItem>
+          <SelectItem value="week">最近7天</SelectItem>
+          <SelectItem value="month">最近30天</SelectItem>
+          <SelectItem value="custom">自定义</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* 时间粒度选择器 */}
+      <Select
+        value={timeControl.granularity}
+        onValueChange={(value) => timeControl.setGranularity(value as TimeGranularity)}
+      >
+        <SelectTrigger className="w-32">
+          <SelectValue placeholder="数据粒度" />
+        </SelectTrigger>
+        <SelectContent>
+          {timeControl.allowedGranularities.map((g) => (
+            <SelectItem key={g} value={g}>
+              {GRANULARITY_LABELS[g]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* 刷新按钮 */}
+      <Button variant="outline" size="sm" onClick={handleRefresh}>
+        <RefreshCw className="h-4 w-4" />
+        刷新
+      </Button>
+
+      {/* 返回按钮 */}
+      <Button variant="ghost" size="sm" onClick={handleGoBack}>
+        <ArrowLeft className="h-4 w-4" />
+        返回
+      </Button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <PageContainer
+        title="Token 统计"
+        description="查看透明代理的 Token 使用情况和请求历史"
+        actions={pageActions}
+      >
+        {/* 实时统计（如果提供了 sessionId 和 toolType） */}
+        {sessionId && toolType && <RealtimeStats sessionId={sessionId} toolType={toolType} />}
+
+        {/* 仪表盘 - 关键指标 */}
+        {costSummary && <Dashboard summary={costSummary} loading={analyticsLoading} />}
+
+        {/* 趋势图表 */}
+        {trendsData.length > 0 && (
+          <>
+            {/* 成本趋势 */}
+            <TrendsChart
+              data={trendsData}
+              title="成本趋势"
+              dataKeys={[
+                {
+                  key: 'total_cost',
+                  name: '总成本',
+                  color: '#10b981',
+                  formatter: (value) => `$${value.toFixed(4)}`,
+                },
+                {
+                  key: 'input_price',
+                  name: '输入成本',
+                  color: '#3b82f6',
+                  formatter: (value) => `$${value.toFixed(4)}`,
+                },
+                {
+                  key: 'output_price',
+                  name: '输出成本',
+                  color: '#f59e0b',
+                  formatter: (value) => `$${value.toFixed(4)}`,
+                },
+              ]}
+              yAxisLabel="成本 (USD)"
+              height={300}
+            />
+
+            {/* Token 使用趋势 */}
+            <TrendsChart
+              data={trendsData}
+              title="Token 使用趋势"
+              dataKeys={[
+                {
+                  key: 'input_tokens',
+                  name: '输入 Tokens',
+                  color: '#3b82f6',
+                  formatter: (value) => value.toLocaleString(),
+                },
+                {
+                  key: 'output_tokens',
+                  name: '输出 Tokens',
+                  color: '#f59e0b',
+                  formatter: (value) => value.toLocaleString(),
+                },
+                {
+                  key: 'cache_read_tokens',
+                  name: '缓存读取 Tokens',
+                  color: '#8b5cf6',
+                  formatter: (value) => value.toLocaleString(),
+                },
+              ]}
+              yAxisLabel="Token 数量"
+              height={300}
+            />
+
+            {/* 响应时间趋势 */}
+            <TrendsChart
+              data={responseTimeTrends}
+              title="平均响应时间趋势"
+              dataKeys={[
+                {
+                  key: 'avg_response_time',
+                  name: '平均响应时间',
+                  color: '#8b5cf6',
+                  formatter: (value) =>
+                    value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${Math.round(value)}ms`,
+                },
+              ]}
+              yAxisLabel="响应时间 (ms)"
+              height={300}
+            />
+          </>
+        )}
+
+        {/* 历史日志表格 */}
+        <LogsTable key={refreshKey} initialToolType={toolType} initialSessionId={sessionId} />
+
+        {/* 配置提示 */}
+        {config && config.auto_cleanup_enabled && (
+          <div className="flex items-start gap-2 p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/20">
+            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+            <div className="flex-1 text-sm">
+              <p className="font-medium text-blue-900 dark:text-blue-100">自动清理已启用</p>
+              <p className="text-blue-700 dark:text-blue-300 mt-1">
+                系统将自动清理
+                {config.retention_days && ` ${config.retention_days} 天前的日志`}
+                {config.retention_days && config.max_log_count && '，并'}
+                {config.max_log_count &&
+                  ` 保留最多 ${config.max_log_count.toLocaleString('zh-CN')} 条记录`}
+                。可在设置页面修改配置。
+              </p>
             </div>
-          )}
-
-          {/* 时间范围选择器 */}
-          <Select
-            value={timeControl.mode === 'custom' ? 'custom' : timeControl.presetRange}
-            onValueChange={handleTimeRangeChange}
-          >
-            <SelectTrigger className="w-36">
-              <Calendar className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="查询范围" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="fifteen_minutes">最近15分钟</SelectItem>
-              <SelectItem value="thirty_minutes">最近30分钟</SelectItem>
-              <SelectItem value="hour">最近1小时</SelectItem>
-              <SelectItem value="twelve_hours">最近12小时</SelectItem>
-              <SelectItem value="day">最近1天</SelectItem>
-              <SelectItem value="week">最近7天</SelectItem>
-              <SelectItem value="month">最近30天</SelectItem>
-              <SelectItem value="custom">自定义</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* 时间粒度选择器 */}
-          <Select
-            value={timeControl.granularity}
-            onValueChange={(value) => timeControl.setGranularity(value as TimeGranularity)}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="数据粒度" />
-            </SelectTrigger>
-            <SelectContent>
-              {timeControl.allowedGranularities.map((g) => (
-                <SelectItem key={g} value={g}>
-                  {GRANULARITY_LABELS[g]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {/* 刷新按钮 */}
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4" />
-            刷新
-          </Button>
-        </div>
-      </div>
-
-      {/* 实时统计（如果提供了 sessionId 和 toolType） */}
-      {sessionId && toolType && <RealtimeStats sessionId={sessionId} toolType={toolType} />}
-
-      {/* 仪表盘 - 关键指标 */}
-      {costSummary && <Dashboard summary={costSummary} loading={analyticsLoading} />}
-
-      {/* 趋势图表 */}
-      {trendsData.length > 0 && (
-        <>
-          {/* 成本趋势 */}
-          <TrendsChart
-            data={trendsData}
-            title="成本趋势"
-            dataKeys={[
-              {
-                key: 'total_cost',
-                name: '总成本',
-                color: '#10b981',
-                formatter: (value) => `$${value.toFixed(4)}`,
-              },
-              {
-                key: 'input_price',
-                name: '输入成本',
-                color: '#3b82f6',
-                formatter: (value) => `$${value.toFixed(4)}`,
-              },
-              {
-                key: 'output_price',
-                name: '输出成本',
-                color: '#f59e0b',
-                formatter: (value) => `$${value.toFixed(4)}`,
-              },
-            ]}
-            yAxisLabel="成本 (USD)"
-            height={300}
-          />
-
-          {/* Token 使用趋势 */}
-          <TrendsChart
-            data={trendsData}
-            title="Token 使用趋势"
-            dataKeys={[
-              {
-                key: 'input_tokens',
-                name: '输入 Tokens',
-                color: '#3b82f6',
-                formatter: (value) => value.toLocaleString(),
-              },
-              {
-                key: 'output_tokens',
-                name: '输出 Tokens',
-                color: '#f59e0b',
-                formatter: (value) => value.toLocaleString(),
-              },
-              {
-                key: 'cache_read_tokens',
-                name: '缓存读取 Tokens',
-                color: '#8b5cf6',
-                formatter: (value) => value.toLocaleString(),
-              },
-            ]}
-            yAxisLabel="Token 数量"
-            height={300}
-          />
-
-          {/* 响应时间趋势 */}
-          <TrendsChart
-            data={responseTimeTrends}
-            title="平均响应时间趋势"
-            dataKeys={[
-              {
-                key: 'avg_response_time',
-                name: '平均响应时间',
-                color: '#8b5cf6',
-                formatter: (value) =>
-                  value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${Math.round(value)}ms`,
-              },
-            ]}
-            yAxisLabel="响应时间 (ms)"
-            height={300}
-          />
-        </>
-      )}
-
-      {/* 历史日志表格 */}
-      <LogsTable key={refreshKey} initialToolType={toolType} initialSessionId={sessionId} />
-
-      {/* 配置提示 */}
-      {config && config.auto_cleanup_enabled && (
-        <div className="flex items-start gap-2 p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/20">
-          <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-          <div className="flex-1 text-sm">
-            <p className="font-medium text-blue-900 dark:text-blue-100">自动清理已启用</p>
-            <p className="text-blue-700 dark:text-blue-300 mt-1">
-              系统将自动清理
-              {config.retention_days && ` ${config.retention_days} 天前的日志`}
-              {config.retention_days && config.max_log_count && '，并'}
-              {config.max_log_count &&
-                ` 保留最多 ${config.max_log_count.toLocaleString('zh-CN')} 条记录`}
-              。可在设置页面修改配置。
-            </p>
           </div>
-        </div>
-      )}
+        )}
+      </PageContainer>
 
       {/* 自定义时间范围对话框 */}
       <CustomTimeRangeDialog

@@ -41,6 +41,10 @@ pub struct TokenLog {
     /// 缓存读取Token数量
     pub cache_read_tokens: i64,
 
+    /// 推理Token数量（如 OpenAI o1 系列）
+    #[serde(default)]
+    pub reasoning_tokens: i64,
+
     /// 请求状态：success, failed
     pub request_status: String,
 
@@ -79,6 +83,11 @@ pub struct TokenLog {
     #[serde(with = "crate::utils::precision::option_price_precision")]
     pub cache_read_price: Option<f64>,
 
+    /// 推理Token部分价格（USD）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(with = "crate::utils::precision::option_price_precision")]
+    pub reasoning_price: Option<f64>,
+
     /// 总成本（USD）
     #[serde(default)]
     #[serde(with = "crate::utils::precision::price_precision")]
@@ -104,6 +113,7 @@ impl TokenLog {
         output_tokens: i64,
         cache_creation_tokens: i64,
         cache_read_tokens: i64,
+        reasoning_tokens: i64,
         request_status: String,
         response_type: String,
         error_type: Option<String>,
@@ -113,6 +123,7 @@ impl TokenLog {
         output_price: Option<f64>,
         cache_write_price: Option<f64>,
         cache_read_price: Option<f64>,
+        reasoning_price: Option<f64>,
         total_cost: f64,
         pricing_template_id: Option<String>,
     ) -> Self {
@@ -129,6 +140,7 @@ impl TokenLog {
             output_tokens,
             cache_creation_tokens,
             cache_read_tokens,
+            reasoning_tokens,
             request_status,
             response_type,
             error_type,
@@ -138,6 +150,7 @@ impl TokenLog {
             output_price,
             cache_write_price,
             cache_read_price,
+            reasoning_price,
             total_cost,
             pricing_template_id,
         }
@@ -174,6 +187,10 @@ pub struct SessionStats {
     /// 总缓存读取Token数量
     pub total_cache_read: i64,
 
+    /// 总推理Token数量
+    #[serde(default)]
+    pub total_reasoning: i64,
+
     /// 请求总数
     pub request_count: i64,
 }
@@ -186,6 +203,7 @@ impl SessionStats {
             total_output: 0,
             total_cache_creation: 0,
             total_cache_read: 0,
+            total_reasoning: 0,
             request_count: 0,
         }
     }
@@ -274,6 +292,7 @@ mod tests {
             500,
             100,
             200,
+            0, // reasoning_tokens
             "success".to_string(),
             "sse".to_string(),
             None,
@@ -283,6 +302,7 @@ mod tests {
             Some(0.0075),
             Some(0.000375),
             Some(0.00006),
+            None, // reasoning_price
             0.011235,
             Some("builtin_claude".to_string()),
         );
@@ -303,6 +323,7 @@ mod tests {
             total_output: 5000,
             total_cache_creation: 1000,
             total_cache_read: 2000,
+            total_reasoning: 0, // 新增字段
             request_count: 10,
         };
 

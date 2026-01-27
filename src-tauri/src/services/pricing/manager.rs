@@ -1,6 +1,8 @@
 use crate::data::DataManager;
 use crate::models::pricing::{DefaultTemplatesConfig, ModelPrice, PricingTemplate};
-use crate::services::pricing::builtin::builtin_claude_official_template;
+use crate::services::pricing::builtin::{
+    builtin_claude_official_template, builtin_openai_official_template,
+};
 use crate::utils::precision::price_precision;
 use anyhow::{anyhow, Context, Result};
 use lazy_static::lazy_static;
@@ -29,6 +31,10 @@ pub struct CostBreakdown {
     /// 缓存读取部分价格（USD）
     #[serde(with = "price_precision")]
     pub cache_read_price: f64,
+
+    /// 推理输出部分价格（USD）
+    #[serde(with = "price_precision")]
+    pub reasoning_price: f64,
 
     /// 总成本（USD）
     #[serde(with = "price_precision")]
@@ -102,14 +108,18 @@ impl PricingManager {
             .context("Failed to create templates directory")?;
 
         // 保存内置 Claude 官方模板
-        let builtin_template = builtin_claude_official_template();
-        self.save_template(&builtin_template)?;
+        let builtin_claude_template = builtin_claude_official_template();
+        self.save_template(&builtin_claude_template)?;
+
+        // 保存内置 OpenAI 官方模板
+        let builtin_openai_template = builtin_openai_official_template();
+        self.save_template(&builtin_openai_template)?;
 
         // 初始化默认模板配置（如果不存在）
         if !self.default_templates_path.exists() {
             let mut config = DefaultTemplatesConfig::new();
             config.set_default("claude-code".to_string(), "builtin_claude".to_string());
-            config.set_default("codex".to_string(), "builtin_claude".to_string());
+            config.set_default("codex".to_string(), "builtin_openai".to_string());
             config.set_default("gemini-cli".to_string(), "builtin_claude".to_string());
 
             let value = serde_json::to_value(&config)
@@ -247,30 +257,36 @@ impl PricingManager {
     /// # 参数
     ///
     /// - `template_id`: 价格模板 ID（None 时使用工具默认模板）
+    /// - `tool_id`: 工具 ID（用于获取默认模板，当 template_id 为 None 时必须提供）
     /// - `model`: 模型名称
     /// - `input_tokens`: 输入 Token 数量
     /// - `output_tokens`: 输出 Token 数量
     /// - `cache_creation_tokens`: 缓存创建 Token 数量
     /// - `cache_read_tokens`: 缓存读取 Token 数量
+    /// - `reasoning_tokens`: 推理 Token 数量
     ///
     /// # 返回
     ///
     /// 成本分解结果
+    #[allow(clippy::too_many_arguments)]
     pub fn calculate_cost(
         &self,
         template_id: Option<&str>,
+        tool_id: Option<&str>,
         model: &str,
         input_tokens: i64,
         output_tokens: i64,
         cache_creation_tokens: i64,
         cache_read_tokens: i64,
+        reasoning_tokens: i64,
     ) -> Result<CostBreakdown> {
         // 1. 获取模板
         let template = if let Some(id) = template_id {
             self.get_template(id)?
         } else {
-            // 使用 claude-code 的默认模板作为回退
-            self.get_default_template("claude-code")?
+            // 使用工具的默认模板（回退到 claude-code）
+            let default_tool_id = tool_id.unwrap_or("claude-code");
+            self.get_default_template(default_tool_id)?
         };
 
         // 2. 解析模型价格（别名 → 继承 → 倍率）
@@ -286,14 +302,25 @@ impl PricingManager {
             * model_price.cache_read_price_per_1m.unwrap_or(0.0)
             / 1_000_000.0;
 
+        // 计算推理 Token 价格（如果有专用价格则使用，否则使用普通输出价格）
+        let reasoning_price =
+            if let Some(reasoning_price_per_1m) = model_price.reasoning_output_price_per_1m {
+                reasoning_tokens as f64 * reasoning_price_per_1m / 1_000_000.0
+            } else {
+                // 回退：使用普通输出价格
+                reasoning_tokens as f64 * model_price.output_price_per_1m / 1_000_000.0
+            };
+
         // 4. 计算总成本
-        let total_cost = input_price + output_price + cache_write_price + cache_read_price;
+        let total_cost =
+            input_price + output_price + cache_write_price + cache_read_price + reasoning_price;
 
         Ok(CostBreakdown {
             input_price,
             output_price,
             cache_write_price,
             cache_read_price,
+            reasoning_price,
             total_cost,
             template_id: template.id.clone(),
         })
@@ -336,6 +363,9 @@ impl PricingManager {
                                 .map(|p| p * inherited.multiplier),
                             cache_read_price_per_1m: base_price
                                 .cache_read_price_per_1m
+                                .map(|p| p * inherited.multiplier),
+                            reasoning_output_price_per_1m: base_price
+                                .reasoning_output_price_per_1m
                                 .map(|p| p * inherited.multiplier),
                             currency: base_price.currency,
                             aliases: base_price.aliases,
@@ -411,11 +441,13 @@ mod tests {
         let breakdown = manager
             .calculate_cost(
                 Some("builtin_claude"),
+                None, // 工具 ID（已指定模板则可选）
                 "claude-sonnet-4.5",
                 1000, // input
                 500,  // output
                 100,  // cache write
                 200,  // cache read
+                0,    // reasoning_tokens
             )
             .unwrap();
 
@@ -493,7 +525,16 @@ mod tests {
 
         // 不指定模板 ID，应使用默认模板
         let breakdown = manager
-            .calculate_cost(None, "claude-sonnet-4.5", 1000, 500, 0, 0)
+            .calculate_cost(
+                None,
+                Some("claude-code"),
+                "claude-sonnet-4.5",
+                1000,
+                500,
+                0,
+                0,
+                0,
+            )
             .unwrap();
 
         assert_eq!(breakdown.template_id, "builtin_claude");

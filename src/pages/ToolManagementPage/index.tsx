@@ -9,21 +9,21 @@ import { ToolListSection } from './components/ToolListSection';
 import { AddInstanceDialog } from './components/AddInstanceDialog/AddInstanceDialog';
 import { VersionManagementDialog } from './components/VersionManagementDialog';
 import { useToolManagement } from './hooks/useToolManagement';
-import type { ToolStatus } from '@/lib/tauri-commands';
+import { useAppContext } from '@/hooks/useAppContext';
+import { ViewToggle, ViewMode } from '@/components/common/ViewToggle';
 
-interface ToolManagementPageProps {
-  tools: ToolStatus[];
-  loading: boolean;
-  restrictNavigation?: boolean; // 新增：引导模式限制
-}
+export function ToolManagementPage() {
+  const {
+    tools: _toolsProp,
+    toolsLoading: loadingProp,
+    restrictedPage,
+    setActiveTab,
+    refreshTools: globalRefreshTools,
+  } = useAppContext();
 
-export function ToolManagementPage({
-  tools: _toolsProp,
-  loading: loadingProp,
-  restrictNavigation,
-}: ToolManagementPageProps) {
-  // _toolsProp 和 loadingProp 用于全局缓存，但工具管理需要更详细的 ToolInstance 数据
-  // 所以仍然需要加载完整的工具实例信息
+  const restrictNavigation = restrictedPage === 'tool-management';
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+
   const {
     groupedByTool,
     loading: dataLoading,
@@ -40,7 +40,8 @@ export function ToolManagementPage({
 
   // 通知父组件刷新工具列表
   const onRefreshTools = () => {
-    window.dispatchEvent(new CustomEvent('refresh-tools'));
+    // Also trigger global refresh
+    globalRefreshTools();
     refreshTools();
   };
 
@@ -86,33 +87,28 @@ export function ToolManagementPage({
     };
   }, []);
 
-  return (
-    <PageContainer>
-      {/* 页面标题和操作按钮 */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold mb-1">工具管理</h2>
-          <p className="text-sm text-muted-foreground">管理所有 AI 开发工具的安装和配置</p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="default"
-            onClick={() => {
-              // 导航到安装页面
-              window.dispatchEvent(new CustomEvent('navigate-to-install'));
-            }}
-          >
-            安装工具
-          </Button>
-          <Button variant="outline" onClick={() => setShowAddDialog(true)}>
-            添加实例
-          </Button>
-          <Button variant="outline" onClick={onRefreshTools}>
-            刷新状态
-          </Button>
-        </div>
-      </div>
+  const pageActions = (
+    <div className="flex gap-2 items-center">
+      <ViewToggle mode={viewMode} onChange={setViewMode} />
+      <div className="h-6 w-px bg-border mx-1" />
+      <Button variant="default" onClick={() => setActiveTab('install')}>
+        安装工具
+      </Button>
+      <Button variant="outline" onClick={() => setShowAddDialog(true)}>
+        添加实例
+      </Button>
+      <Button variant="outline" onClick={onRefreshTools}>
+        刷新状态
+      </Button>
+    </div>
+  );
 
+  return (
+    <PageContainer
+      title="工具管理"
+      description="管理所有 AI 开发工具的安装和配置"
+      actions={pageActions}
+    >
       {/* 引导模式提示 */}
       {restrictNavigation && (
         <Alert className="mb-4">
@@ -145,20 +141,29 @@ export function ToolManagementPage({
       {/* Tab 按工具切换 */}
       {!loadingProp && !dataLoading && !error && (
         <Tabs defaultValue="claude-code" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
-            <TabsTrigger value="claude-code" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-3 mb-6 h-11 p-1 bg-muted/50 rounded-lg">
+            <TabsTrigger
+              value="claude-code"
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
+            >
               Claude Code
             </TabsTrigger>
-            <TabsTrigger value="codex" className="flex items-center gap-2">
+            <TabsTrigger
+              value="codex"
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
+            >
               CodeX
             </TabsTrigger>
-            <TabsTrigger value="gemini-cli" className="flex items-center gap-2">
+            <TabsTrigger
+              value="gemini-cli"
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"
+            >
               Gemini CLI
             </TabsTrigger>
           </TabsList>
 
           {/* Claude Code Tab */}
-          <TabsContent value="claude-code">
+          <TabsContent value="claude-code" className="mt-0">
             <ToolListSection
               toolId="claude-code"
               toolName="Claude Code"
@@ -171,11 +176,12 @@ export function ToolManagementPage({
               updateInfoMap={updateInfoMap}
               checkingUpdate={checkingUpdate}
               updating={updating}
+              viewMode={viewMode}
             />
           </TabsContent>
 
           {/* CodeX Tab */}
-          <TabsContent value="codex">
+          <TabsContent value="codex" className="mt-0">
             <ToolListSection
               toolId="codex"
               toolName="CodeX"
@@ -188,11 +194,12 @@ export function ToolManagementPage({
               updateInfoMap={updateInfoMap}
               checkingUpdate={checkingUpdate}
               updating={updating}
+              viewMode={viewMode}
             />
           </TabsContent>
 
           {/* Gemini CLI Tab */}
-          <TabsContent value="gemini-cli">
+          <TabsContent value="gemini-cli" className="mt-0">
             <ToolListSection
               toolId="gemini-cli"
               toolName="Gemini CLI"
@@ -205,6 +212,7 @@ export function ToolManagementPage({
               updateInfoMap={updateInfoMap}
               checkingUpdate={checkingUpdate}
               updating={updating}
+              viewMode={viewMode}
             />
           </TabsContent>
         </Tabs>

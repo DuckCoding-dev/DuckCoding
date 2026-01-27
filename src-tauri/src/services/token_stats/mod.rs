@@ -4,8 +4,9 @@
 
 pub mod analytics;
 pub mod db;
-pub mod extractor;
+pub mod logger;
 pub mod manager;
+pub mod processor;
 
 #[cfg(test)]
 mod cost_calculation_test;
@@ -15,8 +16,4 @@ pub use analytics::{
     TrendDataPoint, TrendQuery,
 };
 pub use db::TokenStatsDb;
-pub use extractor::{
-    create_extractor, ClaudeTokenExtractor, MessageDeltaData, MessageStartData, ResponseTokenInfo,
-    SseTokenData, TokenExtractor,
-};
 pub use manager::{shutdown_token_stats_manager, TokenStatsManager};

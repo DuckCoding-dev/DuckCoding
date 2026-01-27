@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Loader2, Search } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RefreshCw, Loader2, Search, Zap, Activity, CheckCircle2, AlertCircle } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { DashboardToolCard } from './components/DashboardToolCard';
 import { UpdateCheckBanner } from './components/UpdateCheckBanner';
@@ -9,23 +10,20 @@ import { useDashboard } from './hooks/useDashboard';
 import { useDashboardProviders } from './hooks/useDashboardProviders';
 import { getToolDisplayName } from '@/utils/constants';
 import { useToast } from '@/hooks/use-toast';
+import { useAppContext } from '@/hooks/useAppContext';
 import {
   getUserQuota,
   getUsageStats,
-  type ToolStatus,
   refreshAllToolVersions,
   getSelectedProviderId,
   setSelectedProviderId as saveSelectedProviderId,
 } from '@/lib/tauri-commands';
 import type { UserQuotaResult, UsageStatsResult } from '@/lib/tauri-commands/types';
 
-interface DashboardPageProps {
-  tools: ToolStatus[];
-  loading: boolean;
-}
-
-export function DashboardPage({ tools: toolsProp, loading: loadingProp }: DashboardPageProps) {
+export function DashboardPage() {
   const { toast } = useToast();
+  const { tools: toolsProp, toolsLoading: loadingProp, setActiveTab } = useAppContext();
+
   const [loading, setLoading] = useState(loadingProp);
   const [refreshing, setRefreshing] = useState(false);
   const [quota, setQuota] = useState<UserQuotaResult | null>(null);
@@ -166,9 +164,6 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
         title: '更新成功',
         description: `${getToolDisplayName(toolId)} ${result.message}`,
       });
-      // 更新成功后，handleUpdate 已经设置了 hasUpdate: false
-      // 不需要再调用 handleRefreshToolStatus 和 checkSingleToolUpdate
-      // 因为这会导致状态竞态问题
     } else {
       toast({
         title: '更新失败',
@@ -179,18 +174,18 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
   };
 
   // 切换到配置页面
-  const switchToConfig = (toolId?: string) => {
-    window.dispatchEvent(new CustomEvent('navigate-to-config', { detail: { toolId } }));
+  const switchToConfig = (_toolId?: string) => {
+    setActiveTab('profile-management');
   };
 
   // 切换到安装页面
   const switchToInstall = () => {
-    window.dispatchEvent(new CustomEvent('navigate-to-install'));
+    setActiveTab('install');
   };
 
-  // 切换到安装页面
+  // 切换到工具列表页面
   const switchToList = () => {
-    window.dispatchEvent(new CustomEvent('navigate-to-list'));
+    setActiveTab('tool-management');
   };
 
   // 处理供应商切换（持久化到后端）
@@ -213,11 +208,9 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
 
   // 处理实例选择变更
   const handleInstanceChange = async (toolId: string, instanceId: string) => {
-    // 使用 Hook 提供的函数，直接保存 instance_id
     const result = await setInstanceSelection(toolId, instanceId);
 
     if (result.success) {
-      // 获取实例的 label 用于提示
       const instances = getInstanceOptions(toolId);
       const selectedInstance = instances.find((opt) => opt.value === instanceId);
 
@@ -226,7 +219,6 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
         description: `${getToolDisplayName(toolId)} 已切换到 ${selectedInstance?.label || instanceId}`,
       });
 
-      // 切换成功后重新加载工具实例数据以刷新UI
       try {
         await loadToolInstances();
       } catch (error) {
@@ -246,9 +238,7 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
 
   // 确保始终显示这三个工具，不论是否安装
   const displayTools = FIXED_TOOL_IDS.map((toolId) => {
-    // 从后端数据中查找该工具
     const foundTool = tools.find((t) => t.id === toolId);
-    // 如果找到则使用后端数据，否则创建占位数据
     return (
       foundTool || {
         id: toolId,
@@ -263,12 +253,32 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
     );
   });
 
-  return (
-    <PageContainer>
-      <div className="mb-6">
-        <h2 className="text-2xl font-semibold mb-1">仪表板</h2>
-      </div>
+  const installedCount = displayTools.filter((t) => t.installed).length;
+  const updateCount = displayTools.filter((t) => t.hasUpdate).length;
 
+  const pageActions = (
+    <div className="flex gap-2">
+      <Button variant="outline" size="sm" onClick={handleRefreshToolStatus} disabled={refreshing}>
+        {refreshing ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Search className="mr-2 h-4 w-4" />
+        )}
+        检测状态
+      </Button>
+      <Button variant="outline" size="sm" onClick={checkForUpdates} disabled={checkingUpdates}>
+        {checkingUpdates ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <RefreshCw className="mr-2 h-4 w-4" />
+        )}
+        检查更新
+      </Button>
+    </div>
+  );
+
+  return (
+    <PageContainer title="仪表板" description="概览系统状态与工具健康度" actions={pageActions}>
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -276,58 +286,63 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
         </div>
       ) : (
         <>
-          {/* 更新检查提示 */}
           {updateCheckMessage && <UpdateCheckBanner message={updateCheckMessage} />}
 
-          <div className="space-y-6">
-            {/* 第一段：工具卡片 + 操作按钮 */}
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">工具状态</h3>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRefreshToolStatus}
-                    disabled={refreshing}
-                    className="shadow-sm hover:shadow-md transition-all"
-                  >
-                    {refreshing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        检测中...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="mr-2 h-4 w-4" />
-                        检测工具状态
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={checkForUpdates}
-                    disabled={checkingUpdates}
-                    className="shadow-sm hover:shadow-md transition-all"
-                  >
-                    {checkingUpdates ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        检查中...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        一键检查更新
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </div>
+          {/* 状态概览卡片 */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">已安装工具</CardTitle>
+                <Zap className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{installedCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  共 {FIXED_TOOL_IDS.length} 个支持工具
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">可用更新</CardTitle>
+                <AlertCircle
+                  className={`h-4 w-4 ${updateCount > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}
+                />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{updateCount}</div>
+                <p className="text-xs text-muted-foreground">建议及时更新以获取新特性</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">供应商状态</CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{quota ? '正常' : '-'}</div>
+                <p className="text-xs text-muted-foreground">
+                  {providers.length > 0 ? `已配置 ${providers.length} 个供应商` : '暂无供应商配置'}
+                </p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">系统状态</CardTitle>
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">运行中</div>
+                <p className="text-xs text-muted-foreground">所有服务正常运行</p>
+              </CardContent>
+            </Card>
+          </div>
 
-              {/* 工具卡片列表 */}
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-8">
+            {/* 工具状态 */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold tracking-tight">工具管理</h3>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {displayTools.map((tool) => (
                   <DashboardToolCard
                     key={tool.id}
@@ -349,28 +364,22 @@ export function DashboardPage({ tools: toolsProp, loading: loadingProp }: Dashbo
               </div>
             </div>
 
-            {/* 第二段：供应商标签页 */}
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-lg font-semibold">供应商与用量统计</h3>
+            {/* 供应商与用量 */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold tracking-tight">供应商与用量统计</h3>
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={handleRefreshProviderData}
                   disabled={quotaLoading || statsLoading}
-                  className="shadow-sm hover:shadow-md transition-all"
                 >
                   {quotaLoading || statsLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      刷新中...
-                    </>
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <>
-                      <RefreshCw className="mr-2 h-4 w-4" />
-                      刷新
-                    </>
+                    <RefreshCw className="mr-2 h-3.5 w-3.5" />
                   )}
+                  刷新数据
                 </Button>
               </div>
               <ProviderTabs

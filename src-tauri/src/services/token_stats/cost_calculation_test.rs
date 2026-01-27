@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod tests {
     use crate::services::pricing::PRICING_MANAGER;
-    use crate::services::token_stats::create_extractor;
+    use crate::services::token_stats::processor::create_processor;
     use serde_json::json;
 
     #[test]
@@ -19,12 +19,14 @@ mod tests {
 
         // 使用默认模板计算成本
         let result = PRICING_MANAGER.calculate_cost(
-            None, // 使用默认模板
+            None,                // 使用默认模板
+            Some("claude-code"), // 工具 ID
             model,
             input_tokens,
             output_tokens,
             cache_creation_tokens,
             cache_read_tokens,
+            0, // reasoning_tokens
         );
 
         // 验证计算成功
@@ -73,23 +75,48 @@ mod tests {
         // 测试不同模型的成本计算
 
         // Claude Opus 4.5: $5 input / $25 output
-        let opus_result = PRICING_MANAGER.calculate_cost(None, "claude-opus-4.5", 1000, 500, 0, 0);
+        let opus_result = PRICING_MANAGER.calculate_cost(
+            None,
+            Some("claude-code"),
+            "claude-opus-4.5",
+            1000,
+            500,
+            0,
+            0,
+            0,
+        );
         assert!(opus_result.is_ok());
         let opus_breakdown = opus_result.unwrap();
         assert!((opus_breakdown.input_price - 0.005).abs() < 1e-9); // 1000 * 5 / 1M
         assert!((opus_breakdown.output_price - 0.0125).abs() < 1e-9); // 500 * 25 / 1M
 
         // Claude Sonnet 4.5: $3 input / $15 output
-        let sonnet_result =
-            PRICING_MANAGER.calculate_cost(None, "claude-sonnet-4.5", 1000, 500, 0, 0);
+        let sonnet_result = PRICING_MANAGER.calculate_cost(
+            None,
+            Some("claude-code"),
+            "claude-sonnet-4.5",
+            1000,
+            500,
+            0,
+            0,
+            0,
+        );
         assert!(sonnet_result.is_ok());
         let sonnet_breakdown = sonnet_result.unwrap();
         assert!((sonnet_breakdown.input_price - 0.003).abs() < 1e-9); // 1000 * 3 / 1M
         assert!((sonnet_breakdown.output_price - 0.0075).abs() < 1e-9); // 500 * 15 / 1M
 
         // Claude Haiku 3.5: $0.8 input / $4 output
-        let haiku_result =
-            PRICING_MANAGER.calculate_cost(None, "claude-haiku-3.5", 1000, 500, 0, 0);
+        let haiku_result = PRICING_MANAGER.calculate_cost(
+            None,
+            Some("claude-code"),
+            "claude-haiku-3.5",
+            1000,
+            500,
+            0,
+            0,
+            0,
+        );
         assert!(haiku_result.is_ok());
         let haiku_breakdown = haiku_result.unwrap();
         assert!((haiku_breakdown.input_price - 0.0008).abs() < 1e-9); // 1000 * 0.8 / 1M
@@ -101,7 +128,12 @@ mod tests {
     #[test]
     fn test_token_extraction_from_response() {
         // 测试从响应中提取 Token 信息
-        let extractor = create_extractor("claude_code").unwrap();
+        let processor = create_processor("claude-code").unwrap();
+
+        let request_body = json!({
+            "model": "claude-sonnet-4-5-20250929",
+            "messages": []
+        });
 
         let response_json = json!({
             "id": "msg_test_123",
@@ -114,7 +146,9 @@ mod tests {
             }
         });
 
-        let token_info = extractor.extract_from_json(&response_json).unwrap();
+        let token_info = processor
+            .process_json_response(&serde_json::to_vec(&request_body).unwrap(), &response_json)
+            .unwrap();
 
         assert_eq!(token_info.input_tokens, 100);
         assert_eq!(token_info.output_tokens, 50);
@@ -128,7 +162,12 @@ mod tests {
     #[test]
     fn test_end_to_end_cost_calculation() {
         // 端到端测试：从响应提取 Token -> 计算成本
-        let extractor = create_extractor("claude_code").unwrap();
+        let processor = create_processor("claude-code").unwrap();
+
+        let request_body = json!({
+            "model": "claude-sonnet-4-5-20250929",
+            "messages": []
+        });
 
         let response_json = json!({
             "id": "msg_end_to_end",
@@ -142,16 +181,20 @@ mod tests {
         });
 
         // 步骤1: 提取 Token
-        let token_info = extractor.extract_from_json(&response_json).unwrap();
+        let token_info = processor
+            .process_json_response(&serde_json::to_vec(&request_body).unwrap(), &response_json)
+            .unwrap();
 
         // 步骤2: 计算成本
         let result = PRICING_MANAGER.calculate_cost(
             None,
+            Some("claude-code"), // 工具 ID
             "claude-sonnet-4-5-20250929",
             token_info.input_tokens,
             token_info.output_tokens,
             token_info.cache_creation_tokens,
             token_info.cache_read_tokens,
+            0, // reasoning_tokens
         );
 
         assert!(result.is_ok());
@@ -192,6 +235,101 @@ mod tests {
         println!(
             "  缓存写入: {} tokens -> ${:.6}",
             token_info.cache_creation_tokens, breakdown.cache_write_price
+        );
+        println!(
+            "  缓存读取: {} tokens -> ${:.6}",
+            token_info.cache_read_tokens, breakdown.cache_read_price
+        );
+        println!("  总成本: ${:.6}", breakdown.total_cost);
+    }
+
+    #[test]
+    fn test_codex_end_to_end_cost_calculation() {
+        // Codex 端到端测试：从响应提取 Token -> 计算成本（使用 builtin_openai 模板）
+        let processor = create_processor("codex").unwrap();
+
+        let request_body = json!({
+            "model": "gpt-5.2-codex",
+            "messages": []
+        });
+
+        // 模拟 Codex 响应：input_tokens 包含缓存的 token
+        let response_json = json!({
+            "id": "resp_codex_test",
+            "model": "gpt-5.2-codex",
+            "usage": {
+                "input_tokens": 10000,           // 总输入（包含缓存）
+                "input_tokens_details": {
+                    "cached_tokens": 8000         // 缓存读取
+                },
+                "output_tokens": 500,
+                "output_tokens_details": {
+                    "reasoning_tokens": 0
+                }
+            }
+        });
+
+        // 步骤1: 提取 Token
+        let token_info = processor
+            .process_json_response(&serde_json::to_vec(&request_body).unwrap(), &response_json)
+            .unwrap();
+
+        // 验证 Token 提取正确（新输入 = 总输入 - 缓存）
+        assert_eq!(token_info.input_tokens, 2000); // 10000 - 8000
+        assert_eq!(token_info.output_tokens, 500);
+        assert_eq!(token_info.cache_creation_tokens, 0);
+        assert_eq!(token_info.cache_read_tokens, 8000);
+
+        // 步骤2: 计算成本（使用 builtin_openai 模板）
+        let result = PRICING_MANAGER.calculate_cost(
+            Some("builtin_openai"), // 使用 OpenAI 模板
+            Some("codex"),          // 工具 ID
+            "gpt-5.2-codex",
+            token_info.input_tokens,
+            token_info.output_tokens,
+            token_info.cache_creation_tokens,
+            token_info.cache_read_tokens,
+            0, // reasoning_tokens
+        );
+
+        assert!(result.is_ok());
+        let breakdown = result.unwrap();
+
+        // 验证使用了正确的模板
+        assert_eq!(breakdown.template_id, "builtin_openai");
+
+        // 预期成本计算（gpt-5.2-codex: $3 input / $12 output / $1.5 cache read）
+        // input: 2000 * 3.0 / 1,000,000 = 0.006
+        // output: 500 * 12.0 / 1,000,000 = 0.006
+        // cache_write: 0（OpenAI 不收费）
+        // cache_read: 8000 * 1.5 / 1,000,000 = 0.012
+        // total: 0.006 + 0.006 + 0 + 0.012 = 0.024
+
+        println!("Codex 端到端实际计算结果:");
+        println!("  输入价格: {:.10}", breakdown.input_price);
+        println!("  输出价格: {:.10}", breakdown.output_price);
+        println!("  缓存写入价格: {:.10}", breakdown.cache_write_price);
+        println!("  缓存读取价格: {:.10}", breakdown.cache_read_price);
+        println!("  总成本: {:.10}", breakdown.total_cost);
+
+        assert!((breakdown.input_price - 0.006).abs() < 1e-9);
+        assert!((breakdown.output_price - 0.006).abs() < 1e-9);
+        assert!((breakdown.cache_write_price - 0.0).abs() < 1e-9); // OpenAI 不收费缓存创建
+        assert!((breakdown.cache_read_price - 0.012).abs() < 1e-9);
+        assert!(
+            (breakdown.total_cost - 0.024).abs() < 1e-6,
+            "expected 0.024, got {}",
+            breakdown.total_cost
+        );
+
+        println!("✅ Codex 端到端成本计算测试通过");
+        println!(
+            "  新输入: {} tokens -> ${:.6}",
+            token_info.input_tokens, breakdown.input_price
+        );
+        println!(
+            "  输出: {} tokens -> ${:.6}",
+            token_info.output_tokens, breakdown.output_price
         );
         println!(
             "  缓存读取: {} tokens -> ${:.6}",

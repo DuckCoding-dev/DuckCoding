@@ -263,7 +263,7 @@ mod tests {
 
         for i in 0..10 {
             let log = TokenLog::new(
-                "claude_code".to_string(),
+                "claude-code".to_string(),
                 base_time - (i * 3600 * 1000), // 每小时一条
                 "127.0.0.1".to_string(),
                 "test_session".to_string(),
@@ -274,6 +274,7 @@ mod tests {
                 50,
                 10,
                 20,
+                0, // reasoning_tokens
                 "success".to_string(),
                 "json".to_string(),
                 None,
@@ -283,6 +284,7 @@ mod tests {
                 Some(0.002),
                 Some(0.0001),
                 Some(0.0002),
+                None, // reasoning_price
                 0.0033,
                 Some("test_template".to_string()),
             );
@@ -291,7 +293,7 @@ mod tests {
 
         // 创建查询
         let query = TrendQuery {
-            tool_type: Some("claude_code".to_string()),
+            tool_type: Some("claude-code".to_string()),
             granularity: TimeGranularity::Hour,
             ..Default::default()
         };
@@ -327,7 +329,7 @@ mod tests {
             for (j, config) in configs.iter().enumerate() {
                 for k in 0..3 {
                     let log = TokenLog::new(
-                        "claude_code".to_string(),
+                        "claude-code".to_string(),
                         base_time - (k * 1000),
                         "127.0.0.1".to_string(),
                         format!("session_{}_{}", i, j),
@@ -338,6 +340,7 @@ mod tests {
                         50,
                         10,
                         20,
+                        0, // reasoning_tokens
                         "success".to_string(),
                         "json".to_string(),
                         None,
@@ -347,6 +350,7 @@ mod tests {
                         Some(0.002),
                         Some(0.0001),
                         Some(0.0002),
+                        None, // reasoning_price
                         0.0033,
                         Some("test_template".to_string()),
                     );
@@ -360,7 +364,7 @@ mod tests {
 
         // 按模型分组
         let model_query = CostSummaryQuery {
-            tool_type: Some("claude_code".to_string()),
+            tool_type: Some("claude-code".to_string()),
             group_by: CostGroupBy::Model,
             ..Default::default()
         };
@@ -375,7 +379,7 @@ mod tests {
 
         // 按配置分组
         let config_query = CostSummaryQuery {
-            tool_type: Some("claude_code".to_string()),
+            tool_type: Some("claude-code".to_string()),
             group_by: CostGroupBy::Config,
             ..Default::default()
         };

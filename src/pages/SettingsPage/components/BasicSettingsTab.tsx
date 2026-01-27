@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Settings as SettingsIcon, Info, RefreshCw, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { RefreshCw, Power, MonitorPlay } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   getSingleInstanceConfig,
@@ -103,22 +103,25 @@ export function BasicSettingsTab() {
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-6">
-      <div className="flex items-center gap-2">
-        <SettingsIcon className="h-5 w-5" />
-        <h3 className="text-lg font-semibold">系统设置</h3>
-      </div>
-      <Separator />
-
-      <div className="space-y-6">
-        {/* 基本设置分类 */}
-        <div>
-          <h4 className="text-sm font-semibold text-muted-foreground mb-3">基本设置</h4>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="startup">开机自启动</Label>
-              <p className="text-sm text-muted-foreground">开机时自动启动 DuckCoding 应用</p>
+    <div className="grid gap-6">
+      {/* 启动设置 */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Power className="h-5 w-5 text-primary" />
+            <CardTitle>启动设置</CardTitle>
+          </div>
+          <CardDescription>控制应用启动时的行为</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
+            <div className="space-y-0.5">
+              <Label htmlFor="startup" className="text-base">
+                开机自启动
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                系统启动时自动运行 DuckCoding，方便快速访问。更改后立即生效。
+              </p>
             </div>
             <Switch
               id="startup"
@@ -127,42 +130,26 @@ export function BasicSettingsTab() {
               disabled={loading || saving}
             />
           </div>
+        </CardContent>
+      </Card>
 
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-4 mt-3">
-            <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <div className="text-sm space-y-2">
-                <p className="font-semibold text-blue-800 dark:text-blue-200">关于开机自启动</p>
-                <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
-                  <li>
-                    <strong>启用：</strong>系统启动时自动运行应用，方便快速访问
-                  </li>
-                  <li>
-                    <strong>禁用：</strong>需要手动启动应用
-                  </li>
-                  <li>
-                    <strong>跨平台支持：</strong>Windows、macOS、Linux 均支持此功能
-                  </li>
-                  <li>
-                    <strong>生效方式：</strong>更改后立即生效，无需重启应用
-                  </li>
-                </ul>
-              </div>
-            </div>
+      {/* 运行模式 */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <MonitorPlay className="h-5 w-5 text-primary" />
+            <CardTitle>运行模式</CardTitle>
           </div>
-        </div>
-
-        <Separator />
-
-        {/* 开发者设置分类 */}
-        <div>
-          <h4 className="text-sm font-semibold text-muted-foreground mb-3">开发者设置</h4>
-
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="single-instance">单实例模式</Label>
+          <CardDescription>配置应用实例的运行方式（仅供高级用户使用）</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
+            <div className="space-y-0.5">
+              <Label htmlFor="single-instance" className="text-base">
+                单实例模式
+              </Label>
               <p className="text-sm text-muted-foreground">
-                启用后，同时只能运行一个应用实例（生产环境）
+                启用后，尝试打开第二个实例时会聚焦到现有窗口。禁用可允许同时运行多个实例。
               </p>
             </div>
             <Switch
@@ -172,38 +159,8 @@ export function BasicSettingsTab() {
               disabled={loading || saving}
             />
           </div>
-
-          <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-4 mt-3">
-            <div className="flex items-start gap-2">
-              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-              <div className="text-sm space-y-2">
-                <p className="font-semibold text-blue-800 dark:text-blue-200">关于单实例模式</p>
-                <ul className="list-disc list-inside space-y-1 text-blue-700 dark:text-blue-300">
-                  <li>
-                    <strong>启用（推荐）：</strong>打开第二个实例时会聚焦到第一个窗口，节省系统资源
-                  </li>
-                  <li>
-                    <strong>禁用：</strong>允许同时运行多个实例，适用于多账户测试或特殊需求
-                  </li>
-                  <li>
-                    <strong>开发环境：</strong>始终允许多实例（与正式版隔离）
-                  </li>
-                  <li>
-                    <strong>生效方式：</strong>更改后需要重启应用才能生效
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {(loading || saving) && (
-          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>{loading ? '加载中...' : '保存中...'}</span>
-          </div>
-        )}
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

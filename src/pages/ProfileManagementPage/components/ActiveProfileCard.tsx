@@ -1,9 +1,21 @@
 /**
- * 当前生效 Profile 卡片组件
+ * 当前生效 Profile 卡片组件 - Clean / Professional Design
  */
 
 import { useState, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Server,
+  Terminal,
+  Laptop,
+  Settings,
+  RefreshCw,
+  CheckCircle2,
+  Zap,
+  Download,
+} from 'lucide-react';
 import type { ProfileGroup } from '@/types/profile';
 import type { ToolInstance, ToolType } from '@/types/tool-management';
 import { getToolInstances, checkUpdate, updateToolInstance } from '@/lib/tauri-commands';
@@ -15,27 +27,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { ToolAdvancedConfigDialog } from '@/components/ToolAdvancedConfigDialog';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 interface ActiveProfileCardProps {
   group: ProfileGroup;
   proxyRunning: boolean;
 }
 
-// 工具类型显示名称映射
-const TOOL_TYPE_LABELS: Record<ToolType, string> = {
-  Local: '本地',
-  WSL: 'WSL',
-  SSH: 'SSH',
-};
-
-// 工具类型 Badge 颜色
-const TOOL_TYPE_VARIANTS: Record<ToolType, 'default' | 'secondary' | 'outline'> = {
-  Local: 'default',
-  WSL: 'secondary',
-  SSH: 'outline',
+const TOOL_ICONS: Record<ToolType, any> = {
+  Local: Laptop,
+  WSL: Terminal,
+  SSH: Server,
 };
 
 export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProps) {
@@ -46,16 +52,12 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
   const [detailsExpanded, setDetailsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // 更新相关状态
   const [hasUpdate, setHasUpdate] = useState(false);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
-
-  // 高级配置 Dialog 状态
   const [advancedConfigOpen, setAdvancedConfigOpen] = useState(false);
 
-  // 加载工具实例
   useEffect(() => {
     const loadInstances = async () => {
       try {
@@ -63,8 +65,6 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
         const allInstances = await getToolInstances();
         const instances = allInstances[group.tool_id] || [];
         setToolInstances(instances);
-
-        // 默认选中 Local 实例（如果存在）
         const localInstance = instances.find((i) => i.tool_type === 'Local');
         if (localInstance) {
           setSelectedInstanceId(localInstance.instance_id);
@@ -77,334 +77,252 @@ export function ActiveProfileCard({ group, proxyRunning }: ActiveProfileCardProp
         setLoading(false);
       }
     };
-
     loadInstances();
   }, [group.tool_id]);
 
-  // 获取当前选中的实例
   const selectedInstance = toolInstances.find((i) => i.instance_id === selectedInstanceId);
 
-  // 处理实例切换
   const handleInstanceChange = (instanceId: string) => {
     setSelectedInstanceId(instanceId);
-    setHasUpdate(false); // 切换实例后重置更新状态
-    setLatestVersion(null); // 清除最新版本信息
+    setHasUpdate(false);
+    setLatestVersion(null);
   };
 
-  // 检测更新
   const handleCheckUpdate = async () => {
     if (!selectedInstance) return;
-
     try {
       setCheckingUpdate(true);
       const result = await checkUpdate(group.tool_id);
-
       if (result.has_update) {
         setHasUpdate(true);
         setLatestVersion(result.latest_version || null);
-        toast({
-          title: '发现新版本',
-          description: `${group.tool_name}: ${result.current_version || '未知'} → ${result.latest_version || '未知'}`,
-        });
+        toast({ title: '发现新版本', description: `v${result.latest_version}` });
       } else {
         setHasUpdate(false);
-        setLatestVersion(result.latest_version || null);
-        toast({
-          title: '已是最新版本',
-          description: `${group.tool_name} 当前版本: ${result.current_version || '未知'}`,
-        });
+        setLatestVersion(null);
+        toast({ title: '已是最新版本' });
       }
-    } catch (error) {
-      toast({
-        title: '检测失败',
-        description: error instanceof Error ? error.message : '检测更新失败',
-        variant: 'destructive',
-      });
+    } catch {
+      toast({ title: '检测失败', variant: 'destructive' });
     } finally {
       setCheckingUpdate(false);
     }
   };
 
-  // 执行更新
   const handleUpdate = async () => {
     if (!selectedInstance) return;
-
     try {
       setUpdating(true);
-      toast({
-        title: '正在更新',
-        description: `正在更新 ${group.tool_name}...`,
-      });
-
       const result = await updateToolInstance(selectedInstance.instance_id);
-
       if (result.success) {
         setHasUpdate(false);
-        toast({
-          title: '更新成功',
-          description: `${group.tool_name} 已更新到 ${result.latest_version || '最新版本'}`,
-        });
-
-        // 重新加载工具实例以获取新版本号
+        toast({ title: '更新成功' });
         const allInstances = await getToolInstances();
         const instances = allInstances[group.tool_id] || [];
         setToolInstances(instances);
       } else {
-        toast({
-          title: '更新失败',
-          description: result.message || '未知错误',
-          variant: 'destructive',
-        });
+        toast({ title: '更新失败', description: result.message, variant: 'destructive' });
       }
-    } catch (error) {
-      toast({
-        title: '更新失败',
-        description: error instanceof Error ? error.message : '更新失败',
-        variant: 'destructive',
-      });
+    } catch {
+      toast({ title: '更新失败', variant: 'destructive' });
     } finally {
       setUpdating(false);
     }
   };
 
   return (
-    <div
-      className={`p-4 rounded-lg border-2 mb-6 transition-all ${
-        activeProfile || proxyRunning
-          ? 'bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-300 dark:border-blue-700'
-          : 'bg-muted/30 border-border'
-      }`}
+    <Card
+      className={cn(
+        'mb-6 shadow-sm overflow-hidden border transition-colors',
+        proxyRunning
+          ? 'border-indigo-200/50 dark:border-indigo-800/50 bg-indigo-50/10'
+          : activeProfile
+            ? 'border-border bg-card'
+            : 'border-border bg-muted/5',
+      )}
     >
-      <div className="flex items-center justify-between">
-        {/* 左侧：状态信息 */}
-        <div className="flex items-center gap-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-semibold">{group.tool_name}</h4>
-              <Badge
-                variant={activeProfile || proxyRunning ? 'default' : 'destructive'}
-                className="text-xs"
-              >
-                {activeProfile
-                  ? proxyRunning
-                    ? '透明代理模式'
-                    : '激活中'
-                  : proxyRunning
-                    ? '透明代理模式'
-                    : '未激活'}
-              </Badge>
-              {(activeProfile || proxyRunning) && (
-                <>
-                  <Badge variant="outline" className="text-xs font-normal">
-                    {!proxyRunning ? `配置:${activeProfile?.name}` : '配置:透明代理'}
-                  </Badge>
-                  {hasUpdate && (
-                    <Badge variant="destructive" className="text-xs">
-                      有更新
-                    </Badge>
-                  )}
-                </>
+      <CardContent className="p-0">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:h-20">
+          {/* Left: Info Area */}
+          <div className="flex-1 p-4 lg:pl-6 flex items-center gap-4">
+            {/* Icon Box */}
+            <div
+              className={cn(
+                'w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm',
+                proxyRunning
+                  ? 'bg-indigo-50 border-indigo-100 text-indigo-600 dark:bg-indigo-950 dark:border-indigo-900 dark:text-indigo-400'
+                  : activeProfile
+                    ? 'bg-background border-border text-foreground'
+                    : 'bg-muted border-transparent text-muted-foreground',
+              )}
+            >
+              {proxyRunning ? (
+                <Zap className="w-5 h-5 fill-current" />
+              ) : (
+                <CheckCircle2 className="w-5 h-5 text-green-500" />
               )}
             </div>
-            <div className="flex items-center gap-2">
-              {selectedInstance?.version ? (
-                <>
-                  <Badge variant="outline" className="text-xs">
-                    当前版本：{selectedInstance.version}
-                  </Badge>
-                  {latestVersion && (
-                    <Badge variant="secondary" className="text-xs">
-                      最新版本：{latestVersion}
-                    </Badge>
-                  )}
-                </>
-              ) : (
-                <span className="text-xs text-muted-foreground">未检测到版本信息</span>
-              )}
+
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-lg leading-none tracking-tight">{group.tool_name}</h3>
+                {hasUpdate && (
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                {proxyRunning ? (
+                  <div className="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-medium">
+                    <span>透明代理模式</span>
+                  </div>
+                ) : activeProfile ? (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <span>当前配置:</span>
+                    <span className="font-medium text-foreground">{activeProfile.name}</span>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">未激活任何配置</span>
+                )}
+
+                {selectedInstance?.version && (
+                  <div className="hidden sm:flex items-center text-muted-foreground/60 text-xs">
+                    <span className="mx-2 h-3 w-px bg-border"></span>
+                    <span>v{selectedInstance.version}</span>
+                  </div>
+                )}
+
+                {hasUpdate && latestVersion && (
+                  <div className="hidden sm:flex items-center text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-950/30 px-1.5 py-0.5 rounded">
+                    New v{latestVersion}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* 右侧控制区域 */}
-        <div className="flex flex-col items-end gap-2">
-          {/* 第一行：工具实例选择器 + 详情按钮 */}
-          <div className="flex items-center gap-2">
-            {/* 工具实例选择器 */}
+          {/* Right: Controls Area */}
+          <div className="px-4 pb-4 lg:p-0 lg:pr-6 flex items-center gap-3 justify-end lg:border-l lg:border-border/40 lg:h-12 lg:pl-6">
+            {/* Instance Selector */}
             {!loading && toolInstances.length > 0 && (
-              <Select
-                value={selectedInstanceId || ''}
-                onValueChange={handleInstanceChange}
-                disabled={toolInstances.length === 0}
-              >
-                <SelectTrigger className="min-w-[13rem] h-8 bg-white/80 dark:bg-slate-900/80 [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:line-clamp-none [&>span]:overflow-visible">
-                  <SelectValue placeholder="选择工具实例" />
+              <Select value={selectedInstanceId || ''} onValueChange={handleInstanceChange}>
+                <SelectTrigger className="w-full lg:w-[180px] h-9 bg-background border-input shadow-sm hover:bg-accent/50 focus:ring-1">
+                  <SelectValue placeholder="选择实例" />
                 </SelectTrigger>
-                <SelectContent>
-                  {toolInstances.map((instance) => (
-                    <SelectItem key={instance.instance_id} value={instance.instance_id}>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={TOOL_TYPE_VARIANTS[instance.tool_type]} className="text-xs">
-                          {TOOL_TYPE_LABELS[instance.tool_type]}
-                        </Badge>
-                        <span>
-                          {instance.tool_type === 'WSL' && instance.wsl_distro
-                            ? instance.wsl_distro
-                            : instance.tool_type === 'SSH' && instance.ssh_config?.display_name
-                              ? instance.ssh_config.display_name
-                              : instance.tool_name}
-                        </span>
-                        {instance.version && (
-                          <span className="text-xs text-muted-foreground">v{instance.version}</span>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
+                <SelectContent align="end">
+                  {toolInstances.map((instance) => {
+                    const Icon = TOOL_ICONS[instance.tool_type];
+                    return (
+                      <SelectItem key={instance.instance_id} value={instance.instance_id}>
+                        <div className="flex items-center gap-2">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="truncate">
+                            {instance.tool_type === 'WSL'
+                              ? instance.wsl_distro
+                              : instance.tool_type === 'SSH'
+                                ? instance.ssh_config?.display_name
+                                : 'Local'}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             )}
 
-            {/* 详情展开/折叠按钮 */}
-            {activeProfile && (
+            {/* Actions */}
+            <div className="flex items-center gap-1">
               <Button
-                type="button"
                 variant="ghost"
-                size="sm"
-                onClick={() => setDetailsExpanded(!detailsExpanded)}
-                className="px-2"
-                title={detailsExpanded ? '收起详情' : '展开详情'}
+                size="icon"
+                className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                onClick={() => setAdvancedConfigOpen(true)}
+                title="高级配置"
               >
-                {detailsExpanded ? (
-                  <ChevronUp className="h-4 w-4" />
+                <Settings className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'h-9 w-9',
+                  hasUpdate
+                    ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={hasUpdate ? handleUpdate : handleCheckUpdate}
+                disabled={checkingUpdate || updating || !selectedInstance}
+                title={hasUpdate ? '立即更新' : '检查更新'}
+              >
+                {checkingUpdate || updating ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : hasUpdate ? (
+                  <Download className="w-4 h-4" />
                 ) : (
-                  <ChevronDown className="h-4 w-4" />
+                  <RefreshCw className="w-4 h-4" />
                 )}
               </Button>
-            )}
-          </div>
 
-          {/* 第二行：小按钮组 */}
-          <div className="flex items-center gap-2">
-            {/* 高级配置按钮 */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              title="高级配置"
-              onClick={() => setAdvancedConfigOpen(true)}
-            >
-              高级配置
-            </Button>
-
-            {/* 检测更新/立即更新按钮 */}
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={hasUpdate ? handleUpdate : handleCheckUpdate}
-              disabled={checkingUpdate || updating || !selectedInstance}
-            >
-              {checkingUpdate ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  检测中...
-                </>
-              ) : updating ? (
-                <>
-                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                  更新中...
-                </>
-              ) : hasUpdate ? (
-                '立即更新'
-              ) : (
-                '检测更新'
-              )}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* 配置详情 */}
-      {activeProfile ? (
-        <>
-          {/* 详细信息（可折叠） */}
-          {detailsExpanded && (
-            <div className="mt-4 pt-4 border-t border-border/50">
-              {proxyRunning ? (
-                <div className="text-center py-6 text-muted-foreground">
-                  <p className="text-sm">透明代理运行中</p>
-                  <p className="text-xs mt-1">配置详情已由透明代理接管</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <ConfigField label="API Key" value={activeProfile.api_key_preview} />
-                  <ConfigField label="Base URL" value={activeProfile.base_url} />
-                  <ConfigField
-                    label="来源"
-                    value={
-                      activeProfile.source.type === 'Custom'
-                        ? '自定义'
-                        : '从 ' + activeProfile.source.provider_name + ' 导入'
-                    }
-                  />
-                  {selectedInstance && (
-                    <>
-                      <ConfigField
-                        label="实例类型"
-                        value={TOOL_TYPE_LABELS[selectedInstance.tool_type]}
-                      />
-                      {selectedInstance.version && (
-                        <ConfigField label="版本" value={selectedInstance.version} />
-                      )}
-                      {selectedInstance.tool_type === 'WSL' && selectedInstance.wsl_distro && (
-                        <ConfigField label="WSL 发行版" value={selectedInstance.wsl_distro} />
-                      )}
-                      {selectedInstance.tool_type === 'SSH' && selectedInstance.ssh_config && (
-                        <>
-                          <ConfigField
-                            label="SSH 主机"
-                            value={`${selectedInstance.ssh_config.user}@${selectedInstance.ssh_config.host}:${selectedInstance.ssh_config.port}`}
-                          />
-                          <ConfigField
-                            label="显示名称"
-                            value={selectedInstance.ssh_config.display_name}
-                          />
-                        </>
-                      )}
-                    </>
+              {activeProfile && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                  onClick={() => setDetailsExpanded(!detailsExpanded)}
+                  title={detailsExpanded ? '收起详情' : '展开详情'}
+                >
+                  {detailsExpanded ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
                   )}
-                  {activeProfile.switched_at && (
-                    <div className="col-span-full pt-2 text-xs text-muted-foreground">
-                      最后切换: {new Date(activeProfile.switched_at).toLocaleString('zh-CN')}
-                    </div>
-                  )}
-                </div>
+                </Button>
               )}
             </div>
-          )}
-        </>
-      ) : null}
+          </div>
+        </div>
 
-      {/* 高级配置 Dialog */}
+        {/* Details Panel */}
+        {detailsExpanded && activeProfile && !proxyRunning && (
+          <>
+            <Separator />
+            <div className="bg-muted/10 px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-1">
+              <DetailItem label="API Key" value={activeProfile.api_key_preview} />
+              <DetailItem label="Base URL" value={activeProfile.base_url} />
+              <DetailItem
+                label="来源"
+                value={
+                  activeProfile.source.type === 'Custom'
+                    ? '自定义'
+                    : activeProfile.source.provider_name
+                }
+              />
+            </div>
+          </>
+        )}
+      </CardContent>
+
       <ToolAdvancedConfigDialog
         toolId={group.tool_id}
         open={advancedConfigOpen}
         onOpenChange={setAdvancedConfigOpen}
       />
-    </div>
+    </Card>
   );
 }
 
-// 配置字段显示组件（参考 ProxyControlBar 的 ProxyDetails）
-interface ConfigFieldProps {
-  label: string;
-  value: string;
-}
-
-function ConfigField({ label, value }: ConfigFieldProps) {
+function DetailItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <code className="block px-2 py-1 bg-muted rounded text-xs font-mono truncate">{value}</code>
+      <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/70">
+        {label}
+      </span>
+      <p className="text-sm font-medium text-foreground truncate" title={value}>
+        {value}
+      </p>
     </div>
   );
 }

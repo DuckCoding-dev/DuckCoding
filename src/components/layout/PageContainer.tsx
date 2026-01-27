@@ -1,18 +1,43 @@
 import { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
 
 interface PageContainerProps {
   children: ReactNode;
   className?: string;
+  header?: ReactNode;
+  title?: string;
+  description?: string;
+  actions?: ReactNode;
 }
 
 /**
- * 页面容器组件
- * 为所有页面提供统一的布局和样式
+ * Enhanced Page Container Component
+ * Provides a unified layout structure for all pages with optional header, title, and description.
  */
-export function PageContainer({ children, className = '' }: PageContainerProps) {
+export function PageContainer({
+  children,
+  className = '',
+  header,
+  title,
+  description,
+  actions,
+}: PageContainerProps) {
   return (
-    <div className={`p-8 ${className}`}>
-      <div className="max-w-6xl mx-auto">{children}</div>
+    <div className={cn('space-y-6 pb-8', className)}>
+      {/* Optional Standard Header Section */}
+      {(title || header || actions) && (
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1.5">
+            {title && <h1 className="text-2xl font-bold tracking-tight">{title}</h1>}
+            {description && <p className="text-sm text-muted-foreground">{description}</p>}
+            {header}
+          </div>
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="space-y-6">{children}</div>
     </div>
   );
 }

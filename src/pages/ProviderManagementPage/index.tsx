@@ -1,6 +1,5 @@
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table,
@@ -18,6 +17,8 @@ import { useProviderManagement } from './hooks/useProviderManagement';
 import { ProviderFormDialog } from './components/ProviderFormDialog';
 import { DeleteConfirmDialog } from './components/DeleteConfirmDialog';
 import { TokenManagementTab } from './components/TokenManagementTab';
+import { ProviderCard } from './components/ProviderCard';
+import { ViewToggle, ViewMode } from '@/components/common/ViewToggle';
 
 /**
  * 供应商管理页面
@@ -35,6 +36,7 @@ export function ProviderManagementPage() {
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<'providers' | 'tokens'>('providers');
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
 
   /**
    * 打开新增对话框
@@ -114,18 +116,25 @@ export function ProviderManagementPage() {
     setActiveTab('tokens');
   };
 
-  return (
-    <PageContainer>
-      <div className="space-y-4 rounded-lg border p-6">
-        {/* 顶部标题栏 */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Building2 className="h-5 w-5" />
-            <h3 className="text-lg font-semibold">供应商</h3>
-          </div>
-        </div>
-        <Separator />
+  const pageActions =
+    activeTab === 'providers' ? (
+      <div className="flex gap-2 items-center">
+        <ViewToggle mode={viewMode} onChange={setViewMode} />
+        <div className="h-6 w-px bg-border mx-1" />
+        <Button onClick={handleAdd} size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          新增供应商
+        </Button>
+      </div>
+    ) : null;
 
+  return (
+    <PageContainer
+      title="供应商管理"
+      description="管理所有 AI 服务供应商及其令牌信息"
+      actions={pageActions}
+    >
+      <div className="space-y-4">
         {/* Tabs 组件 */}
         <Tabs
           value={activeTab}
@@ -134,7 +143,7 @@ export function ProviderManagementPage() {
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="providers">
               <Building2 className="mr-2 h-4 w-4" />
-              供应商管理
+              供应商列表
             </TabsTrigger>
             <TabsTrigger value="tokens">
               <Coins className="mr-2 h-4 w-4" />
@@ -144,13 +153,6 @@ export function ProviderManagementPage() {
 
           {/* Tab 1: 供应商管理 */}
           <TabsContent value="providers" className="mt-4 space-y-4">
-            <div className="flex items-center justify-end">
-              <Button onClick={handleAdd} size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                新增供应商
-              </Button>
-            </div>
-
             {/* 错误提示 */}
             {error && (
               <div className="rounded-md border border-destructive bg-destructive/10 p-4">
@@ -168,6 +170,21 @@ export function ProviderManagementPage() {
               <div className="text-center py-8 text-muted-foreground">
                 <Building2 className="h-12 w-12 mx-auto mb-2 opacity-20" />
                 <p className="text-sm">暂无供应商，请点击「新增供应商」按钮添加</p>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {providers.map((provider) => (
+                  <ProviderCard
+                    key={provider.id}
+                    provider={provider}
+                    onEdit={handleEdit}
+                    onDelete={(p) => {
+                      setDeletingProvider(p);
+                      setDeleteDialogOpen(true);
+                    }}
+                    onViewTokens={handleViewTokens}
+                  />
+                ))}
               </div>
             ) : (
               <div className="rounded-md border max-h-[500px] overflow-auto">

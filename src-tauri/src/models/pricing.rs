@@ -21,6 +21,10 @@ pub struct ModelPrice {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_read_price_per_1m: Option<f64>,
 
+    /// 推理输出价格（USD/百万 Token，可选，如 OpenAI o1 系列）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_output_price_per_1m: Option<f64>,
+
     /// 货币类型（默认：USD）
     #[serde(default = "default_currency")]
     pub currency: String,
@@ -39,6 +43,7 @@ impl ModelPrice {
         output_price_per_1m: f64,
         cache_write_price_per_1m: Option<f64>,
         cache_read_price_per_1m: Option<f64>,
+        reasoning_output_price_per_1m: Option<f64>,
         aliases: Vec<String>,
     ) -> Self {
         Self {
@@ -47,6 +52,7 @@ impl ModelPrice {
             output_price_per_1m,
             cache_write_price_per_1m,
             cache_read_price_per_1m,
+            reasoning_output_price_per_1m,
             currency: default_currency(),
             aliases,
         }
@@ -168,26 +174,45 @@ impl PricingTemplate {
 /// 工具默认模板配置（存储在 default_templates.json）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefaultTemplatesConfig {
+    /// 配置版本号（用于自动迁移）
+    #[serde(default = "default_config_version")]
+    pub version: u32,
+
     /// 工具 -> 默认模板 ID 的映射
     ///
     /// 例如：
     /// ```json
     /// {
-    ///   "claude-code": "claude_official_2025_01",
-    ///   "codex": "claude_official_2025_01",
-    ///   "gemini-cli": "claude_official_2025_01"
+    ///   "version": 2,
+    ///   "claude-code": "builtin_claude",
+    ///   "codex": "builtin_openai",
+    ///   "gemini-cli": "builtin_claude"
     /// }
     /// ```
     #[serde(flatten)]
     pub tool_defaults: HashMap<String, String>,
 }
 
+/// 当前配置版本号
+const CURRENT_CONFIG_VERSION: u32 = 2;
+
+/// 默认配置版本号
+fn default_config_version() -> u32 {
+    1 // 旧配置默认为版本 1
+}
+
 impl DefaultTemplatesConfig {
-    /// 创建新的默认模板配置
+    /// 创建新的默认模板配置（使用最新版本）
     pub fn new() -> Self {
         Self {
+            version: CURRENT_CONFIG_VERSION,
             tool_defaults: HashMap::new(),
         }
+    }
+
+    /// 获取当前配置版本号
+    pub fn current_version() -> u32 {
+        CURRENT_CONFIG_VERSION
     }
 
     /// 获取工具的默认模板 ID
@@ -224,6 +249,7 @@ mod tests {
             15.0,
             Some(3.75),
             Some(0.3),
+            None, // No reasoning price
             vec![
                 "claude-sonnet-4.5".to_string(),
                 "claude-sonnet-4-5".to_string(),
@@ -258,7 +284,7 @@ mod tests {
         let mut custom_models = HashMap::new();
         custom_models.insert(
             "model1".to_string(),
-            ModelPrice::new("provider1".to_string(), 1.0, 2.0, None, None, vec![]),
+            ModelPrice::new("provider1".to_string(), 1.0, 2.0, None, None, None, vec![]),
         );
 
         let full_custom = PricingTemplate::new(

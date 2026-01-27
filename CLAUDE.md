@@ -228,6 +228,37 @@ last-updated: 2025-12-16
     - **GlobalConfig 清理**：删除 6 个废弃字段（`transparent_proxy_enabled`、`transparent_proxy_port`、`transparent_proxy_api_key`、`transparent_proxy_allow_public`、`transparent_proxy_real_api_key`、`transparent_proxy_real_base_url`）
     - **迁移逻辑**：`migrations/proxy_config.rs` 使用 `serde_json::Value` 手动操作 JSON，保持向后兼容
     - **代码质量**：遵循 DRY 原则，所有检查通过（Clippy + fmt + ESLint + Prettier），测试 199 通过
+  - **Codex 会话管理与计费系统（2026-01-18）**：
+    - **会话 ID 提取**：从请求体的 `prompt_cache_key` 字段提取（区别于 Claude 的 `metadata.user_id`）
+    - **SSE 事件结构**：
+      - `"type": "response.created"` → 提取 `response.id`（消息 ID）
+      - `"type": "response.completed"` → 提取完整 `response.usage`（所有 token 统计）
+    - **Token 字段映射**：
+      - `input_tokens` → input_tokens
+      - `input_tokens_details.cached_tokens` → cache_read_tokens
+      - `output_tokens` → output_tokens
+      - `output_tokens_details.reasoning_tokens` → 记录日志（暂不计费）
+      - `cache_creation_tokens` → 0（Codex 不报告缓存创建）
+    - **Tool Processor Pattern 架构（2026-01-18 重构）**：
+      - **核心理念**：每个工具独立实现 Token 提取逻辑，互不影响
+      - **三层架构**：
+        - `ToolProcessor` trait（位于 `services/token_stats/processor/mod.rs`）：定义提取接口，输出统一的 `TokenInfo`
+        - `TokenLogger` trait（位于 `services/token_stats/logger/mod.rs`）：封装 Processor + 成本计算，输出完整的 `TokenLog`
+        - `TokenStatsManager`（简化版）：仅负责批量写入数据库，单一职责
+      - **工具实现**：
+        - Claude: `ClaudeProcessor` + `ClaudeLogger`（支持 message_start/message_delta 事件，嵌套 cache_creation 对象）
+        - Codex: `CodexProcessor` + `CodexLogger`（支持 response.created/response.completed 事件，平铺 usage 结构）
+      - **扩展性**：添加新工具仅需实现两个 trait，工厂函数自动注册
+      - **优势**：工具逻辑完全隔离，Claude 和 Codex 互不影响，维护性和可测试性显著提高
+    - **会话模型增强**：
+      - `ProxySession::extract_display_id()` 支持多种格式：
+        - Claude 格式：`user_xxx_session_<uuid>` → 提取 UUID
+        - Codex 格式：`prompt_cache_key` → 使用前 12 字符
+      - `RequestLogContext` 根据 tool_id 自动选择提取逻辑
+    - **代码质量**：
+      - 新增 38 个测试（9 个 Processor 测试 + 10 个 Logger 测试 + 15 个数据库测试 + 4 个命令测试）
+      - 代码量减少：manager.rs 从 626 行减少到 286 行（-54%）
+      - 所有测试通过，编译 0 警告
   - **配置管理机制（2025-12-12）**：
     - 代理启动时自动创建内置 Profile（`dc_proxy_*`），通过 `ProfileManager` 切换配置
     - 内置 Profile 在 UI 中不可见（列表查询时过滤 `dc_proxy_` 前缀）
@@ -276,10 +307,20 @@ last-updated: 2025-12-16
   - **命令层**：新增 `analytics_commands.rs`、`token_stats_commands.rs`、`pricing_commands.rs`；支持趋势/成本汇总、日志分页查询、会话级统计
   - **配置扩展**：`ToolProxyConfig` 新增 `pricing_template_id`，Profile/会话配置支持覆盖价格模板
   - **前端页面**：`TokenStatisticsPage`（Dashboard + TrendsChart）、`SettingsPage` 新增 `TokenStatsTab` 与 `PricingTab`；统一分析 Hook `useAnalyticsStats` + 时间范围控制 `useTimeRangeControl`
+- **Token 统计扩展（2026-01-25）**：
+  - Codex 统计链路拆分为 `token_stats/processor/*` 与 `token_stats/logger/*`，支持基于 `prompt_cache_key` 的会话识别与 display_id
+  - 价格模板新增内置 OpenAI 官方模板与 Codex 机型定价，并提供默认模板迁移脚本
+- **Gemini 认证扩展（2026-01-25）**：
+  - 透明代理支持 `x-goog-api-key` 认证头，与 `authorization`/`x-api-key` 兼容
+  - `gemini_processor.rs` 新增完整鉴权单测覆盖
 - **透明代理页面重构（2026-01-14）**：
   - `TransparentProxyPage` 采用 Tab 驱动架构（`types/tab-types.ts`），支持主视图/会话详情双模式，URL 查询参数与 ViewState 双向同步
   - 主视图 Tabs：`SessionListTab` / `GlobalStatsTab` / `GlobalLogsTab`；会话详情 Tabs：`SessionStatsTab` / `SessionLogsTab` / `SessionSettingsTab`
   - 共享组件：`LogsTable`、`RealtimeStats`、`CustomTimeRangeDialog`；会话详情页隐藏代理控制栏，简化布局
+- **前端架构重构（2026-01-25）**：
+  - `AppContext` 统一管理全局状态（工具状态、配置、更新检查、导航等）
+  - `App.tsx` 拆分为 `AppContent`、`AppEventsHandler`、`ConfigWatchHandler`、`UpdateManager`、`OnboardingManager`，引入 `MainLayout` 统一布局
+  - 新增复用组件：`ViewToggle`、`BalanceTable`、`HelpDialog`、`ProfileTable`、`ProviderCard`、`TokenCard`、`ToolInstanceCard`
 - **余额监控页面（BalancePage）**：
   - 后端提供通用 `fetch_api` 命令（位于 `commands/api_commands.rs`），支持 GET/POST、自定义 headers、超时控制
   - 前端使用 JavaScript `Function` 构造器执行用户自定义的 extractor 脚本（位于 `utils/extractor.ts`）

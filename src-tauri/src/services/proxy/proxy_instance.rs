@@ -152,22 +152,23 @@ impl ProxyInstance {
                                 );
 
                                 // 记录连接层错误到数据库（无 session_id）
-                                let manager =
-                                    crate::services::token_stats::manager::TokenStatsManager::get();
                                 let error_detail = format!("连接处理失败: {:?}", e);
-                                let _ = manager
-                                    .log_failed_request(
-                                        &tool_id,
-                                        "connection_error", // 通用会话 ID
-                                        "global",
-                                        "unknown", // 无法获取客户端 IP
-                                        &[],       // 无请求体
-                                        "connection_error",
-                                        &error_detail,
-                                        "unknown", // 无法确定响应类型
-                                        None,      // 无响应时间
-                                    )
-                                    .await;
+                                if let Ok(logger) =
+                                    crate::services::token_stats::logger::create_logger(&tool_id)
+                                {
+                                    if let Ok(failed_log) = logger.log_failed_request(
+                                        &[],
+                                        "connection_error".to_string(),
+                                        "global".to_string(),
+                                        "unknown".to_string(),
+                                        None,
+                                        "connection_error".to_string(),
+                                        error_detail,
+                                    ) {
+                                        crate::services::token_stats::manager::TokenStatsManager::get()
+                                            .write_log(failed_log);
+                                    }
+                                }
                             }
                         }
                     }
@@ -273,10 +274,12 @@ async fn handle_request_inner(
     };
 
     // 验证本地 API Key
+    // 支持多种鉴权方式：authorization (Bearer), x-api-key, x-goog-api-key
     let auth_header = req
         .headers()
         .get("authorization")
         .or_else(|| req.headers().get("x-api-key"))
+        .or_else(|| req.headers().get("x-goog-api-key"))
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
