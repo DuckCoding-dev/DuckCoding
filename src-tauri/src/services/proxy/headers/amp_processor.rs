@@ -57,6 +57,18 @@ fn sanitize_brand_text(s: &str) -> String {
     BRAND_SANITIZE_RE.replace_all(s, "Claude Code").into_owned()
 }
 
+/// 统一 cache_control 为标准 5m ttl
+fn normalize_cache_control(item: &mut Value) {
+    if let Some(obj) = item.as_object_mut() {
+        if obj.contains_key("cache_control") {
+            obj.insert(
+                "cache_control".to_string(),
+                json!({ "type": "ephemeral", "ttl": "5m" }),
+            );
+        }
+    }
+}
+
 /// 最大响应体大小（5MB）
 const MAX_RESPONSE_SIZE: usize = 5 * 1024 * 1024;
 
@@ -218,10 +230,13 @@ impl AmpHeadersProcessor {
         // 0) system 文本清洗 + 注入 Claude Code 身份声明（对齐 JS 插件行为）
         // - 文本清洗：OpenCode/opencode/ampcode/amp-code/amp（不区分大小写）
         // - 注入：将声明插到 system 最前面
+        // - 统一 cache_control 为 5m
         if let Some(system) = json.get_mut("system") {
             match system {
                 serde_json::Value::Array(items) => {
                     for item in items.iter_mut() {
+                        normalize_cache_control(item);
+
                         if item.get("type").and_then(|t| t.as_str()) != Some("text") {
                             continue;
                         }
@@ -258,9 +273,11 @@ impl AmpHeadersProcessor {
             json["system"] = json!([{ "type": "text", "text": CLAUDE_CODE_PREAMBLE }]);
         }
 
-        // 1) tools[].name 加前缀
+        // 1) tools[].name 加前缀 + 统一 cache_control
         if let Some(tools) = json.get_mut("tools").and_then(|t| t.as_array_mut()) {
             for tool in tools.iter_mut() {
+                normalize_cache_control(tool);
+
                 if let Some(name) = tool.get("name").and_then(|n| n.as_str()) {
                     if !name.starts_with(TOOL_PREFIX) {
                         tool["name"] =
@@ -270,7 +287,7 @@ impl AmpHeadersProcessor {
             }
         }
 
-        // 2) messages[].content[] 里 type=="tool_use" 的 name 也要加前缀（保持幂等）
+        // 2) messages[].content[] 里 type=="tool_use" 的 name 也要加前缀 + 统一所有 content item 的 cache_control
         if let Some(messages) = json.get_mut("messages").and_then(|m| m.as_array_mut()) {
             for msg in messages.iter_mut() {
                 let Some(content) = msg.get_mut("content") else {
@@ -282,6 +299,8 @@ impl AmpHeadersProcessor {
                 };
 
                 for item in arr.iter_mut() {
+                    normalize_cache_control(item);
+
                     if item.get("type").and_then(|t| t.as_str()) != Some("tool_use") {
                         continue;
                     }
