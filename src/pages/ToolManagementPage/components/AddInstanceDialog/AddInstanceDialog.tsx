@@ -15,6 +15,7 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import type { SSHConfig } from '@/types/tool-management';
 import { listWslDistributions, addManualToolInstance } from '@/lib/tauri-commands';
 import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage } from '@/utils/error';
 import { useAddInstanceState } from './hooks/useAddInstanceState';
 import { useToolScanner } from './hooks/useToolScanner';
 import { useInstallerScanner } from './hooks/useInstallerScanner';
@@ -100,7 +101,7 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
     } catch (err) {
       toast({
         title: '加载WSL发行版失败',
-        description: String(err),
+        description: getErrorMessage(err),
         variant: 'destructive',
       });
       actions.setWslDistros([]);
@@ -156,7 +157,7 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
       toast({
         variant: 'destructive',
         title: '打开文件选择器失败',
-        description: String(error),
+        description: getErrorMessage(error),
       });
     }
   };
@@ -184,7 +185,7 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
       toast({
         variant: 'destructive',
         title: '打开文件选择器失败',
-        description: String(error),
+        description: getErrorMessage(error),
       });
     }
   };
@@ -291,7 +292,7 @@ export function AddInstanceDialog({ open, onClose, onAdd }: AddInstanceDialogPro
         toast({
           variant: 'destructive',
           title: '添加失败',
-          description: String(error),
+          description: getErrorMessage(error),
         });
       } finally {
         actions.setLoading(false);

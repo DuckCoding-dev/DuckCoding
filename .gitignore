@@ -54,3 +54,4 @@ mirror-server/
 /.claude/
 /src-tauri/NUL
 /docs
+.sisyphus

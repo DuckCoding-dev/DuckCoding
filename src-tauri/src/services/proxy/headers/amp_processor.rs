@@ -720,9 +720,9 @@ impl AmpHeadersProcessor {
                         let c = m.get("content")?;
                         if let Some(s) = c.as_str() {
                             Some(s.to_string())
-                        } else if let Some(arr) = c.as_array() {
+                        } else {
                             // 多模态内容：提取 text 类型
-                            Some(
+                            c.as_array().map(|arr| {
                                 arr.iter()
                                     .filter_map(|item| {
                                         if item.get("type")?.as_str()? == "text" {
@@ -732,10 +732,8 @@ impl AmpHeadersProcessor {
                                         }
                                     })
                                     .collect::<Vec<_>>()
-                                    .join(""),
-                            )
-                        } else {
-                            None
+                                    .join("")
+                            })
                         }
                     })
                     .collect::<Vec<_>>()

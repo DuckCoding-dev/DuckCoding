@@ -123,7 +123,7 @@ export interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ summary, loading = false }) => {
   if (loading) {
     return (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
           <div key={i} className="h-32 animate-pulse rounded-lg bg-gray-200 dark:bg-gray-700" />
         ))}
@@ -135,7 +135,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ summary, loading = false }
     summary.total_requests > 0 ? (summary.failed_requests / summary.total_requests) * 100 : 0;
 
   return (
-    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* 总成本 */}
       <MetricCard
         title="总成本"

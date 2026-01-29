@@ -134,7 +134,7 @@ export function SettingsPage() {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
+      <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
         <TabsList>
           <TabsTrigger value="basic" disabled={!!restrictToTab && restrictToTab !== 'basic'}>
             系统设置

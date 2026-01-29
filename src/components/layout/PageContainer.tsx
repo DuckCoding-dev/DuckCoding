@@ -23,12 +23,12 @@ export function PageContainer({
   actions,
 }: PageContainerProps) {
   return (
-    <div className={cn('space-y-6 pb-8', className)}>
+    <div className={cn('space-y-4 pb-6', className)}>
       {/* Optional Standard Header Section */}
       {(title || header || actions) && (
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1.5">
-            {title && <h1 className="text-2xl font-bold tracking-tight">{title}</h1>}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            {title && <h1 className="text-xl font-bold tracking-tight">{title}</h1>}
             {description && <p className="text-sm text-muted-foreground">{description}</p>}
             {header}
           </div>
@@ -37,7 +37,7 @@ export function PageContainer({
       )}
 
       {/* Main Content */}
-      <div className="space-y-6">{children}</div>
+      <div className="space-y-4">{children}</div>
     </div>
   );
 }

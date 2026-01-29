@@ -11,6 +11,7 @@ import {
 } from '@/lib/tauri-commands';
 import type { ToolInstance, SSHConfig } from '@/types/tool-management';
 import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage } from '@/utils/error';
 
 // 更新状态信息
 interface UpdateInfo {
@@ -44,7 +45,7 @@ export function useToolManagement() {
       setGroupedTools(tools);
       setInitialized(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '加载失败';
+      const message = getErrorMessage(err) || '加载失败';
       console.error('[useToolManagement] 加载失败:', message);
       setError(message);
       toast({
@@ -77,7 +78,7 @@ export function useToolManagement() {
     } catch (err) {
       toast({
         title: '刷新失败',
-        description: String(err),
+        description: getErrorMessage(err),
         variant: 'destructive',
       });
     } finally {
@@ -117,7 +118,7 @@ export function useToolManagement() {
       } catch (err) {
         toast({
           title: '添加失败',
-          description: String(err),
+          description: getErrorMessage(err),
           variant: 'destructive',
         });
       }
@@ -135,7 +136,7 @@ export function useToolManagement() {
       } catch (err) {
         toast({
           title: '删除失败',
-          description: String(err),
+          description: getErrorMessage(err),
           variant: 'destructive',
         });
       }
@@ -195,7 +196,7 @@ export function useToolManagement() {
       } catch (err) {
         toast({
           title: '检测失败',
-          description: String(err),
+          description: getErrorMessage(err),
           variant: 'destructive',
         });
       } finally {
@@ -249,7 +250,7 @@ export function useToolManagement() {
       } catch (err) {
         toast({
           title: '更新失败',
-          description: String(err),
+          description: getErrorMessage(err),
           variant: 'destructive',
         });
       } finally {

@@ -77,7 +77,20 @@ impl ToolInstanceDB {
     pub fn add_instance(&self, instance: &ToolInstance) -> Result<()> {
         let mut config = self.load_config()?;
 
-        // 查找对应的 ToolGroup
+        // 查找/创建对应的 ToolGroup（兼容旧 tools.json 缺少分组的情况）
+        if !config.tools.iter().any(|g| g.id == instance.base_id) {
+            tracing::warn!("tools.json 缺少工具分组 {}，将自动补齐", instance.base_id);
+            config
+                .tools
+                .push(crate::services::tool::tools_config::ToolGroup {
+                    id: instance.base_id.clone(),
+                    name: instance.tool_name.clone(),
+                    local_tools: vec![],
+                    wsl_tools: vec![],
+                    ssh_tools: vec![],
+                });
+        }
+
         let tool_group = config
             .tools
             .iter_mut()
@@ -140,7 +153,20 @@ impl ToolInstanceDB {
     pub fn update_instance(&self, instance: &ToolInstance) -> Result<()> {
         let mut config = self.load_config()?;
 
-        // 查找对应的 ToolGroup
+        // 查找/创建对应的 ToolGroup（避免旧数据导致更新失败）
+        if !config.tools.iter().any(|g| g.id == instance.base_id) {
+            tracing::warn!("tools.json 缺少工具分组 {}，将自动补齐", instance.base_id);
+            config
+                .tools
+                .push(crate::services::tool::tools_config::ToolGroup {
+                    id: instance.base_id.clone(),
+                    name: instance.tool_name.clone(),
+                    local_tools: vec![],
+                    wsl_tools: vec![],
+                    ssh_tools: vec![],
+                });
+        }
+
         let tool_group = config
             .tools
             .iter_mut()

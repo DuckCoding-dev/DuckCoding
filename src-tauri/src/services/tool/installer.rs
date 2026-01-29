@@ -76,17 +76,29 @@ impl InstallerService {
         instance: &ToolInstance,
         force: bool,
     ) -> Result<UpdateResult> {
-        // 1. 检查是否有安装器路径和安装方法
-        let installer_path = instance.installer_path.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("该实例未配置安装器路径，无法执行快捷更新。请手动更新或重新添加实例。")
-        })?;
-
+        // 1. 检查是否有安装方法
         let install_method = instance
             .install_method
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("该实例未配置安装方法，无法执行快捷更新"))?;
 
-        // 2. 根据安装方法构建更新命令
+        // 2. 不支持的安装方式：直接返回（避免误报“缺少安装器路径”）
+        match install_method {
+            InstallMethod::Official => {
+                anyhow::bail!("官方安装方式暂不支持快捷更新，请手动重新安装");
+            }
+            InstallMethod::Other => {
+                anyhow::bail!("「其他」类型不支持 APP 内快捷更新，请手动更新");
+            }
+            InstallMethod::Npm | InstallMethod::Brew => {}
+        }
+
+        // 3. Npm/Brew：需要安装器路径
+        let installer_path = instance.installer_path.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("该实例未配置安装器路径，无法执行快捷更新。请手动更新或重新添加实例。")
+        })?;
+
+        // 4. 根据安装方法构建更新命令
         let tool_obj = Tool::by_id(&instance.base_id).ok_or_else(|| anyhow::anyhow!("未知工具"))?;
 
         let update_cmd = match install_method {
@@ -102,11 +114,8 @@ impl InstallerService {
                 let tool_id = &instance.base_id;
                 format!("{} upgrade {}", installer_path, tool_id)
             }
-            InstallMethod::Official => {
-                anyhow::bail!("官方安装方式暂不支持快捷更新，请手动重新安装");
-            }
-            InstallMethod::Other => {
-                anyhow::bail!("「其他」类型不支持 APP 内快捷更新，请手动更新");
+            InstallMethod::Official | InstallMethod::Other => {
+                unreachable!("InstallMethod::Official/Other 已在前置 match 中提前返回")
             }
         };
 

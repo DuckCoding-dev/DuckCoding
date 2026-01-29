@@ -338,11 +338,11 @@ export function DashboardPage() {
             </Card>
           </div>
 
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* 工具状态 */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <h3 className="text-lg font-semibold tracking-tight">工具管理</h3>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {displayTools.map((tool) => (
                   <DashboardToolCard
                     key={tool.id}
@@ -365,7 +365,7 @@ export function DashboardPage() {
             </div>
 
             {/* 供应商与用量 */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold tracking-tight">供应商与用量统计</h3>
                 <Button
