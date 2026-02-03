@@ -141,7 +141,7 @@ export function ToolManagementPage() {
       {/* Tab 按工具切换 */}
       {!loadingProp && !dataLoading && !error && (
         <Tabs defaultValue="claude-code" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6 h-11 p-1 bg-muted/50 rounded-lg">
+          <TabsList className="grid w-full grid-cols-3 mb-4 h-9 p-1 bg-muted/50 rounded-lg">
             <TabsTrigger
               value="claude-code"
               className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all duration-200"

@@ -135,7 +135,7 @@ export function TransparentProxyPage({ selectedToolId: initialToolId }: Transpar
     >
       {/* 四工具 Tab 切换 */}
       <Tabs value={selectedToolId} onValueChange={(val) => setSelectedToolId(val as ToolId)}>
-        <TabsList className="grid w-full grid-cols-4 mb-6 h-11 p-1 bg-muted/50 rounded-lg">
+        <TabsList className="grid w-full grid-cols-4 mb-4 h-9 p-1 bg-muted/50 rounded-lg">
           {SUPPORTED_TOOLS.map((tool) => (
             <TabsTrigger
               key={tool.id}
@@ -181,7 +181,7 @@ export function TransparentProxyPage({ selectedToolId: initialToolId }: Transpar
                   value={viewState.mainTab}
                   onValueChange={(val) => setViewState({ ...viewState, mainTab: val as any })}
                 >
-                  <TabsList className="grid w-full grid-cols-3 mt-4">
+                  <TabsList className="grid w-full grid-cols-3 mt-3">
                     {MAIN_TABS.map((tab) => (
                       <TabsTrigger key={tab.id} value={tab.id}>
                         {tab.icon} {tab.label}

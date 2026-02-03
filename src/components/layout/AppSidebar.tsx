@@ -19,7 +19,7 @@ import {
 import DuckLogo from '@/assets/duck-logo.png';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useThemeHook';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,6 +68,9 @@ const navigationGroups = [
   },
 ];
 
+// 响应式折叠阈值
+const COLLAPSE_BREAKPOINT = 1024;
+
 export function AppSidebar({
   activeTab,
   onTabChange,
@@ -77,14 +80,52 @@ export function AppSidebar({
   const { toast } = useToast();
   const { actualTheme, setTheme } = useTheme();
 
+  // 用户是否手动操作过侧边栏（优先级高于自动折叠）
+  const [userHasInteracted, setUserHasInteracted] = useState(() => {
+    return localStorage.getItem('duckcoding-sidebar-user-interacted') === 'true';
+  });
+
   const [isCollapsed, setIsCollapsed] = useState(() => {
     const stored = localStorage.getItem('duckcoding-sidebar-collapsed');
+    // 如果用户没有手动操作过，根据窗口大小决定初始状态
+    if (!localStorage.getItem('duckcoding-sidebar-user-interacted')) {
+      return typeof window !== 'undefined' && window.innerWidth < COLLAPSE_BREAKPOINT;
+    }
     return stored === 'true';
   });
 
+  // 持久化折叠状态
   useEffect(() => {
     localStorage.setItem('duckcoding-sidebar-collapsed', String(isCollapsed));
   }, [isCollapsed]);
+
+  // 响应式自动折叠（仅在用户未手动操作时生效）
+  useEffect(() => {
+    if (userHasInteracted) return; // 用户手动操作过，不自动折叠
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const isSmallScreen = window.innerWidth < COLLAPSE_BREAKPOINT;
+        setIsCollapsed(isSmallScreen);
+      }, 150);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [userHasInteracted]);
+
+  // 手动切换折叠状态（标记用户已交互）
+  const handleToggleCollapse = useCallback(() => {
+    setIsCollapsed((prev) => !prev);
+    setUserHasInteracted(true);
+    localStorage.setItem('duckcoding-sidebar-user-interacted', 'true');
+  }, []);
 
   const handleTabChange = (tab: string) => {
     if (restrictNavigation) {
@@ -155,7 +196,7 @@ export function AppSidebar({
         className={cn(
           'flex flex-col border border-border/50 bg-card/50 backdrop-blur-xl shadow-sm transition-all duration-300 ease-in-out z-50',
           'my-3 ml-3 rounded-2xl',
-          isCollapsed ? 'w-[68px]' : 'w-64',
+          isCollapsed ? 'w-[68px]' : 'w-44',
         )}
       >
         {/* Logo Header */}
@@ -251,7 +292,7 @@ export function AppSidebar({
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 hover:bg-background/80 hover:text-primary transition-colors"
-                  onClick={() => setIsCollapsed(!isCollapsed)}
+                  onClick={handleToggleCollapse}
                 >
                   {isCollapsed ? (
                     <ChevronsRight className="h-4 w-4" />
