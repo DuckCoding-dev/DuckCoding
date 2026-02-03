@@ -1084,7 +1084,73 @@ impl RequestProcessor for AmpHeadersProcessor {
             }
             ApiType::Codex => {
                 let p = codex.ok_or_else(|| anyhow!("未配置 Codex Profile"))?;
-                tracing::info!("AMP Code → Codex: {}{}", p.base_url, llm_path);
+                let cleaned_body = if body.is_empty() {
+                    None
+                } else {
+                    match serde_json::from_slice::<Value>(body) {
+                        Ok(mut json_body) => {
+                            let mut modified = false;
+
+                            // 移除 max_output_tokens
+                            if json_body
+                                .as_object_mut()
+                                .and_then(|obj| obj.remove("max_output_tokens"))
+                                .is_some()
+                            {
+                                modified = true;
+                            }
+
+                            // 注入 instructions：从 input 数组中提取 role=system 的 content
+                            if let Some(obj) = json_body.as_object() {
+                                if let Some(input) = obj.get("input").and_then(|v| v.as_array()) {
+                                    let system_content: String = input
+                                        .iter()
+                                        .filter(|item| {
+                                            item.get("role")
+                                                .and_then(|r| r.as_str())
+                                                .map(|r| r == "system")
+                                                .unwrap_or(false)
+                                        })
+                                        .filter_map(|item| {
+                                            item.get("content").and_then(|c| c.as_str())
+                                        })
+                                        .collect::<Vec<_>>()
+                                        .join("\n\n");
+
+                                    if !system_content.is_empty() {
+                                        // 按顺序重建 JSON：model → instructions → 其他字段
+                                        let mut ordered = Map::new();
+                                        if let Some(model) = obj.get("model") {
+                                            ordered.insert("model".to_string(), model.clone());
+                                        }
+                                        ordered.insert(
+                                            "instructions".to_string(),
+                                            Value::String(system_content),
+                                        );
+                                        for (k, v) in obj.iter() {
+                                            if k != "model" && k != "instructions" {
+                                                ordered.insert(k.clone(), v.clone());
+                                            }
+                                        }
+                                        json_body = Value::Object(ordered);
+                                        modified = true;
+                                        tracing::debug!(
+                                            "AMP Code Codex: 注入 instructions（来自 input system）"
+                                        );
+                                    }
+                                }
+                            }
+
+                            if modified {
+                                serde_json::to_vec(&json_body).ok()
+                            } else {
+                                None
+                            }
+                        }
+                        Err(_) => None,
+                    }
+                };
+                let body_to_forward: &[u8] = cleaned_body.as_deref().unwrap_or(body);
                 let mut result = CodexHeadersProcessor
                     .process_outgoing_request(
                         &p.base_url,
@@ -1092,9 +1158,14 @@ impl RequestProcessor for AmpHeadersProcessor {
                         &llm_path,
                         query,
                         original_headers,
-                        body,
+                        body_to_forward,
                     )
                     .await?;
+                if cleaned_body.is_some() {
+                    result.headers.remove("content-length");
+                    result.headers.remove("transfer-encoding");
+                }
+                tracing::info!("AMP Code → Codex: {}", result.target_url);
                 result.headers.insert(
                     "user-agent",
                     Self::get_user_agent(api_type, path, body).parse().unwrap(),
