@@ -1100,24 +1100,32 @@ impl RequestProcessor for AmpHeadersProcessor {
                                 modified = true;
                             }
 
-                            // 注入 instructions：从 input 数组中提取 role=system 的 content
+                            // 注入 instructions：从 input 数组中提取 role=system 的 content（含空字符串）
                             if let Some(obj) = json_body.as_object() {
                                 if let Some(input) = obj.get("input").and_then(|v| v.as_array()) {
-                                    let system_content: String = input
-                                        .iter()
-                                        .filter(|item| {
-                                            item.get("role")
-                                                .and_then(|r| r.as_str())
-                                                .map(|r| r == "system")
-                                                .unwrap_or(false)
-                                        })
-                                        .filter_map(|item| {
-                                            item.get("content").and_then(|c| c.as_str())
-                                        })
-                                        .collect::<Vec<_>>()
-                                        .join("\n\n");
+                                    // 检查是否存在 role=system 的消息
+                                    let has_system = input.iter().any(|item| {
+                                        item.get("role")
+                                            .and_then(|r| r.as_str())
+                                            .map(|r| r == "system")
+                                            .unwrap_or(false)
+                                    });
 
-                                    if !system_content.is_empty() {
+                                    if has_system {
+                                        let system_content: String = input
+                                            .iter()
+                                            .filter(|item| {
+                                                item.get("role")
+                                                    .and_then(|r| r.as_str())
+                                                    .map(|r| r == "system")
+                                                    .unwrap_or(false)
+                                            })
+                                            .filter_map(|item| {
+                                                item.get("content").and_then(|c| c.as_str())
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n\n");
+
                                         // 按顺序重建 JSON：model → instructions → 其他字段
                                         let mut ordered = Map::new();
                                         if let Some(model) = obj.get("model") {
