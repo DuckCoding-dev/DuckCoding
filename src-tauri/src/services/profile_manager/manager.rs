@@ -845,6 +845,88 @@ impl ProfileManager {
     }
 }
 
+impl Default for ProfileManager {
+    fn default() -> Self {
+        Self::new().expect("创建 ProfileManager 失败")
+    }
+}
+
+// ==================== AMP Profile Selection ====================
+
+impl ProfileManager {
+    /// 获取 AMP Profile 选择的存储路径
+    fn amp_selection_path(&self) -> PathBuf {
+        self.profiles_path
+            .parent()
+            .unwrap()
+            .join("amp_selection.json")
+    }
+
+    /// 获取 AMP Profile 选择
+    pub fn get_amp_selection(&self) -> Result<AmpProfileSelection> {
+        let path = self.amp_selection_path();
+        if !path.exists() {
+            return Ok(AmpProfileSelection::default());
+        }
+        let value = self.data_manager.json().read(&path)?;
+        serde_json::from_value(value).context("反序列化 AmpProfileSelection 失败")
+    }
+
+    /// 保存 AMP Profile 选择
+    pub fn save_amp_selection(&self, selection: &AmpProfileSelection) -> Result<()> {
+        let path = self.amp_selection_path();
+
+        // 验证引用的 profile 存在
+        let store = self.load_profiles_store()?;
+
+        if let Some(ref claude) = selection.claude {
+            if !store.claude_code.contains_key(&claude.profile_name) {
+                return Err(anyhow!("Claude Profile 不存在: {}", claude.profile_name));
+            }
+        }
+
+        if let Some(ref codex) = selection.codex {
+            if !store.codex.contains_key(&codex.profile_name) {
+                return Err(anyhow!("Codex Profile 不存在: {}", codex.profile_name));
+            }
+        }
+
+        if let Some(ref gemini) = selection.gemini {
+            if !store.gemini_cli.contains_key(&gemini.profile_name) {
+                return Err(anyhow!("Gemini Profile 不存在: {}", gemini.profile_name));
+            }
+        }
+
+        let value = serde_json::to_value(selection)?;
+        self.data_manager.json().write(&path, &value)?;
+        Ok(())
+    }
+
+    /// 解析 AMP Profile 选择，返回实际的 Profile 数据
+    pub fn resolve_amp_selection(
+        &self,
+    ) -> Result<(
+        Option<ClaudeProfile>,
+        Option<CodexProfile>,
+        Option<GeminiProfile>,
+    )> {
+        let selection = self.get_amp_selection()?;
+        let store = self.load_profiles_store()?;
+
+        let claude = selection
+            .claude
+            .and_then(|r| store.claude_code.get(&r.profile_name).cloned());
+        let codex = selection
+            .codex
+            .and_then(|r| store.codex.get(&r.profile_name).cloned());
+        let gemini = selection
+            .gemini
+            .and_then(|r| store.gemini_cli.get(&r.profile_name).cloned());
+
+        Ok((claude, codex, gemini))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1018,87 +1100,5 @@ mod tests {
         );
 
         Ok(())
-    }
-}
-
-impl Default for ProfileManager {
-    fn default() -> Self {
-        Self::new().expect("创建 ProfileManager 失败")
-    }
-}
-
-// ==================== AMP Profile Selection ====================
-
-impl ProfileManager {
-    /// 获取 AMP Profile 选择的存储路径
-    fn amp_selection_path(&self) -> PathBuf {
-        self.profiles_path
-            .parent()
-            .unwrap()
-            .join("amp_selection.json")
-    }
-
-    /// 获取 AMP Profile 选择
-    pub fn get_amp_selection(&self) -> Result<AmpProfileSelection> {
-        let path = self.amp_selection_path();
-        if !path.exists() {
-            return Ok(AmpProfileSelection::default());
-        }
-        let value = self.data_manager.json().read(&path)?;
-        serde_json::from_value(value).context("反序列化 AmpProfileSelection 失败")
-    }
-
-    /// 保存 AMP Profile 选择
-    pub fn save_amp_selection(&self, selection: &AmpProfileSelection) -> Result<()> {
-        let path = self.amp_selection_path();
-
-        // 验证引用的 profile 存在
-        let store = self.load_profiles_store()?;
-
-        if let Some(ref claude) = selection.claude {
-            if !store.claude_code.contains_key(&claude.profile_name) {
-                return Err(anyhow!("Claude Profile 不存在: {}", claude.profile_name));
-            }
-        }
-
-        if let Some(ref codex) = selection.codex {
-            if !store.codex.contains_key(&codex.profile_name) {
-                return Err(anyhow!("Codex Profile 不存在: {}", codex.profile_name));
-            }
-        }
-
-        if let Some(ref gemini) = selection.gemini {
-            if !store.gemini_cli.contains_key(&gemini.profile_name) {
-                return Err(anyhow!("Gemini Profile 不存在: {}", gemini.profile_name));
-            }
-        }
-
-        let value = serde_json::to_value(selection)?;
-        self.data_manager.json().write(&path, &value)?;
-        Ok(())
-    }
-
-    /// 解析 AMP Profile 选择，返回实际的 Profile 数据
-    pub fn resolve_amp_selection(
-        &self,
-    ) -> Result<(
-        Option<ClaudeProfile>,
-        Option<CodexProfile>,
-        Option<GeminiProfile>,
-    )> {
-        let selection = self.get_amp_selection()?;
-        let store = self.load_profiles_store()?;
-
-        let claude = selection
-            .claude
-            .and_then(|r| store.claude_code.get(&r.profile_name).cloned());
-        let codex = selection
-            .codex
-            .and_then(|r| store.codex.get(&r.profile_name).cloned());
-        let gemini = selection
-            .gemini
-            .and_then(|r| store.gemini_cli.get(&r.profile_name).cloned());
-
-        Ok((claude, codex, gemini))
     }
 }
