@@ -173,12 +173,14 @@ impl ProfileManager {
 
     pub fn list_claude_profiles(&self) -> Result<Vec<String>> {
         let store = self.load_profiles_store()?;
-        Ok(store
+        let mut names: Vec<String> = store
             .claude_code
             .keys()
             .filter(|name| !name.starts_with(RESERVED_PREFIX))
             .cloned()
-            .collect())
+            .collect();
+        names.sort();
+        Ok(names)
     }
 
     // ==================== Codex ====================
@@ -274,12 +276,14 @@ impl ProfileManager {
 
     pub fn list_codex_profiles(&self) -> Result<Vec<String>> {
         let store = self.load_profiles_store()?;
-        Ok(store
+        let mut names: Vec<String> = store
             .codex
             .keys()
             .filter(|name| !name.starts_with(RESERVED_PREFIX))
             .cloned()
-            .collect())
+            .collect();
+        names.sort();
+        Ok(names)
     }
 
     // ==================== Gemini CLI ====================
@@ -377,12 +381,14 @@ impl ProfileManager {
 
     pub fn list_gemini_profiles(&self) -> Result<Vec<String>> {
         let store = self.load_profiles_store()?;
-        Ok(store
+        let mut names: Vec<String> = store
             .gemini_cli
             .keys()
             .filter(|name| !name.starts_with(RESERVED_PREFIX))
             .cloned()
-            .collect())
+            .collect();
+        names.sort();
+        Ok(names)
     }
 
     // ==================== 通用列表 ====================
@@ -418,6 +424,26 @@ impl ProfileManager {
             }
             descriptors.push(ProfileDescriptor::from_gemini(name, profile, active_gemini));
         }
+
+        // HashMap 遍历顺序不稳定：这里做显式排序，保证前端展示稳定
+        fn tool_rank(tool_id: &str) -> u8 {
+            match tool_id {
+                "claude-code" => 0,
+                "codex" => 1,
+                "gemini-cli" => 2,
+                _ => 99,
+            }
+        }
+
+        descriptors.sort_by(|a, b| {
+            tool_rank(&a.tool_id)
+                .cmp(&tool_rank(&b.tool_id))
+                // 同工具内：激活的 Profile 置顶
+                .then_with(|| b.is_active.cmp(&a.is_active))
+                // 其余按创建时间倒序（新建的更靠前），再按名称稳定排序
+                .then_with(|| b.created_at.cmp(&a.created_at))
+                .then_with(|| a.name.cmp(&b.name))
+        });
 
         Ok(descriptors)
     }
@@ -816,6 +842,182 @@ impl ProfileManager {
         Ok(active_store
             .get_active(tool_id)
             .and_then(|a| a.native_snapshot.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::TimeZone;
+    use tempfile::TempDir;
+
+    fn test_manager(temp_dir: &TempDir) -> ProfileManager {
+        ProfileManager {
+            data_manager: DataManager::new(),
+            profiles_path: temp_dir.path().join("profiles.json"),
+            active_path: temp_dir.path().join("active.json"),
+        }
+    }
+
+    #[test]
+    fn test_list_profiles_sorted_and_filters_reserved() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = test_manager(&temp_dir);
+
+        let mut store = ProfilesStore::new();
+        let created_at = Utc.timestamp_opt(1, 0).single().unwrap();
+        let updated_at = created_at;
+
+        store.claude_code.insert(
+            "b".to_string(),
+            ClaudeProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                source: ProfileSource::Custom,
+                created_at,
+                updated_at,
+                raw_settings: None,
+                raw_config_json: None,
+                pricing_template_id: None,
+            },
+        );
+        store.claude_code.insert(
+            "a".to_string(),
+            ClaudeProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                source: ProfileSource::Custom,
+                created_at,
+                updated_at,
+                raw_settings: None,
+                raw_config_json: None,
+                pricing_template_id: None,
+            },
+        );
+        store.claude_code.insert(
+            "dc_proxy_internal".to_string(),
+            ClaudeProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                source: ProfileSource::Custom,
+                created_at,
+                updated_at,
+                raw_settings: None,
+                raw_config_json: None,
+                pricing_template_id: None,
+            },
+        );
+
+        manager.save_profiles_store(&store)?;
+
+        let names = manager.list_claude_profiles()?;
+        assert_eq!(names, vec!["a".to_string(), "b".to_string()]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_list_all_descriptors_sorted_stable() -> Result<()> {
+        let temp_dir = TempDir::new().unwrap();
+        let manager = test_manager(&temp_dir);
+
+        let mut store = ProfilesStore::new();
+
+        let t1 = Utc.timestamp_opt(1, 0).single().unwrap();
+        let t2 = Utc.timestamp_opt(2, 0).single().unwrap();
+        let t3 = Utc.timestamp_opt(3, 0).single().unwrap();
+
+        // 同工具内：激活置顶，其他按 created_at 倒序
+        store.claude_code.insert(
+            "p_middle".to_string(),
+            ClaudeProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                source: ProfileSource::Custom,
+                created_at: t2,
+                updated_at: t2,
+                raw_settings: None,
+                raw_config_json: None,
+                pricing_template_id: None,
+            },
+        );
+        store.claude_code.insert(
+            "p_new".to_string(),
+            ClaudeProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                source: ProfileSource::Custom,
+                created_at: t3,
+                updated_at: t3,
+                raw_settings: None,
+                raw_config_json: None,
+                pricing_template_id: None,
+            },
+        );
+        store.claude_code.insert(
+            "p_active_old".to_string(),
+            ClaudeProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                source: ProfileSource::Custom,
+                created_at: t1,
+                updated_at: t1,
+                raw_settings: None,
+                raw_config_json: None,
+                pricing_template_id: None,
+            },
+        );
+
+        // 其他工具插入一个，验证 tool_id rank 的稳定性（claude -> codex -> gemini）
+        store.codex.insert(
+            "codex_one".to_string(),
+            CodexProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                wire_api: "responses".to_string(),
+                source: ProfileSource::Custom,
+                created_at: t2,
+                updated_at: t2,
+                raw_config_toml: None,
+                raw_auth_json: None,
+                pricing_template_id: None,
+            },
+        );
+        store.gemini_cli.insert(
+            "gemini_one".to_string(),
+            GeminiProfile {
+                api_key: "k".to_string(),
+                base_url: "u".to_string(),
+                model: None,
+                source: ProfileSource::Custom,
+                created_at: t2,
+                updated_at: t2,
+                raw_settings: None,
+                raw_env: None,
+                pricing_template_id: None,
+            },
+        );
+
+        manager.save_profiles_store(&store)?;
+
+        let mut active = ActiveStore::new();
+        active.set_active("claude-code", "p_active_old".to_string());
+        manager.save_active_store(&active)?;
+
+        let descriptors = manager.list_all_descriptors()?;
+        let names: Vec<String> = descriptors.iter().map(|d| d.name.clone()).collect();
+
+        assert_eq!(
+            names,
+            vec![
+                "p_active_old".to_string(),
+                "p_new".to_string(),
+                "p_middle".to_string(),
+                "codex_one".to_string(),
+                "gemini_one".to_string()
+            ]
+        );
+
+        Ok(())
     }
 }
 
