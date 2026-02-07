@@ -134,7 +134,8 @@ impl AmpHeadersProcessor {
             return api_type;
         }
 
-        ApiType::Claude
+        // 无法识别的路径转发到 ampcode.com
+        ApiType::AmpInternal
     }
 
     fn detect_by_model(body: &[u8]) -> Option<ApiType> {

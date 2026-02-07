@@ -419,7 +419,16 @@ async fn handle_request_inner(
                 .unwrap_or_else(|| "default".to_string());
             let proxy_pricing_template_id_clone = proxy_config.pricing_template_id.clone();
             let request_body_clone = processed.body.clone();
-            let error_msg = e.to_string();
+            // 展开完整错误链（reqwest 的 source chain 包含底层原因如 DNS/TLS/超时等）
+            let error_msg = {
+                let mut msg = e.to_string();
+                let mut source = std::error::Error::source(&e);
+                while let Some(cause) = source {
+                    msg.push_str(&format!(" → {}", cause));
+                    source = std::error::Error::source(cause);
+                }
+                msg
+            };
 
             // 从请求体中判断是否为流式请求
             let is_sse = serde_json::from_slice::<serde_json::Value>(&processed.body)
