@@ -292,7 +292,21 @@ impl AmpHeadersProcessor {
             }
         }
 
-        // 2) messages[].content[] 里 type=="tool_use" 的 name 也要加前缀 + 统一所有 content item 的 cache_control
+        // 2) tool_choice.name 加前缀（与 tools[].name 保持一致）
+        if let Some(tc) = json.get_mut("tool_choice").and_then(|v| v.as_object_mut()) {
+            if tc.get("type").and_then(|t| t.as_str()) == Some("tool") {
+                if let Some(name) = tc.get("name").and_then(|n| n.as_str()) {
+                    if !name.starts_with(TOOL_PREFIX) {
+                        tc.insert(
+                            "name".to_string(),
+                            serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name)),
+                        );
+                    }
+                }
+            }
+        }
+
+        // 3) messages[].content[] 里 type=="tool_use" 的 name 也要加前缀 + 统一所有 content item 的 cache_control
         if let Some(messages) = json.get_mut("messages").and_then(|m| m.as_array_mut()) {
             for msg in messages.iter_mut() {
                 let Some(content) = msg.get_mut("content") else {
