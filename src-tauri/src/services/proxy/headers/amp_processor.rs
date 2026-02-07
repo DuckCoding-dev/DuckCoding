@@ -250,15 +250,19 @@ impl AmpHeadersProcessor {
                         }
                     }
 
-                    let already_prefixed = items
-                        .first()
-                        .and_then(|v| v.get("type").and_then(|t| t.as_str()))
-                        == Some("text")
-                        && items
-                            .first()
-                            .and_then(|v| v.get("text").and_then(|t| t.as_str()))
-                            == Some(CLAUDE_CODE_PREAMBLE);
-                    if !already_prefixed {
+                    let first_text = items
+                        .iter_mut()
+                        .find(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"));
+                    if let Some(item) = first_text {
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            if !text.starts_with(CLAUDE_CODE_PREAMBLE) {
+                                item["text"] = serde_json::Value::String(format!(
+                                    "{}{}",
+                                    CLAUDE_CODE_PREAMBLE, text
+                                ));
+                            }
+                        }
+                    } else {
                         items.insert(0, json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }));
                     }
                 }
