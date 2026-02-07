@@ -1,7 +1,7 @@
 // AMP Code 请求处理器
 //
 // 路由逻辑：
-// 0. 本地工具拦截：webSearch2 / extractWebPageContent → 本地处理
+// 0. 工具拦截：webSearch2 / extractWebPageContent → 远程免费层优先，失败降级本地处理
 // 1. /api/provider/anthropic/* → Claude Profile（提取 /v1/messages）
 // 2. /api/provider/openai/* → Codex Profile（提取 /v1/responses 或 /v1/chat/completions）
 // 3. /api/provider/google/* → Gemini Profile（提取 /v1beta/...）
@@ -34,6 +34,10 @@ static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
         .redirect(Policy::none()) // 禁止重定向，防止 SSRF 绕过
         .build()
         .expect("Failed to create HTTP client")
+});
+
+static IS_FREE_TIER_RE: Lazy<regex::Regex> = Lazy::new(|| {
+    regex::Regex::new(r#""isFreeTierRequest"\s*:\s*false"#).expect("isFreeTierRequest 正则非法")
 });
 
 static MCP_NAME_PREFIX_RE: Lazy<regex::Regex> = Lazy::new(|| {
@@ -345,23 +349,159 @@ impl AmpHeadersProcessor {
             None => format!("{}{}", base_url, path),
         };
 
-        tracing::info!("AMP Code → ampcode.com: {}", target_url);
+        tracing::debug!("AMP Code → ampcode.com: {}", target_url);
 
         let mut new_headers = headers.clone();
         new_headers.remove(hyper::header::AUTHORIZATION);
-        let x_api_key = hyper::header::HeaderName::from_static("x-api-key");
-        new_headers.remove(&x_api_key);
+        // 移除 accept-encoding，让 reqwest 自动解压响应体
+        // 否则 strip_mcp_name_prefix_bytes 会对压缩数据执行 from_utf8_lossy 导致损坏
+        new_headers.remove(hyper::header::ACCEPT_ENCODING);
         new_headers.insert(
             hyper::header::AUTHORIZATION,
             format!("Bearer {}", token).parse().unwrap(),
         );
-        new_headers.insert(x_api_key, token.parse().unwrap());
 
         Ok(ProcessedRequest {
             target_url,
             headers: new_headers,
             body: body.to_vec().into(),
         })
+    }
+
+    /// 尝试通过 ampcode.com 远程执行工具（篡改 isFreeTierRequest → true）
+    /// 成功返回 dc-local:// 响应，失败返回 Err 供调用方降级
+    async fn try_remote_tool(
+        tool_name: &str,
+        path: &str,
+        query: Option<&str>,
+        headers: &HyperHeaderMap,
+        modified_body: &[u8],
+    ) -> Result<ProcessedRequest> {
+        let proxy_mgr = crate::services::proxy_config_manager::ProxyConfigManager::new()
+            .map_err(|e| anyhow!("ProxyConfigManager 初始化失败: {}", e))?;
+        let config = proxy_mgr
+            .get_config("amp-code")
+            .map_err(|e| anyhow!("读取配置失败: {}", e))?
+            .ok_or_else(|| anyhow!("AMP Code 代理未配置"))?;
+        let token = config
+            .real_api_key
+            .ok_or_else(|| anyhow!("AMP Code Access Token 未配置"))?;
+        let base_url = config
+            .real_base_url
+            .unwrap_or_else(|| "https://ampcode.com".to_string());
+
+        let target_url = match query {
+            Some(q) => format!("{}{}?{}", base_url, path, q),
+            None => format!("{}{}", base_url, path),
+        };
+
+        tracing::info!("AMP Code 远程工具 {} → {}", tool_name, target_url);
+
+        // 构建请求 headers（不设 accept-encoding，让 reqwest 自动解压）
+        let mut req_headers = reqwest::header::HeaderMap::new();
+        for (name, value) in headers.iter() {
+            let skip = name == hyper::header::AUTHORIZATION
+                || name == hyper::header::ACCEPT_ENCODING
+                || name == hyper::header::CONTENT_LENGTH
+                || name == hyper::header::HOST;
+            if skip {
+                continue;
+            }
+            if let (Ok(key), Ok(val)) = (
+                reqwest::header::HeaderName::from_bytes(name.as_str().as_bytes()),
+                reqwest::header::HeaderValue::from_bytes(value.as_bytes()),
+            ) {
+                req_headers.insert(key, val);
+            }
+        }
+        req_headers.insert(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", token).parse().unwrap(),
+        );
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| anyhow!("构建 HTTP client 失败: {}", e))?;
+
+        let response = client
+            .post(&target_url)
+            .headers(req_headers)
+            .body(modified_body.to_vec())
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(
+                    "远程工具请求详细错误: {:?}, is_timeout={}, is_connect={}, is_request={}",
+                    e,
+                    e.is_timeout(),
+                    e.is_connect(),
+                    e.is_request()
+                );
+                anyhow!("远程工具请求失败: {}", e)
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body_preview = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<读取失败>".to_string());
+            return Err(anyhow!(
+                "ampcode.com 返回 {}: {}",
+                status,
+                &body_preview[..body_preview.len().min(200)]
+            ));
+        }
+
+        let body_bytes = response
+            .bytes()
+            .await
+            .map_err(|e| anyhow!("读取响应体失败: {}", e))?;
+        tracing::debug!(
+            "AMP Code 远程工具 {} 响应 {} 字节: {}",
+            tool_name,
+            body_bytes.len(),
+            String::from_utf8_lossy(&body_bytes[..body_bytes.len().min(500)])
+        );
+
+        // 检测业务层错误（HTTP 200 但 ok:false，如 insufficient-credits）
+        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+            if json.get("ok") == Some(&serde_json::Value::Bool(false)) {
+                let code = json
+                    .pointer("/error/code")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                return Err(anyhow!("ampcode.com 业务错误: {}", code));
+            }
+        }
+
+        tracing::debug!(
+            "AMP Code 远程工具 {} 成功, {} 字节",
+            tool_name,
+            body_bytes.len()
+        );
+
+        let mut resp_headers = reqwest::header::HeaderMap::new();
+        resp_headers.insert("content-type", "application/json".parse().unwrap());
+
+        Ok(ProcessedRequest {
+            target_url: format!("dc-local://{}", tool_name),
+            headers: resp_headers,
+            body: body_bytes,
+        })
+    }
+
+    /// 检测是否为广告相关请求
+    fn is_ad_request(query: Option<&str>) -> bool {
+        const AD_ENDPOINTS: &[&str] = &[
+            "recordAdImpressionEnd",
+            "recordAdImpressionStart",
+            "getCurrentAd",
+        ];
+        let Some(q) = query else { return false };
+        q.split('&')
+            .any(|part| AD_ENDPOINTS.contains(&part.split('=').next().unwrap_or(part)))
     }
 
     /// 检测是否为本地工具请求（精确匹配，避免误判）
@@ -679,7 +819,7 @@ impl AmpHeadersProcessor {
         // SSRF 防护：使用 URL 解析进行精确校验
         Self::validate_url_security(target_url)?;
 
-        tracing::info!("本地网页提取: {}", target_url);
+        tracing::debug!("本地网页提取: {}", target_url);
 
         let resp = HTTP_CLIENT
             .get(target_url)
@@ -706,7 +846,7 @@ impl AmpHeadersProcessor {
             }
         });
 
-        tracing::info!("本地网页提取完成: {} bytes", html.len());
+        tracing::debug!("本地网页提取完成: {} bytes", html.len());
         Self::build_local_response("extractWebPageContent", response)
     }
 
@@ -947,11 +1087,35 @@ impl RequestProcessor for AmpHeadersProcessor {
         original_headers: &HyperHeaderMap,
         body: &[u8],
     ) -> Result<ProcessedRequest> {
-        // 0. 本地工具拦截：webSearch2 / extractWebPageContent
+        // 0. 工具拦截：webSearch2 / extractWebPageContent
+        //    篡改 isFreeTierRequest: false → true，转发到 ampcode.com（对齐 PR #622）
+        //    无 isFreeTierRequest 字段时降级本地处理
         if let Some(tool_name) = Self::detect_local_tool(query) {
-            tracing::info!("AMP Code 本地工具: {}", tool_name);
+            // 尝试篡改 isFreeTierRequest → true 并远程执行（对齐 PR #622）
+            let body_str = String::from_utf8_lossy(body);
+            if IS_FREE_TIER_RE.is_match(&body_str) {
+                let modified = IS_FREE_TIER_RE
+                    .replace_all(&body_str, r#""isFreeTierRequest":true"#)
+                    .into_owned();
+                match Self::try_remote_tool(
+                    tool_name,
+                    path,
+                    query,
+                    original_headers,
+                    modified.as_bytes(),
+                )
+                .await
+                {
+                    Ok(result) => return Ok(result),
+                    Err(e) => {
+                        tracing::warn!("AMP Code 远程工具 {} 失败: {}, 降级本地处理", tool_name, e);
+                        // fall through 到本地处理
+                    }
+                }
+            }
 
-            // 获取 Tavily API Key（如果配置了）
+            // 无 isFreeTierRequest 字段或远程失败 → 降级本地处理
+            tracing::info!("AMP Code 本地工具: {}", tool_name);
             let tavily_api_key = crate::services::proxy_config_manager::ProxyConfigManager::new()
                 .ok()
                 .and_then(|mgr| mgr.get_config("amp-code").ok().flatten())
@@ -964,6 +1128,11 @@ impl RequestProcessor for AmpHeadersProcessor {
         tracing::debug!("AMP Code 路由: path={}, type={:?}", path, api_type);
 
         if api_type == ApiType::AmpInternal {
+            // 拦截广告相关请求，返回空成功响应
+            if Self::is_ad_request(query) {
+                tracing::debug!("AMP Code 拦截广告请求: path={}, query={:?}", path, query);
+                return Self::build_local_response("ad-blocked", json!({ "ok": true }));
+            }
             return Self::forward_to_amp(path, query, original_headers, body).await;
         }
 

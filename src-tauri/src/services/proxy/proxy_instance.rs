@@ -362,10 +362,10 @@ async fn handle_request_inner(
 
     // 本地工具处理：dc-local:// 协议标记的请求直接返回 body
     if processed.target_url.starts_with("dc-local://") {
-        tracing::info!(
+        tracing::debug!(
             tool_id = %tool_id,
-            local_tool = %processed.target_url,
-            "本地工具响应"
+            source = %processed.target_url,
+            "直接返回预构建响应"
         );
         let mut response = Response::builder()
             .status(StatusCode::OK)
@@ -552,7 +552,7 @@ async fn handle_request_inner(
             // 等待流完全消费的信号(无超时,真正等待流结束)
             match stream_end_rx.await {
                 Ok(_) => {
-                    tracing::info!("✓ 收到 SSE 流完成信号,流已完全消费");
+                    tracing::debug!("✓ 收到 SSE 流完成信号,流已完全消费");
                 }
                 Err(_) => {
                     tracing::warn!("✗ 未收到 SSE 流完成信号(sender 被 drop),可能流被提前取消");
@@ -570,7 +570,7 @@ async fn handle_request_inner(
                 }
             };
 
-            tracing::info!(
+            tracing::debug!(
                 chunks_count = chunks.len(),
                 "开始处理 SSE chunks 进行 token 统计"
             );
