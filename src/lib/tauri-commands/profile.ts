@@ -111,3 +111,12 @@ export async function pmSaveAmpSelection(input: {
 }): Promise<void> {
   return invoke<void>('pm_save_amp_selection', { input });
 }
+
+// ==================== 菜单管理 ====================
+
+/**
+ * 刷新应用菜单栏（仅 macOS）
+ */
+export async function refreshAppMenu(): Promise<void> {
+  return invoke<void>('refresh_app_menu');
+}

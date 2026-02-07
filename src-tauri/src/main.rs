@@ -139,13 +139,19 @@ fn setup_app_hooks(app: &mut tauri::App) -> tauri::Result<()> {
     // 3. 启动配置监听
     start_config_watcher(app)?;
 
-    // 4. 创建系统托盘
+    // 4. 创建系统托盘（非 macOS 平台）
+    #[cfg(not(target_os = "macos"))]
     setup::tray::setup_system_tray(app)?;
 
     // 5. 处理窗口关闭事件
+    #[cfg(not(target_os = "macos"))]
     setup::tray::setup_window_close_handler(app)?;
 
-    // 6. 启动后检查更新
+    // 6. 创建应用菜单栏（仅 macOS）
+    #[cfg(target_os = "macos")]
+    setup::menu::setup_app_menu(app)?;
+
+    // 7. 启动后检查更新
     schedule_update_check(app.handle().clone());
 
     Ok(())
@@ -261,6 +267,7 @@ fn main() {
         migrate_balance_from_localstorage,
         // 窗口管理
         handle_close_action,
+        refresh_app_menu,
         // 代理调试
         get_current_proxy,
         apply_proxy_now,
