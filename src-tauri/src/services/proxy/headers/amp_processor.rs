@@ -61,8 +61,13 @@ fn sanitize_brand_text(s: &str) -> String {
     BRAND_SANITIZE_RE.replace_all(s, "Claude Code").into_owned()
 }
 
-/// 统一 cache_control 为标准 5m ttl
+/// 是否统一 cache_control 为标准 5m ttl
+const NORMALIZE_CACHE_CONTROL: bool = false;
+
 fn normalize_cache_control(item: &mut Value) {
+    if !NORMALIZE_CACHE_CONTROL {
+        return;
+    }
     if let Some(obj) = item.as_object_mut() {
         if obj.contains_key("cache_control") {
             obj.insert(
