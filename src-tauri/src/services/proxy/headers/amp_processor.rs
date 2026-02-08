@@ -41,7 +41,7 @@ static IS_FREE_TIER_RE: Lazy<regex::Regex> = Lazy::new(|| {
 });
 
 static MCP_NAME_PREFIX_RE: Lazy<regex::Regex> = Lazy::new(|| {
-    regex::Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).expect("mcp name 前缀正则非法")
+    regex::Regex::new(r#""name"\s*:\s*"mcp_([^_"][^"]*)""#).expect("mcp name 前缀正则非法")
 });
 
 static BRAND_SANITIZE_RE: Lazy<regex::Regex> = Lazy::new(|| {
@@ -222,6 +222,7 @@ impl AmpHeadersProcessor {
 
     fn add_tool_prefix(body: &[u8]) -> Vec<u8> {
         const TOOL_PREFIX: &str = "mcp_";
+        const MCP_TOOL_PREFIX: &str = "_";
 
         if body.is_empty() {
             return body.to_vec();
@@ -293,7 +294,7 @@ impl AmpHeadersProcessor {
                 normalize_cache_control(tool);
 
                 if let Some(name) = tool.get("name").and_then(|n| n.as_str()) {
-                    if !name.starts_with(TOOL_PREFIX) {
+                    if !name.starts_with(TOOL_PREFIX) && !name.starts_with(MCP_TOOL_PREFIX) {
                         tool["name"] =
                             serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name));
                     }
@@ -305,7 +306,7 @@ impl AmpHeadersProcessor {
         if let Some(tc) = json.get_mut("tool_choice").and_then(|v| v.as_object_mut()) {
             if tc.get("type").and_then(|t| t.as_str()) == Some("tool") {
                 if let Some(name) = tc.get("name").and_then(|n| n.as_str()) {
-                    if !name.starts_with(TOOL_PREFIX) {
+                    if !name.starts_with(TOOL_PREFIX) && !name.starts_with(MCP_TOOL_PREFIX) {
                         tc.insert(
                             "name".to_string(),
                             serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name)),
@@ -334,7 +335,7 @@ impl AmpHeadersProcessor {
                     }
 
                     if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
-                        if !name.starts_with(TOOL_PREFIX) {
+                        if !name.starts_with(TOOL_PREFIX) && !name.starts_with(MCP_TOOL_PREFIX) {
                             item["name"] =
                                 serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name));
                         }
