@@ -12,6 +12,7 @@ import {
   pmActivateProfile,
   pmCaptureFromNative,
   getAllProxyStatus,
+  refreshAppMenu,
   type AllProxyStatus,
 } from '@/lib/tauri-commands';
 import { TOOL_NAMES } from '@/types/profile';
@@ -83,6 +84,8 @@ export function useProfileManagement(): UseProfileManagementReturn {
   // 刷新
   const refresh = useCallback(async () => {
     await loadProfiles();
+    // 刷新 macOS 应用菜单栏
+    refreshAppMenu().catch((e) => console.debug('refreshAppMenu:', e));
   }, [loadProfiles]);
 
   // 加载所有透明代理状态

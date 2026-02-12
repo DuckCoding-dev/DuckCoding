@@ -122,11 +122,9 @@ pub async fn get_recommended_package_format(
     Ok(state.service.get_recommended_package_format())
 }
 
-/// 主动触发检查更新（供托盘菜单和启动时调用）
-#[tauri::command]
-pub async fn trigger_check_update(
-    app: AppHandle,
-    state: State<'_, UpdateServiceState>,
+pub(crate) async fn trigger_check_update_internal(
+    app: &AppHandle,
+    state: &UpdateServiceState,
 ) -> Result<(), String> {
     let update_info = state
         .service
@@ -144,4 +142,13 @@ pub async fn trigger_check_update(
     }
 
     Ok(())
+}
+
+/// 主动触发检查更新（供托盘菜单和启动时调用）
+#[tauri::command]
+pub async fn trigger_check_update(
+    app: AppHandle,
+    state: State<'_, UpdateServiceState>,
+) -> Result<(), String> {
+    trigger_check_update_internal(&app, &state).await
 }

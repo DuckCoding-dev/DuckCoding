@@ -26,9 +26,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 custom-scrollbar">
-          <div className="mx-auto max-w-7xl animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {children}
-          </div>
+          <div className="mx-auto max-w-7xl">{children}</div>
         </div>
       </main>
 
