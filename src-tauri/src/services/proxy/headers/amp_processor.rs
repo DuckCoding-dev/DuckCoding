@@ -256,20 +256,18 @@ impl AmpHeadersProcessor {
                         }
                     }
 
-                    let first_text = items
-                        .iter_mut()
-                        .find(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"));
-                    if let Some(item) = first_text {
-                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                            if !text.starts_with(CLAUDE_CODE_PREAMBLE) {
-                                item["text"] = serde_json::Value::String(format!(
-                                    "{}{}",
-                                    CLAUDE_CODE_PREAMBLE, text
-                                ));
-                            }
-                        }
-                    } else {
-                        items.insert(0, json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }));
+                    // 检查整个 system 数组中是否已有完全匹配的声明条目
+                    let already_has_preamble = items.iter().any(|item| {
+                        item.get("type").and_then(|t| t.as_str()) == Some("text")
+                            && item.get("text").and_then(|t| t.as_str())
+                                == Some(CLAUDE_CODE_PREAMBLE)
+                    });
+
+                    if !already_has_preamble {
+                        items.insert(
+                            0,
+                            json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }),
+                        );
                     }
                 }
                 serde_json::Value::String(s) => {
