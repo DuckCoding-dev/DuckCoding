@@ -204,6 +204,76 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
     )
 }
 
+/// 生成内置 Gemini 价格模板
+///
+/// 包含 Google Gemini 模型的定价
+pub fn builtin_gemini_official_template() -> PricingTemplate {
+    let mut custom_models = HashMap::new();
+
+    // Gemini 2.5 Pro: $1.25 input / $10 output (≤200k tokens)
+    custom_models.insert(
+        "gemini-2.5-pro".to_string(),
+        ModelPrice::new(
+            "google".to_string(),
+            1.25,
+            10.0,
+            None,
+            Some(0.3125), // Cache read: $0.3125/1M
+            Some(10.0),   // Reasoning (thinking) tokens
+            vec!["gemini-2.5-pro".to_string(), "gemini-2-5-pro".to_string()],
+        ),
+    );
+
+    // Gemini 2.5 Flash: $0.15 input / $0.60 output (≤200k tokens)
+    custom_models.insert(
+        "gemini-2.5-flash".to_string(),
+        ModelPrice::new(
+            "google".to_string(),
+            0.15,
+            0.6,
+            None,
+            Some(0.0375), // Cache read
+            Some(3.5),    // Thinking tokens
+            vec![
+                "gemini-2.5-flash".to_string(),
+                "gemini-2-5-flash".to_string(),
+            ],
+        ),
+    );
+
+    // Gemini 2.0 Flash: $0.10 input / $0.40 output
+    custom_models.insert(
+        "gemini-2.0-flash".to_string(),
+        ModelPrice::new(
+            "google".to_string(),
+            0.1,
+            0.4,
+            None,
+            Some(0.025), // Cache read
+            None,
+            vec![
+                "gemini-2.0-flash".to_string(),
+                "gemini-2-0-flash".to_string(),
+            ],
+        ),
+    );
+
+    PricingTemplate::new(
+        "builtin_gemini".to_string(),
+        "内置Gemini价格".to_string(),
+        "Google Gemini 官方定价，包含主流 Gemini 模型".to_string(),
+        "1.0".to_string(),
+        vec![], // 内置模板不使用继承
+        custom_models,
+        vec![
+            "official".to_string(),
+            "gemini".to_string(),
+            "google".to_string(),
+        ],
+        true, // 标记为内置预设模板
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

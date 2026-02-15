@@ -264,10 +264,7 @@ impl AmpHeadersProcessor {
                     });
 
                     if !already_has_preamble {
-                        items.insert(
-                            0,
-                            json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }),
-                        );
+                        items.insert(0, json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }));
                     }
                 }
                 serde_json::Value::String(s) => {
@@ -1433,7 +1430,11 @@ impl RequestProcessor for AmpHeadersProcessor {
         // 根据请求体判断实际路由的 API 类型，用于正确提取 session_id 和选择 logger
         let inner_tool_id = if !request_body.is_empty() {
             if let Ok(json) = serde_json::from_slice::<serde_json::Value>(request_body) {
-                if json.get("prompt_cache_key").and_then(|v| v.as_str()).is_some() {
+                if json
+                    .get("prompt_cache_key")
+                    .and_then(|v| v.as_str())
+                    .is_some()
+                {
                     "codex"
                 } else {
                     "claude-code"

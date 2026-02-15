@@ -26,6 +26,7 @@ use reqwest::header::HeaderMap as ReqwestHeaderMap;
 pub struct CodexHeadersProcessor;
 
 impl CodexHeadersProcessor {
+    #[allow(clippy::too_many_arguments)]
     pub async fn process_outgoing_request_for(
         &self,
         caller_tool_id: &str,
@@ -166,7 +167,16 @@ impl RequestProcessor for CodexHeadersProcessor {
         original_headers: &HyperHeaderMap,
         body: &[u8],
     ) -> Result<ProcessedRequest> {
-        self.process_outgoing_request_for("codex", base_url, api_key, path, query, original_headers, body).await
+        self.process_outgoing_request_for(
+            "codex",
+            base_url,
+            api_key,
+            path,
+            query,
+            original_headers,
+            body,
+        )
+        .await
     }
 
     // Codex 当前不需要特殊的响应处理
