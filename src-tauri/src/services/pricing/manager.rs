@@ -1,8 +1,10 @@
 use crate::data::DataManager;
 use crate::models::pricing::{DefaultTemplatesConfig, ModelPrice, PricingTemplate};
 use crate::services::pricing::builtin::{
-    builtin_claude_official_template, builtin_openai_official_template,
+    builtin_claude_official_template, builtin_gemini_official_template,
+    builtin_openai_official_template,
 };
+use crate::services::pricing::remote_sync::RemoteSyncState;
 use crate::utils::precision::price_precision;
 use anyhow::{anyhow, Context, Result};
 use lazy_static::lazy_static;
@@ -115,12 +117,16 @@ impl PricingManager {
         let builtin_openai_template = builtin_openai_official_template();
         self.save_template(&builtin_openai_template)?;
 
+        // 保存内置 Gemini 官方模板
+        let builtin_gemini_template = builtin_gemini_official_template();
+        self.save_template(&builtin_gemini_template)?;
+
         // 初始化默认模板配置（如果不存在）
         if !self.default_templates_path.exists() {
             let mut config = DefaultTemplatesConfig::new();
             config.set_default("claude-code".to_string(), "builtin_claude".to_string());
             config.set_default("codex".to_string(), "builtin_openai".to_string());
-            config.set_default("gemini-cli".to_string(), "builtin_claude".to_string());
+            config.set_default("gemini-cli".to_string(), "builtin_gemini".to_string());
 
             let value = serde_json::to_value(&config)
                 .context("Failed to serialize default templates config")?;
@@ -250,6 +256,34 @@ impl PricingManager {
             .context("Failed to read default templates config")?;
 
         serde_json::from_value(value).context("Failed to parse default templates config")
+    }
+
+    /// 加载远程同步状态
+    pub fn load_sync_state(&self) -> Result<RemoteSyncState> {
+        let state_path = self.pricing_dir.join("remote_sync_state.json");
+        if !state_path.exists() {
+            return Ok(RemoteSyncState::default());
+        }
+
+        let value = self
+            .data_manager
+            .json()
+            .read(&state_path)
+            .context("Failed to read remote sync state")?;
+
+        serde_json::from_value(value).context("Failed to parse remote sync state")
+    }
+
+    /// 保存远程同步状态
+    pub fn save_sync_state(&self, state: &RemoteSyncState) -> Result<()> {
+        let state_path = self.pricing_dir.join("remote_sync_state.json");
+
+        let value = serde_json::to_value(state).context("Failed to serialize remote sync state")?;
+
+        self.data_manager
+            .json()
+            .write(&state_path, &value)
+            .context("Failed to write remote sync state")
     }
 
     /// 计算成本（核心方法）

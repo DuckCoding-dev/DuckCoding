@@ -256,19 +256,14 @@ impl AmpHeadersProcessor {
                         }
                     }
 
-                    let first_text = items
-                        .iter_mut()
-                        .find(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"));
-                    if let Some(item) = first_text {
-                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                            if !text.starts_with(CLAUDE_CODE_PREAMBLE) {
-                                item["text"] = serde_json::Value::String(format!(
-                                    "{}{}",
-                                    CLAUDE_CODE_PREAMBLE, text
-                                ));
-                            }
-                        }
-                    } else {
+                    // 检查整个 system 数组中是否已有完全匹配的声明条目
+                    let already_has_preamble = items.iter().any(|item| {
+                        item.get("type").and_then(|t| t.as_str()) == Some("text")
+                            && item.get("text").and_then(|t| t.as_str())
+                                == Some(CLAUDE_CODE_PREAMBLE)
+                    });
+
+                    if !already_has_preamble {
                         items.insert(0, json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }));
                     }
                 }
@@ -1207,7 +1202,8 @@ impl RequestProcessor for AmpHeadersProcessor {
                 };
 
                 let mut result = ClaudeHeadersProcessor
-                    .process_outgoing_request(
+                    .process_outgoing_request_for(
+                        "amp-code",
                         &p.base_url,
                         &p.api_key,
                         &llm_path,
@@ -1354,7 +1350,8 @@ impl RequestProcessor for AmpHeadersProcessor {
                 };
                 let body_to_forward: &[u8] = cleaned_body.as_deref().unwrap_or(body);
                 let mut result = CodexHeadersProcessor
-                    .process_outgoing_request(
+                    .process_outgoing_request_for(
+                        "amp-code",
                         &p.base_url,
                         &p.api_key,
                         &llm_path,
@@ -1395,5 +1392,76 @@ impl RequestProcessor for AmpHeadersProcessor {
             }
             ApiType::AmpInternal => unreachable!(),
         }
+    }
+
+    /// AMP Code 的请求日志记录实现
+    ///
+    /// 根据请求体格式判断实际路由的 API 类型，使用对应的 logger 解析 token，
+    /// 但 tool_id 记录为 "amp-code"
+    async fn record_request_log(
+        &self,
+        client_ip: &str,
+        config_name: &str,
+        proxy_pricing_template_id: Option<&str>,
+        request_body: &[u8],
+        response_status: u16,
+        response_body: &[u8],
+        is_sse: bool,
+        response_time_ms: Option<i64>,
+    ) -> Result<()> {
+        use crate::services::proxy::log_recorder::{
+            LogRecorder, RequestLogContext, ResponseParser,
+        };
+
+        // 仅记录 LLM 请求的日志，跳过 AmpInternal（/api/*）等非 LLM 请求
+        let is_llm_request = if !request_body.is_empty() {
+            serde_json::from_slice::<serde_json::Value>(request_body)
+                .ok()
+                .and_then(|json| json.get("model").and_then(|m| m.as_str()).map(|_| true))
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
+        if !is_llm_request {
+            return Ok(());
+        }
+
+        // 根据请求体判断实际路由的 API 类型，用于正确提取 session_id 和选择 logger
+        let inner_tool_id = if !request_body.is_empty() {
+            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(request_body) {
+                if json
+                    .get("prompt_cache_key")
+                    .and_then(|v| v.as_str())
+                    .is_some()
+                {
+                    "codex"
+                } else {
+                    "claude-code"
+                }
+            } else {
+                "claude-code"
+            }
+        } else {
+            "claude-code"
+        };
+
+        // 用 inner_tool_id 创建 context（确保 session_id 提取和 logger 选择正确）
+        let mut context = RequestLogContext::from_request(
+            inner_tool_id,
+            config_name,
+            client_ip,
+            proxy_pricing_template_id,
+            request_body,
+            response_time_ms,
+        );
+
+        // 覆盖写入日志的 tool_type 为 "amp-code"
+        context.override_tool_type = Some("amp-code".to_string());
+
+        let parsed = ResponseParser::parse(response_body, response_status, is_sse);
+        LogRecorder::record(&context, response_status, parsed).await?;
+
+        Ok(())
     }
 }

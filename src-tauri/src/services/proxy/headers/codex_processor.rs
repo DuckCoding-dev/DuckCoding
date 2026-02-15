@@ -25,14 +25,11 @@ use reqwest::header::HeaderMap as ReqwestHeaderMap;
 #[derive(Debug)]
 pub struct CodexHeadersProcessor;
 
-#[async_trait]
-impl RequestProcessor for CodexHeadersProcessor {
-    fn tool_id(&self) -> &str {
-        "codex"
-    }
-
-    async fn process_outgoing_request(
+impl CodexHeadersProcessor {
+    #[allow(clippy::too_many_arguments)]
+    pub async fn process_outgoing_request_for(
         &self,
+        caller_tool_id: &str,
         base_url: &str,
         api_key: &str,
         path: &str,
@@ -64,7 +61,7 @@ impl RequestProcessor for CodexHeadersProcessor {
                             // 记录会话事件（使用自定义配置）
                             if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                                 session_id: session_id.to_string(),
-                                tool_id: "codex".to_string(),
+                                tool_id: caller_tool_id.to_string(),
                                 timestamp,
                             }) {
                                 tracing::warn!("Session 事件发送失败: {}", e);
@@ -74,7 +71,7 @@ impl RequestProcessor for CodexHeadersProcessor {
                             // 使用全局配置并记录会话
                             if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                                 session_id: session_id.to_string(),
-                                tool_id: "codex".to_string(),
+                                tool_id: caller_tool_id.to_string(),
                                 timestamp,
                             }) {
                                 tracing::warn!("Session 事件发送失败: {}", e);
@@ -85,7 +82,7 @@ impl RequestProcessor for CodexHeadersProcessor {
                         // 会话不存在，使用全局配置并记录新会话
                         if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                             session_id: session_id.to_string(),
-                            tool_id: "codex".to_string(),
+                            tool_id: caller_tool_id.to_string(),
                             timestamp,
                         }) {
                             tracing::warn!("Session 事件发送失败: {}", e);
@@ -152,6 +149,34 @@ impl RequestProcessor for CodexHeadersProcessor {
             headers,
             body: Bytes::copy_from_slice(body),
         })
+    }
+}
+
+#[async_trait]
+impl RequestProcessor for CodexHeadersProcessor {
+    fn tool_id(&self) -> &str {
+        "codex"
+    }
+
+    async fn process_outgoing_request(
+        &self,
+        base_url: &str,
+        api_key: &str,
+        path: &str,
+        query: Option<&str>,
+        original_headers: &HyperHeaderMap,
+        body: &[u8],
+    ) -> Result<ProcessedRequest> {
+        self.process_outgoing_request_for(
+            "codex",
+            base_url,
+            api_key,
+            path,
+            query,
+            original_headers,
+            body,
+        )
+        .await
     }
 
     // Codex 当前不需要特殊的响应处理

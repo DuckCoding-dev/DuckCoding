@@ -57,7 +57,6 @@ impl LogRecorder {
         data_lines: Vec<String>,
     ) -> Result<()> {
         let logger = create_logger(&context.tool_id)?;
-        let manager = TokenStatsManager::get();
 
         match logger.log_sse_response(
             &context.request_body,
@@ -68,7 +67,7 @@ impl LogRecorder {
             context.response_time_ms,
         ) {
             Ok(log) => {
-                manager.write_log(log);
+                Self::write_log(context, log);
                 tracing::debug!(
                     tool_id = %context.tool_id,
                     session_id = %context.session_id,
@@ -95,7 +94,7 @@ impl LogRecorder {
                     "parse_error".to_string(),
                     error_detail,
                 )?;
-                manager.write_log(failed_log);
+                Self::write_log(context, failed_log);
                 Ok(())
             }
         }
@@ -107,7 +106,6 @@ impl LogRecorder {
         data: serde_json::Value,
     ) -> Result<()> {
         let logger = create_logger(&context.tool_id)?;
-        let manager = TokenStatsManager::get();
 
         match logger.log_json_response(
             &context.request_body,
@@ -118,7 +116,7 @@ impl LogRecorder {
             context.response_time_ms,
         ) {
             Ok(log) => {
-                manager.write_log(log);
+                Self::write_log(context, log);
                 tracing::debug!(
                     tool_id = %context.tool_id,
                     session_id = %context.session_id,
@@ -145,7 +143,7 @@ impl LogRecorder {
                     "parse_error".to_string(),
                     error_detail,
                 )?;
-                manager.write_log(failed_log);
+                Self::write_log(context, failed_log);
                 Ok(())
             }
         }
@@ -177,7 +175,7 @@ impl LogRecorder {
             "parse_error".to_string(),
             error_detail,
         )?;
-        TokenStatsManager::get().write_log(failed_log);
+        Self::write_log(context, failed_log);
         Ok(())
     }
 
@@ -201,7 +199,7 @@ impl LogRecorder {
             "upstream_error".to_string(),
             detail.to_string(),
         )?;
-        TokenStatsManager::get().write_log(failed_log);
+        Self::write_log(context, failed_log);
         Ok(())
     }
 
@@ -235,7 +233,15 @@ impl LogRecorder {
             "upstream_error".to_string(),
             error_detail,
         )?;
-        TokenStatsManager::get().write_log(failed_log);
+        Self::write_log(context, failed_log);
         Ok(())
+    }
+
+    /// 写入日志，如果 context 指定了 override_tool_type 则覆盖 tool_type
+    fn write_log(context: &RequestLogContext, mut log: crate::models::token_stats::TokenLog) {
+        if let Some(ref tid) = context.override_tool_type {
+            log.tool_type = tid.clone();
+        }
+        TokenStatsManager::get().write_log(log);
     }
 }
