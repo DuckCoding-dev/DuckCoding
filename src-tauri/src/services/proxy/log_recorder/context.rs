@@ -17,6 +17,7 @@ pub struct RequestLogContext {
     pub is_stream: bool,                     // 从 request_body 提取 stream 字段
     pub request_body: Vec<u8>,               // 保留原始请求体
     pub response_time_ms: Option<i64>,       // 响应时间（毫秒）
+    pub override_tool_type: Option<String>,  // 覆盖写入日志的 tool_type（供 AMP 等路由器使用）
 }
 
 impl RequestLogContext {
@@ -79,6 +80,7 @@ impl RequestLogContext {
             is_stream,
             request_body: request_body.to_vec(),
             response_time_ms,
+            override_tool_type: None,
         }
     }
 

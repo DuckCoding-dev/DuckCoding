@@ -17,14 +17,10 @@ use reqwest::header::HeaderMap as ReqwestHeaderMap;
 #[derive(Debug)]
 pub struct ClaudeHeadersProcessor;
 
-#[async_trait]
-impl RequestProcessor for ClaudeHeadersProcessor {
-    fn tool_id(&self) -> &str {
-        "claude-code"
-    }
-
-    async fn process_outgoing_request(
+impl ClaudeHeadersProcessor {
+    pub async fn process_outgoing_request_for(
         &self,
+        caller_tool_id: &str,
         base_url: &str,
         api_key: &str,
         path: &str,
@@ -56,7 +52,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                             // 记录会话事件（使用自定义配置）
                             if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                                 session_id: user_id.to_string(),
-                                tool_id: "claude-code".to_string(),
+                                tool_id: caller_tool_id.to_string(),
                                 timestamp,
                             }) {
                                 tracing::warn!("Session 事件发送失败: {}", e);
@@ -66,7 +62,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                             // 使用全局配置并记录会话
                             if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                                 session_id: user_id.to_string(),
-                                tool_id: "claude-code".to_string(),
+                                tool_id: caller_tool_id.to_string(),
                                 timestamp,
                             }) {
                                 tracing::warn!("Session 事件发送失败: {}", e);
@@ -77,7 +73,7 @@ impl RequestProcessor for ClaudeHeadersProcessor {
                         // 会话不存在，使用全局配置并记录新会话
                         if let Err(e) = SESSION_MANAGER.send_event(SessionEvent::NewRequest {
                             session_id: user_id.to_string(),
-                            tool_id: "claude-code".to_string(),
+                            tool_id: caller_tool_id.to_string(),
                             timestamp,
                         }) {
                             tracing::warn!("Session 事件发送失败: {}", e);
@@ -130,6 +126,25 @@ impl RequestProcessor for ClaudeHeadersProcessor {
             headers,
             body: Bytes::copy_from_slice(body),
         })
+    }
+}
+
+#[async_trait]
+impl RequestProcessor for ClaudeHeadersProcessor {
+    fn tool_id(&self) -> &str {
+        "claude-code"
+    }
+
+    async fn process_outgoing_request(
+        &self,
+        base_url: &str,
+        api_key: &str,
+        path: &str,
+        query: Option<&str>,
+        original_headers: &HyperHeaderMap,
+        body: &[u8],
+    ) -> Result<ProcessedRequest> {
+        self.process_outgoing_request_for("claude-code", base_url, api_key, path, query, original_headers, body).await
     }
 
     // Claude Code 不需要特殊的响应处理
