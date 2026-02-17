@@ -19,6 +19,7 @@ import { DeleteConfirmDialog } from './components/DeleteConfirmDialog';
 import { TokenManagementTab } from './components/TokenManagementTab';
 import { ProviderCard } from './components/ProviderCard';
 import { ViewToggle, ViewMode } from '@/components/common/ViewToggle';
+import { CheckinDialog } from './components/CheckinDialog';
 
 /**
  * 供应商管理页面
@@ -37,6 +38,8 @@ export function ProviderManagementPage() {
   const [activeTab, setActiveTab] = useState<'providers' | 'tokens'>('providers');
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [checkinDialogOpen, setCheckinDialogOpen] = useState(false);
+  const [checkinProvider, setCheckinProvider] = useState<Provider | null>(null);
 
   /**
    * 打开新增对话框
@@ -116,6 +119,28 @@ export function ProviderManagementPage() {
     setActiveTab('tokens');
   };
 
+  /**
+   * 打开签到对话框
+   */
+  const handleCheckin = (provider: Provider) => {
+    setCheckinProvider(provider);
+    setCheckinDialogOpen(true);
+  };
+
+  /**
+   * 更新签到配置
+   */
+  const handleCheckinUpdate = async (updatedProvider: Provider) => {
+    const result = await updateProvider(updatedProvider.id, updatedProvider);
+    if (!result.success) {
+      toast({
+        title: '更新失败',
+        description: result.error,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const pageActions =
     activeTab === 'providers' ? (
       <div className="flex gap-2 items-center">
@@ -183,6 +208,8 @@ export function ProviderManagementPage() {
                       setDeleteDialogOpen(true);
                     }}
                     onViewTokens={handleViewTokens}
+                    onCheckin={handleCheckin}
+                  />
                   />
                 ))}
               </div>
@@ -291,6 +318,16 @@ export function ProviderManagementPage() {
         }}
         deleting={deleting}
       />
+
+      {/* 签到对话框 */}
+      {checkinProvider && (
+        <CheckinDialog
+          open={checkinDialogOpen}
+          onOpenChange={setCheckinDialogOpen}
+          provider={checkinProvider}
+          onUpdate={handleCheckinUpdate}
+        />
+      )}
     </PageContainer>
   );
 }

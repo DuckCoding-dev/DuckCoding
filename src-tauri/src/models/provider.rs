@@ -4,6 +4,52 @@
 
 use serde::{Deserialize, Serialize};
 
+/// 签到配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckinConfig {
+    /// 是否启用自动签到
+    pub enabled: bool,
+    /// 签到 API 端点
+    pub endpoint: String,
+    /// 签到时间 (小时, 0-23)
+    #[serde(default = "default_checkin_hour")]
+    pub checkin_hour: u8,
+    /// 最后签到时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_checkin_at: Option<i64>,
+    /// 最后签到状态
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_checkin_status: Option<String>,
+    /// 最后签到消息
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_checkin_message: Option<String>,
+    /// 累计签到次数
+    #[serde(default)]
+    pub total_checkins: u32,
+    /// 累计获得额度
+    #[serde(default)]
+    pub total_quota: i64,
+}
+
+fn default_checkin_hour() -> u8 {
+    9 // 默认早上 9 点
+}
+
+impl Default for CheckinConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            endpoint: "/api/user/checkin".to_string(),
+            checkin_hour: 9,
+            last_checkin_at: None,
+            last_checkin_status: None,
+            last_checkin_message: None,
+            total_checkins: 0,
+            total_quota: 0,
+        }
+    }
+}
+
 /// 供应商配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Provider {
@@ -28,6 +74,9 @@ pub struct Provider {
     pub created_at: i64,
     /// 更新时间
     pub updated_at: i64,
+    /// 签到配置
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkin_config: Option<CheckinConfig>,
 }
 
 /// 供应商存储结构
