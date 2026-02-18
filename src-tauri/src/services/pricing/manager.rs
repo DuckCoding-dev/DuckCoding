@@ -109,17 +109,17 @@ impl PricingManager {
         std::fs::create_dir_all(&self.templates_dir)
             .context("Failed to create templates directory")?;
 
-        // 保存内置 Claude 官方模板
-        let builtin_claude_template = builtin_claude_official_template();
-        self.save_template(&builtin_claude_template)?;
-
-        // 保存内置 OpenAI 官方模板
-        let builtin_openai_template = builtin_openai_official_template();
-        self.save_template(&builtin_openai_template)?;
-
-        // 保存内置 Gemini 官方模板
-        let builtin_gemini_template = builtin_gemini_official_template();
-        self.save_template(&builtin_gemini_template)?;
+        // 仅在模板文件不存在时才写入内置默认值，避免覆盖远程同步的数据
+        for (id, template) in [
+            ("builtin_claude", builtin_claude_official_template()),
+            ("builtin_openai", builtin_openai_official_template()),
+            ("builtin_gemini", builtin_gemini_official_template()),
+        ] {
+            let path = self.templates_dir.join(format!("{}.json", id));
+            if !path.exists() {
+                self.save_template(&template)?;
+            }
+        }
 
         // 初始化默认模板配置（如果不存在）
         if !self.default_templates_path.exists() {
