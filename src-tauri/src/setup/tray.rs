@@ -87,32 +87,6 @@ pub fn restore_window_state<R: Runtime>(window: &WebviewWindow<R>) {
     }
 }
 
-/// 隐藏窗口到系统托盘
-#[cfg(not(target_os = "macos"))]
-pub fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
-    tracing::info!("隐藏窗口到系统托盘");
-    if let Err(e) = window.hide() {
-        tracing::error!(error = ?e, "隐藏窗口失败");
-    }
-
-    #[cfg(target_os = "macos")]
-    #[allow(deprecated)]
-    {
-        use cocoa::appkit::NSApplication;
-        use cocoa::base::nil;
-        use cocoa::foundation::NSAutoreleasePool;
-
-        unsafe {
-            let _pool = NSAutoreleasePool::new(nil);
-            let app_macos = NSApplication::sharedApplication(nil);
-            app_macos.setActivationPolicy_(
-                cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyAccessory,
-            );
-        }
-        tracing::debug!("macOS Dock 图标已隐藏");
-    }
-}
-
 /// 设置系统托盘（包含事件处理）
 #[cfg(not(target_os = "macos"))]
 pub fn setup_system_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
