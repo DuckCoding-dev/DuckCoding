@@ -151,7 +151,7 @@ export default function ProfileManagementPage() {
         <>
           {/* 工具 Tab 切换 */}
           <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as ToolId)}>
-            <TabsList className="grid w-full grid-cols-4 mb-6 h-11 p-1 bg-muted/50 rounded-lg">
+            <TabsList className="grid w-full grid-cols-4 mb-4 h-9 p-1 bg-muted/50 rounded-lg">
               {profileGroups.map((group) => (
                 <TabsTrigger
                   key={group.tool_id}
@@ -174,14 +174,14 @@ export default function ProfileManagementPage() {
 
             {/* 每个工具的 Profile 列表 */}
             {profileGroups.map((group) => (
-              <TabsContent key={group.tool_id} value={group.tool_id} className="space-y-6 mt-0">
+              <TabsContent key={group.tool_id} value={group.tool_id} className="space-y-4 mt-0">
                 {/* 当前生效配置卡片 */}
                 <ActiveProfileCard
                   group={group}
                   proxyRunning={allProxyStatus[group.tool_id]?.running || false}
                 />
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* 创建按钮 */}
                   <div className="flex items-center justify-between">
                     <div>

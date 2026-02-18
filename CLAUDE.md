@@ -259,14 +259,24 @@ last-updated: 2025-12-16
       - 新增 38 个测试（9 个 Processor 测试 + 10 个 Logger 测试 + 15 个数据库测试 + 4 个命令测试）
       - 代码量减少：manager.rs 从 626 行减少到 286 行（-54%）
       - 所有测试通过，编译 0 警告
-  - **配置管理机制（2025-12-12）**：
-    - 代理启动时自动创建内置 Profile（`dc_proxy_*`），通过 `ProfileManager` 切换配置
-    - 内置 Profile 在 UI 中不可见（列表查询时过滤 `dc_proxy_` 前缀）
-    - `dc_proxy_` 为系统保留前缀，用户无法创建同名 Profile
+- **配置管理机制（2025-12-12）**：
+  - 代理启动时自动创建内置 Profile（`dc_proxy_*`），通过 `ProfileManager` 切换配置
+  - 内置 Profile 在 UI 中不可见（列表查询时过滤 `dc_proxy_` 前缀）
+  - `dc_proxy_` 为系统保留前缀，用户无法创建同名 Profile
     - 代理关闭时自动还原到启动前激活的 Profile
-    - 运行时禁止修改 `ToolProxyConfig`，确保配置一致性
-    - `original_active_profile` 字段记录启动前的 Profile 用于还原
-    - Gemini CLI 的 model 字段为可选，允许不填（内置代理 Profile 不设置 model，保留用户原有配置）
+  - 运行时禁止修改 `ToolProxyConfig`，确保配置一致性
+  - `original_active_profile` 字段记录启动前的 Profile 用于还原
+  - Gemini CLI 的 model 字段为可选，允许不填（内置代理 Profile 不设置 model，保留用户原有配置）
+- **macOS 状态栏菜单增强（2026-02-08）**：
+  - `src-tauri/src/setup/menu.rs` 增加“检查更新”入口，点击后走后端后台检查更新流程（不强制拉起窗口）
+  - 菜单保留“透明代理”标题，`claude-code`、`codex`、`gemini-cli` 三工具子菜单在顶层直接可见（按需求不展示 `amp-code`）
+  - 每个工具子菜单支持：启动代理、停止代理、打开透明代理页面、平铺展示的代理配置选择（含当前配置勾选态和 `更多...`，不再二级展开）
+  - 从状态栏菜单选择代理配置时，如该工具透明代理未运行，会自动开启代理（必要时自动将 `enabled` 置为 true）
+  - 从状态栏菜单切换代理配置前会调用配置监听抑制窗口（3 秒），避免内部写入触发 `external-config-changed`，并在抑制分支刷新快照保持一致性（2026-02-12）
+  - 透明代理工具子菜单标题显示运行状态（`运行中`/`已停止`），并按状态自动切换“启动代理/停止代理”菜单项可用性
+  - `更多...` 与配置缺失引导统一使用窗口前置 + 导航，修复窗口隐藏时点击菜单“无反应”的体验问题
+  - 导航语义扩展：`navigate-to` 新增 `/transparent-proxy/<tool_id>` 路径，前端 `AppEventsHandler` 已兼容解析并自动选中对应工具
+  - 后端命令复用：`proxy_commands.rs`、`update_commands.rs` 抽取 `pub(crate)` helper，菜单与 Tauri command 共享同一业务逻辑，避免分叉
 - `ToolProxyConfig` 额外存储 `real_profile_name`、`auto_start`、工具级 `session_endpoint_config_enabled`，全局配置新增 `hide_transparent_proxy_tip` 控制设置页横幅显示
 - `GlobalConfig.hide_session_config_hint` 持久化会话级端点提示的隐藏状态，`ProxyControlBar`/`ProxySettingsDialog`/`ClaudeContent` 通过 `open-proxy-settings` 与 `proxy-config-updated` 事件联动刷新视图
 - 日志系统支持完整配置管理：`GlobalConfig.log_config` 存储级别/格式/输出目标；`log_commands.rs` 提供查询与更新命令，`LogSettingsTab` 可热重载级别、保存文件输出设置；`core/logger.rs` 通过 `update_log_level` reload 机制动态调整

@@ -11,9 +11,12 @@
 // - provider_manager: 供应商配置管理
 // - new_api: NEW API 客户端服务
 // - token_stats: Token统计和请求记录
+// - checkin: 签到服务
 
 pub mod amp_native_config; // AMP Code 原生配置管理
 pub mod balance;
+pub mod checkin; // 签到服务
+pub mod checkin_scheduler; // 签到调度器
 pub mod config;
 pub mod dashboard_manager; // 仪表板状态管理
 pub mod migration_manager;
@@ -30,6 +33,8 @@ pub mod update;
 
 // 重新导出服务
 pub use balance::*;
+pub use checkin::*;
+pub use checkin_scheduler::CheckinScheduler;
 pub use config::types::*; // 仅导出类型
 pub use dashboard_manager::DashboardManager;
 pub use migration_manager::{create_migration_manager, MigrationManager};

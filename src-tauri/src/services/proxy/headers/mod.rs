@@ -12,6 +12,8 @@ mod codex_processor;
 mod gemini_processor;
 
 pub use amp_processor::AmpHeadersProcessor;
+
+pub(crate) use amp_processor::strip_mcp_name_prefix_bytes;
 pub use claude_processor::ClaudeHeadersProcessor;
 pub use codex_processor::CodexHeadersProcessor;
 pub use gemini_processor::GeminiHeadersProcessor;

@@ -12,11 +12,12 @@ use crate::models::Tool;
 use anyhow::{anyhow, Result};
 use serde::Serialize;
 use serde_json::Value as JsonValue;
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 // ========== 导出类型 ==========
@@ -396,10 +397,40 @@ use std::sync::Mutex;
 static WATCHER_HANDLE: once_cell::sync::Lazy<Mutex<Option<WatcherHandle>>> =
     once_cell::sync::Lazy::new(|| Mutex::new(None));
 
+/// 内部配置写入抑制窗口（tool_id -> 到期时间）
+static INTERNAL_CHANGE_SUPPRESS_UNTIL: once_cell::sync::Lazy<Mutex<HashMap<String, Instant>>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(HashMap::new()));
+
 /// Watcher 句柄
 struct WatcherHandle {
     _watcher: RecommendedWatcher,
     stop_signal: Arc<AtomicBool>,
+}
+
+/// 标记某个工具发生内部配置写入，在短时间内跳过外部变更检测。
+pub fn suppress_external_detection_for_tool(tool_id: &str, duration: Duration) {
+    let expire_at = Instant::now() + duration;
+    INTERNAL_CHANGE_SUPPRESS_UNTIL
+        .lock()
+        .unwrap()
+        .insert(tool_id.to_string(), expire_at);
+
+    tracing::debug!(
+        tool_id = %tool_id,
+        duration_secs = duration.as_secs_f32(),
+        "标记内部配置写入，短时间跳过外部变更检测"
+    );
+}
+
+/// 检查工具是否在内部写入抑制窗口内，并清理已过期项。
+fn is_external_detection_suppressed(tool_id: &str) -> bool {
+    let now = Instant::now();
+    let mut suppressed = INTERNAL_CHANGE_SUPPRESS_UNTIL.lock().unwrap();
+    suppressed.retain(|_, expire_at| *expire_at > now);
+
+    suppressed
+        .get(tool_id)
+        .is_some_and(|expire_at| *expire_at > now)
 }
 
 /// 启动配置文件监听
@@ -514,6 +545,18 @@ fn handle_file_change(path: &Path, app_handle: &AppHandle) -> Result<()> {
         });
 
         if is_tool_config {
+            if is_external_detection_suppressed(&tool.id) {
+                tracing::debug!(tool_id = %tool.id, "检测到内部写入，跳过外部变更通知");
+                if let Err(error) = save_snapshot_for_tool(&tool) {
+                    tracing::warn!(
+                        error = ?error,
+                        tool_id = %tool.id,
+                        "内部写入后刷新配置快照失败"
+                    );
+                }
+                break;
+            }
+
             // 检测变更
             if let Some(change) = detect_tool_change(&tool, watch_config)? {
                 tracing::info!(

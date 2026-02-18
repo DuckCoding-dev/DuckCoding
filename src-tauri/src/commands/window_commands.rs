@@ -1,6 +1,6 @@
 use crate::commands::error::{AppError, AppResult};
 use ::duckcoding::ui;
-use tauri::{Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, WebviewWindow};
 
 /// 处理窗口关闭操作
 ///
@@ -24,4 +24,20 @@ pub fn handle_close_action(window: WebviewWindow, action: String) -> AppResult<(
             reason: format!("未知的关闭操作: {}", other),
         }),
     }
+}
+
+/// 刷新应用菜单栏（仅 macOS）
+#[tauri::command]
+pub fn refresh_app_menu(app: AppHandle) -> AppResult<()> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::setup::menu::refresh_app_menu(&app).map_err(|e| AppError::Internal {
+            message: format!("刷新菜单失败: {}", e),
+        })?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+    }
+    Ok(())
 }

@@ -1,7 +1,7 @@
 // AMP Code 请求处理器
 //
 // 路由逻辑：
-// 0. 本地工具拦截：webSearch2 / extractWebPageContent → 本地处理
+// 0. 工具拦截：webSearch2 / extractWebPageContent → 远程免费层优先，失败降级本地处理
 // 1. /api/provider/anthropic/* → Claude Profile（提取 /v1/messages）
 // 2. /api/provider/openai/* → Codex Profile（提取 /v1/responses 或 /v1/chat/completions）
 // 3. /api/provider/google/* → Gemini Profile（提取 /v1beta/...）
@@ -35,6 +35,48 @@ static HTTP_CLIENT: Lazy<reqwest::Client> = Lazy::new(|| {
         .build()
         .expect("Failed to create HTTP client")
 });
+
+static IS_FREE_TIER_RE: Lazy<regex::Regex> = Lazy::new(|| {
+    regex::Regex::new(r#""isFreeTierRequest"\s*:\s*false"#).expect("isFreeTierRequest 正则非法")
+});
+
+static MCP_NAME_PREFIX_RE: Lazy<regex::Regex> = Lazy::new(|| {
+    regex::Regex::new(r#""name"\s*:\s*"mcp_([^_"][^"]*)""#).expect("mcp name 前缀正则非法")
+});
+
+static BRAND_SANITIZE_RE: Lazy<regex::Regex> = Lazy::new(|| {
+    // 不区分大小写 + 单词边界替换，避免误伤子串（例如 "example" 中的 "amp"）。
+    regex::Regex::new(r"(?i)\b(?:opencode|amp(?:-?code)?)\b").expect("清洗正则非法")
+});
+
+const CLAUDE_CODE_PREAMBLE: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+pub(crate) fn strip_mcp_name_prefix_bytes(bytes: &Bytes) -> Bytes {
+    let text = String::from_utf8_lossy(bytes);
+    let cleaned = MCP_NAME_PREFIX_RE.replace_all(&text, r#""name": "$1""#);
+    Bytes::from(cleaned.into_owned())
+}
+
+fn sanitize_brand_text(s: &str) -> String {
+    BRAND_SANITIZE_RE.replace_all(s, "Claude Code").into_owned()
+}
+
+/// 是否统一 cache_control 为标准 5m ttl
+const NORMALIZE_CACHE_CONTROL: bool = false;
+
+fn normalize_cache_control(item: &mut Value) {
+    if !NORMALIZE_CACHE_CONTROL {
+        return;
+    }
+    if let Some(obj) = item.as_object_mut() {
+        if obj.contains_key("cache_control") {
+            obj.insert(
+                "cache_control".to_string(),
+                json!({ "type": "ephemeral", "ttl": "5m" }),
+            );
+        }
+    }
+}
 
 /// 最大响应体大小（5MB）
 const MAX_RESPONSE_SIZE: usize = 5 * 1024 * 1024;
@@ -97,7 +139,8 @@ impl AmpHeadersProcessor {
             return api_type;
         }
 
-        ApiType::Claude
+        // 无法识别的路径转发到 ampcode.com
+        ApiType::AmpInternal
     }
 
     fn detect_by_model(body: &[u8]) -> Option<ApiType> {
@@ -165,7 +208,7 @@ impl AmpHeadersProcessor {
 
     fn get_user_agent(api_type: ApiType, path: &str, body: &[u8]) -> String {
         match api_type {
-            ApiType::Claude => "claude-cli/2.0.72 (external, cli)".to_string(),
+            ApiType::Claude => "claude-cli/2.1.2 (external, cli)".to_string(),
             ApiType::Codex => {
                 "codex_cli_rs/0.77.0 (Mac OS 15.7.2; arm64) Apple_Terminal/455.1".to_string()
             }
@@ -179,6 +222,7 @@ impl AmpHeadersProcessor {
 
     fn add_tool_prefix(body: &[u8]) -> Vec<u8> {
         const TOOL_PREFIX: &str = "mcp_";
+        const MCP_TOOL_PREFIX: &str = "_";
 
         if body.is_empty() {
             return body.to_vec();
@@ -194,12 +238,107 @@ impl AmpHeadersProcessor {
             }
         }
 
+        // 0) system 文本清洗 + 注入 Claude Code 身份声明（对齐 JS 插件行为）
+        // - 文本清洗：OpenCode/opencode/ampcode/amp-code/amp（不区分大小写）
+        // - 注入：将声明插到 system 最前面
+        // - 统一 cache_control 为 5m
+        if let Some(system) = json.get_mut("system") {
+            match system {
+                serde_json::Value::Array(items) => {
+                    for item in items.iter_mut() {
+                        normalize_cache_control(item);
+
+                        if item.get("type").and_then(|t| t.as_str()) != Some("text") {
+                            continue;
+                        }
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            item["text"] = serde_json::Value::String(sanitize_brand_text(text));
+                        }
+                    }
+
+                    let first_text = items
+                        .iter_mut()
+                        .find(|item| item.get("type").and_then(|t| t.as_str()) == Some("text"));
+                    if let Some(item) = first_text {
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            if !text.starts_with(CLAUDE_CODE_PREAMBLE) {
+                                item["text"] = serde_json::Value::String(format!(
+                                    "{}{}",
+                                    CLAUDE_CODE_PREAMBLE, text
+                                ));
+                            }
+                        }
+                    } else {
+                        items.insert(0, json!({ "type": "text", "text": CLAUDE_CODE_PREAMBLE }));
+                    }
+                }
+                serde_json::Value::String(s) => {
+                    let cleaned = sanitize_brand_text(s);
+                    if !cleaned.starts_with(CLAUDE_CODE_PREAMBLE) {
+                        *s = format!("{}\n{}", CLAUDE_CODE_PREAMBLE, cleaned);
+                    } else {
+                        *s = cleaned;
+                    }
+                }
+                _ => {
+                    // 其他格式不处理
+                }
+            }
+        } else {
+            json["system"] = json!([{ "type": "text", "text": CLAUDE_CODE_PREAMBLE }]);
+        }
+
+        // 1) tools[].name 加前缀 + 统一 cache_control
         if let Some(tools) = json.get_mut("tools").and_then(|t| t.as_array_mut()) {
             for tool in tools.iter_mut() {
+                normalize_cache_control(tool);
+
                 if let Some(name) = tool.get("name").and_then(|n| n.as_str()) {
-                    if !name.starts_with(TOOL_PREFIX) {
+                    if !name.starts_with(TOOL_PREFIX) && !name.starts_with(MCP_TOOL_PREFIX) {
                         tool["name"] =
                             serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name));
+                    }
+                }
+            }
+        }
+
+        // 2) tool_choice.name 加前缀（与 tools[].name 保持一致）
+        if let Some(tc) = json.get_mut("tool_choice").and_then(|v| v.as_object_mut()) {
+            if tc.get("type").and_then(|t| t.as_str()) == Some("tool") {
+                if let Some(name) = tc.get("name").and_then(|n| n.as_str()) {
+                    if !name.starts_with(TOOL_PREFIX) && !name.starts_with(MCP_TOOL_PREFIX) {
+                        tc.insert(
+                            "name".to_string(),
+                            serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name)),
+                        );
+                    }
+                }
+            }
+        }
+
+        // 3) messages[].content[] 里 type=="tool_use" 的 name 也要加前缀 + 统一所有 content item 的 cache_control
+        if let Some(messages) = json.get_mut("messages").and_then(|m| m.as_array_mut()) {
+            for msg in messages.iter_mut() {
+                let Some(content) = msg.get_mut("content") else {
+                    continue;
+                };
+
+                let Some(arr) = content.as_array_mut() else {
+                    continue;
+                };
+
+                for item in arr.iter_mut() {
+                    normalize_cache_control(item);
+
+                    if item.get("type").and_then(|t| t.as_str()) != Some("tool_use") {
+                        continue;
+                    }
+
+                    if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                        if !name.starts_with(TOOL_PREFIX) && !name.starts_with(MCP_TOOL_PREFIX) {
+                            item["name"] =
+                                serde_json::Value::String(format!("{}{}", TOOL_PREFIX, name));
+                        }
                     }
                 }
             }
@@ -235,23 +374,159 @@ impl AmpHeadersProcessor {
             None => format!("{}{}", base_url, path),
         };
 
-        tracing::info!("AMP Code → ampcode.com: {}", target_url);
+        tracing::debug!("AMP Code → ampcode.com: {}", target_url);
 
         let mut new_headers = headers.clone();
         new_headers.remove(hyper::header::AUTHORIZATION);
-        let x_api_key = hyper::header::HeaderName::from_static("x-api-key");
-        new_headers.remove(&x_api_key);
+        // 移除 accept-encoding，让 reqwest 自动解压响应体
+        // 否则 strip_mcp_name_prefix_bytes 会对压缩数据执行 from_utf8_lossy 导致损坏
+        new_headers.remove(hyper::header::ACCEPT_ENCODING);
         new_headers.insert(
             hyper::header::AUTHORIZATION,
             format!("Bearer {}", token).parse().unwrap(),
         );
-        new_headers.insert(x_api_key, token.parse().unwrap());
 
         Ok(ProcessedRequest {
             target_url,
             headers: new_headers,
             body: body.to_vec().into(),
         })
+    }
+
+    /// 尝试通过 ampcode.com 远程执行工具（篡改 isFreeTierRequest → true）
+    /// 成功返回 dc-local:// 响应，失败返回 Err 供调用方降级
+    async fn try_remote_tool(
+        tool_name: &str,
+        path: &str,
+        query: Option<&str>,
+        headers: &HyperHeaderMap,
+        modified_body: &[u8],
+    ) -> Result<ProcessedRequest> {
+        let proxy_mgr = crate::services::proxy_config_manager::ProxyConfigManager::new()
+            .map_err(|e| anyhow!("ProxyConfigManager 初始化失败: {}", e))?;
+        let config = proxy_mgr
+            .get_config("amp-code")
+            .map_err(|e| anyhow!("读取配置失败: {}", e))?
+            .ok_or_else(|| anyhow!("AMP Code 代理未配置"))?;
+        let token = config
+            .real_api_key
+            .ok_or_else(|| anyhow!("AMP Code Access Token 未配置"))?;
+        let base_url = config
+            .real_base_url
+            .unwrap_or_else(|| "https://ampcode.com".to_string());
+
+        let target_url = match query {
+            Some(q) => format!("{}{}?{}", base_url, path, q),
+            None => format!("{}{}", base_url, path),
+        };
+
+        tracing::info!("AMP Code 远程工具 {} → {}", tool_name, target_url);
+
+        // 构建请求 headers（不设 accept-encoding，让 reqwest 自动解压）
+        let mut req_headers = reqwest::header::HeaderMap::new();
+        for (name, value) in headers.iter() {
+            let skip = name == hyper::header::AUTHORIZATION
+                || name == hyper::header::ACCEPT_ENCODING
+                || name == hyper::header::CONTENT_LENGTH
+                || name == hyper::header::HOST;
+            if skip {
+                continue;
+            }
+            if let (Ok(key), Ok(val)) = (
+                reqwest::header::HeaderName::from_bytes(name.as_str().as_bytes()),
+                reqwest::header::HeaderValue::from_bytes(value.as_bytes()),
+            ) {
+                req_headers.insert(key, val);
+            }
+        }
+        req_headers.insert(
+            reqwest::header::AUTHORIZATION,
+            format!("Bearer {}", token).parse().unwrap(),
+        );
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .map_err(|e| anyhow!("构建 HTTP client 失败: {}", e))?;
+
+        let response = client
+            .post(&target_url)
+            .headers(req_headers)
+            .body(modified_body.to_vec())
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(
+                    "远程工具请求详细错误: {:?}, is_timeout={}, is_connect={}, is_request={}",
+                    e,
+                    e.is_timeout(),
+                    e.is_connect(),
+                    e.is_request()
+                );
+                anyhow!("远程工具请求失败: {}", e)
+            })?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body_preview = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<读取失败>".to_string());
+            return Err(anyhow!(
+                "ampcode.com 返回 {}: {}",
+                status,
+                &body_preview[..body_preview.len().min(200)]
+            ));
+        }
+
+        let body_bytes = response
+            .bytes()
+            .await
+            .map_err(|e| anyhow!("读取响应体失败: {}", e))?;
+        tracing::debug!(
+            "AMP Code 远程工具 {} 响应 {} 字节: {}",
+            tool_name,
+            body_bytes.len(),
+            String::from_utf8_lossy(&body_bytes[..body_bytes.len().min(500)])
+        );
+
+        // 检测业务层错误（HTTP 200 但 ok:false，如 insufficient-credits）
+        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body_bytes) {
+            if json.get("ok") == Some(&serde_json::Value::Bool(false)) {
+                let code = json
+                    .pointer("/error/code")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                return Err(anyhow!("ampcode.com 业务错误: {}", code));
+            }
+        }
+
+        tracing::debug!(
+            "AMP Code 远程工具 {} 成功, {} 字节",
+            tool_name,
+            body_bytes.len()
+        );
+
+        let mut resp_headers = reqwest::header::HeaderMap::new();
+        resp_headers.insert("content-type", "application/json".parse().unwrap());
+
+        Ok(ProcessedRequest {
+            target_url: format!("dc-local://{}", tool_name),
+            headers: resp_headers,
+            body: body_bytes,
+        })
+    }
+
+    /// 检测是否为广告相关请求
+    fn is_ad_request(query: Option<&str>) -> bool {
+        const AD_ENDPOINTS: &[&str] = &[
+            "recordAdImpressionEnd",
+            "recordAdImpressionStart",
+            "getCurrentAd",
+        ];
+        let Some(q) = query else { return false };
+        q.split('&')
+            .any(|part| AD_ENDPOINTS.contains(&part.split('=').next().unwrap_or(part)))
     }
 
     /// 检测是否为本地工具请求（精确匹配，避免误判）
@@ -569,7 +844,7 @@ impl AmpHeadersProcessor {
         // SSRF 防护：使用 URL 解析进行精确校验
         Self::validate_url_security(target_url)?;
 
-        tracing::info!("本地网页提取: {}", target_url);
+        tracing::debug!("本地网页提取: {}", target_url);
 
         let resp = HTTP_CLIENT
             .get(target_url)
@@ -596,7 +871,7 @@ impl AmpHeadersProcessor {
             }
         });
 
-        tracing::info!("本地网页提取完成: {} bytes", html.len());
+        tracing::debug!("本地网页提取完成: {} bytes", html.len());
         Self::build_local_response("extractWebPageContent", response)
     }
 
@@ -720,9 +995,9 @@ impl AmpHeadersProcessor {
                         let c = m.get("content")?;
                         if let Some(s) = c.as_str() {
                             Some(s.to_string())
-                        } else if let Some(arr) = c.as_array() {
+                        } else {
                             // 多模态内容：提取 text 类型
-                            Some(
+                            c.as_array().map(|arr| {
                                 arr.iter()
                                     .filter_map(|item| {
                                         if item.get("type")?.as_str()? == "text" {
@@ -732,10 +1007,8 @@ impl AmpHeadersProcessor {
                                         }
                                     })
                                     .collect::<Vec<_>>()
-                                    .join(""),
-                            )
-                        } else {
-                            None
+                                    .join("")
+                            })
                         }
                     })
                     .collect::<Vec<_>>()
@@ -839,11 +1112,35 @@ impl RequestProcessor for AmpHeadersProcessor {
         original_headers: &HyperHeaderMap,
         body: &[u8],
     ) -> Result<ProcessedRequest> {
-        // 0. 本地工具拦截：webSearch2 / extractWebPageContent
+        // 0. 工具拦截：webSearch2 / extractWebPageContent
+        //    篡改 isFreeTierRequest: false → true，转发到 ampcode.com（对齐 PR #622）
+        //    无 isFreeTierRequest 字段时降级本地处理
         if let Some(tool_name) = Self::detect_local_tool(query) {
-            tracing::info!("AMP Code 本地工具: {}", tool_name);
+            // 尝试篡改 isFreeTierRequest → true 并远程执行（对齐 PR #622）
+            let body_str = String::from_utf8_lossy(body);
+            if IS_FREE_TIER_RE.is_match(&body_str) {
+                let modified = IS_FREE_TIER_RE
+                    .replace_all(&body_str, r#""isFreeTierRequest":true"#)
+                    .into_owned();
+                match Self::try_remote_tool(
+                    tool_name,
+                    path,
+                    query,
+                    original_headers,
+                    modified.as_bytes(),
+                )
+                .await
+                {
+                    Ok(result) => return Ok(result),
+                    Err(e) => {
+                        tracing::warn!("AMP Code 远程工具 {} 失败: {}, 降级本地处理", tool_name, e);
+                        // fall through 到本地处理
+                    }
+                }
+            }
 
-            // 获取 Tavily API Key（如果配置了）
+            // 无 isFreeTierRequest 字段或远程失败 → 降级本地处理
+            tracing::info!("AMP Code 本地工具: {}", tool_name);
             let tavily_api_key = crate::services::proxy_config_manager::ProxyConfigManager::new()
                 .ok()
                 .and_then(|mgr| mgr.get_config("amp-code").ok().flatten())
@@ -856,6 +1153,11 @@ impl RequestProcessor for AmpHeadersProcessor {
         tracing::debug!("AMP Code 路由: path={}, type={:?}", path, api_type);
 
         if api_type == ApiType::AmpInternal {
+            // 拦截广告相关请求，返回空成功响应
+            if Self::is_ad_request(query) {
+                tracing::debug!("AMP Code 拦截广告请求: path={}, query={:?}", path, query);
+                return Self::build_local_response("ad-blocked", json!({ "ok": true }));
+            }
             return Self::forward_to_amp(path, query, original_headers, body).await;
         }
 
@@ -934,6 +1236,36 @@ impl RequestProcessor for AmpHeadersProcessor {
                 );
                 result.headers.insert("x-app", "cli".parse().unwrap());
 
+                // 保留调用方传入的 anthropic-beta，同时确保必需 beta 存在（对齐 JS 插件行为）
+                {
+                    const REQUIRED_BETAS: [&str; 2] =
+                        ["oauth-2025-04-20", "interleaved-thinking-2025-05-14"];
+                    let incoming = result
+                        .headers
+                        .get("anthropic-beta")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("");
+
+                    let mut betas = std::collections::BTreeSet::new();
+                    for b in incoming
+                        .split(',')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                    {
+                        betas.insert(b.to_string());
+                    }
+                    for b in REQUIRED_BETAS {
+                        betas.insert(b.to_string());
+                    }
+
+                    if !betas.is_empty() {
+                        let merged = betas.into_iter().collect::<Vec<_>>().join(",");
+                        result
+                            .headers
+                            .insert("anthropic-beta", merged.parse().unwrap());
+                    }
+                }
+
                 if !result.target_url.contains("beta=true") {
                     if result.target_url.contains('?') {
                         result.target_url.push_str("&beta=true");
@@ -946,7 +1278,81 @@ impl RequestProcessor for AmpHeadersProcessor {
             }
             ApiType::Codex => {
                 let p = codex.ok_or_else(|| anyhow!("未配置 Codex Profile"))?;
-                tracing::info!("AMP Code → Codex: {}{}", p.base_url, llm_path);
+                let cleaned_body = if body.is_empty() {
+                    None
+                } else {
+                    match serde_json::from_slice::<Value>(body) {
+                        Ok(mut json_body) => {
+                            let mut modified = false;
+
+                            // 移除 max_output_tokens
+                            if json_body
+                                .as_object_mut()
+                                .and_then(|obj| obj.remove("max_output_tokens"))
+                                .is_some()
+                            {
+                                modified = true;
+                            }
+
+                            // 注入 instructions：从 input 数组中提取 role=system 的 content（含空字符串）
+                            if let Some(obj) = json_body.as_object() {
+                                if let Some(input) = obj.get("input").and_then(|v| v.as_array()) {
+                                    // 检查是否存在 role=system 的消息
+                                    let has_system = input.iter().any(|item| {
+                                        item.get("role")
+                                            .and_then(|r| r.as_str())
+                                            .map(|r| r == "system")
+                                            .unwrap_or(false)
+                                    });
+
+                                    if has_system {
+                                        let system_content: String = input
+                                            .iter()
+                                            .filter(|item| {
+                                                item.get("role")
+                                                    .and_then(|r| r.as_str())
+                                                    .map(|r| r == "system")
+                                                    .unwrap_or(false)
+                                            })
+                                            .filter_map(|item| {
+                                                item.get("content").and_then(|c| c.as_str())
+                                            })
+                                            .collect::<Vec<_>>()
+                                            .join("\n\n");
+
+                                        // 按顺序重建 JSON：model → instructions → 其他字段
+                                        let mut ordered = Map::new();
+                                        if let Some(model) = obj.get("model") {
+                                            ordered.insert("model".to_string(), model.clone());
+                                        }
+                                        ordered.insert(
+                                            "instructions".to_string(),
+                                            Value::String(system_content),
+                                        );
+                                        for (k, v) in obj.iter() {
+                                            if k != "model" && k != "instructions" {
+                                                ordered.insert(k.clone(), v.clone());
+                                            }
+                                        }
+                                        json_body = Value::Object(ordered);
+                                        modified = true;
+                                        tracing::debug!(
+                                            "AMP Code Codex: 注入 instructions（来自 input system）"
+                                        );
+                                    }
+                                }
+                            }
+
+                            if modified {
+                                serde_json::to_vec(&json_body).ok()
+                            } else {
+                                None
+                            }
+                        }
+                        Err(_) => None,
+                    }
+                };
+                let body_to_forward: &[u8] = cleaned_body.as_deref().unwrap_or(body);
                 let mut result = CodexHeadersProcessor
                     .process_outgoing_request(
                         &p.base_url,
@@ -954,9 +1360,14 @@ impl RequestProcessor for AmpHeadersProcessor {
                         &llm_path,
                         query,
                         original_headers,
-                        body,
+                        body_to_forward,
                     )
                     .await?;
+                if cleaned_body.is_some() {
+                    result.headers.remove("content-length");
+                    result.headers.remove("transfer-encoding");
+                }
+                tracing::info!("AMP Code → Codex: {}", result.target_url);
                 result.headers.insert(
                     "user-agent",
                     Self::get_user_agent(api_type, path, body).parse().unwrap(),

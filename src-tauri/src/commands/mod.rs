@@ -1,6 +1,7 @@
 pub mod amp_commands; // AMP 用户认证命令
 pub mod analytics_commands; // Token统计分析命令（Phase 4）
 pub mod balance_commands;
+pub mod checkin_scheduler_state; // 签到调度器状态
 pub mod config_commands;
 pub mod dashboard_commands; // 仪表板状态管理命令
 pub mod error; // 错误处理统一模块
@@ -25,6 +26,7 @@ pub mod window_commands;
 pub use amp_commands::*; // AMP 用户认证命令
 pub use analytics_commands::*; // Token统计分析命令（Phase 4）
 pub use balance_commands::*;
+pub use checkin_scheduler_state::CheckinSchedulerState;
 pub use config_commands::*;
 pub use dashboard_commands::*; // 仪表板状态管理命令
 pub use log_commands::*;

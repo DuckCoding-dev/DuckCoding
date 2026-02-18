@@ -326,6 +326,7 @@ mod tests {
             is_default: false,
             created_at: 0,
             updated_at: 0,
+            checkin_config: None,
         };
 
         assert_eq!(provider.id, "test-provider");

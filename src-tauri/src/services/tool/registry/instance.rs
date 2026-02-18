@@ -113,7 +113,7 @@ impl ToolRegistry {
     /// - tool_id: 工具ID
     /// - path: 工具路径
     /// - install_method: 安装方法
-    /// - installer_path: 安装器路径（非 Other 类型时必需）
+    /// - installer_path: 安装器路径（Npm/Brew 用于快捷更新；Official/Other 可为空）
     ///
     /// # 返回
     /// - Ok(ToolStatus): 工具状态
@@ -130,18 +130,31 @@ impl ToolRegistry {
         // 1. 验证工具路径
         let version = self.validate_tool_path(path).await?;
 
-        // 2. 验证安装器路径（非 Other 类型时需要）
-        if install_method != InstallMethod::Other {
-            if let Some(ref installer) = installer_path {
-                let installer_buf = PathBuf::from(installer);
-                if !installer_buf.exists() {
-                    anyhow::bail!("安装器路径不存在: {}", installer);
+        // 2. 验证安装器路径（仅 Npm/Brew 需要；Official/Other 允许为空）
+        match &install_method {
+            InstallMethod::Npm | InstallMethod::Brew => {
+                if let Some(ref installer) = installer_path {
+                    let installer_buf = PathBuf::from(installer);
+                    if !installer_buf.exists() {
+                        anyhow::bail!("安装器路径不存在: {}", installer);
+                    }
+                    if !installer_buf.is_file() {
+                        anyhow::bail!("安装器路径不是文件: {}", installer);
+                    }
+                } else {
+                    anyhow::bail!("Npm/Brew 类型必须提供安装器路径");
                 }
-                if !installer_buf.is_file() {
-                    anyhow::bail!("安装器路径不是文件: {}", installer);
+            }
+            InstallMethod::Official | InstallMethod::Other => {
+                if let Some(ref installer) = installer_path {
+                    let installer_buf = PathBuf::from(installer);
+                    if !installer_buf.exists() {
+                        anyhow::bail!("安装器路径不存在: {}", installer);
+                    }
+                    if !installer_buf.is_file() {
+                        anyhow::bail!("安装器路径不是文件: {}", installer);
+                    }
                 }
-            } else {
-                anyhow::bail!("非「其他」类型必须提供安装器路径");
             }
         }
 

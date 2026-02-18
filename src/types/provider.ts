@@ -26,6 +26,56 @@ export interface Provider {
   created_at: number;
   /** 更新时间（Unix timestamp） */
   updated_at: number;
+  /** 签到配置（可选） */
+  checkin_config?: CheckinConfig;
+}
+
+/**
+ * 签到配置
+ */
+export interface CheckinConfig {
+  /** 是否启用自动签到 */
+  enabled: boolean;
+  /** 签到 API 端点（相对路径，如 "/api/user/checkin"） */
+  endpoint: string;
+  /** 签到时间范围 - 开始小时（0-23，默认 0） */
+  checkin_hour_start?: number;
+  /** 签到时间范围 - 结束小时（0-23，默认 0）；start==end 或 start>end 时为全天 */
+  checkin_hour_end?: number;
+  /** 下次计划签到时间（Unix timestamp），由后端调度器生成 */
+  next_checkin_at?: number;
+  /** 最后签到时间（Unix timestamp） */
+  last_checkin_at?: number;
+  /** 最后签到状态 */
+  last_checkin_status?: 'success' | 'failed';
+  /** 最后签到消息 */
+  last_checkin_message?: string;
+  /** 累计签到次数 */
+  total_checkins?: number;
+  /** 累计获得额度 */
+  total_quota?: number;
+}
+
+/**
+ * 签到响应
+ */
+export interface CheckinResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    quota_awarded?: number;
+    checkin_date?: string;
+    stats?: {
+      checked_in_today: boolean;
+      checkin_count: number;
+      total_checkins: number;
+      total_quota: number;
+      records?: Array<{
+        checkin_date: string;
+        quota_awarded: number;
+      }>;
+    };
+  };
 }
 
 /**
