@@ -201,6 +201,12 @@ fn build_template_from_remote(
         let cache_write = data
             .cache_creation_input_token_cost
             .map(|v| v * 1_000_000.0);
+        // Anthropic 1h 缓存写入价格 = input * 2.0（远程数据仅提供 5m 价格）
+        let cache_write_1h = if provider == "anthropic" {
+            data.input_cost_per_token.map(|v| v * 2.0 * 1_000_000.0)
+        } else {
+            None
+        };
         let cache_read = data.cache_read_input_token_cost.map(|v| v * 1_000_000.0);
         let reasoning = data.reasoning_cost_per_token.map(|v| v * 1_000_000.0);
 
@@ -211,6 +217,7 @@ fn build_template_from_remote(
             input_per_1m,
             output_per_1m,
             cache_write,
+            cache_write_1h,
             cache_read,
             reasoning,
             aliases,

@@ -295,7 +295,8 @@ impl PricingManager {
     /// - `model`: 模型名称
     /// - `input_tokens`: 输入 Token 数量
     /// - `output_tokens`: 输出 Token 数量
-    /// - `cache_creation_tokens`: 缓存创建 Token 数量
+    /// - `cache_creation_tokens`: 缓存创建 Token 总量（5m + 1h）
+    /// - `cache_creation_1h_tokens`: 1小时缓存创建 Token 数量（5m = total - 1h）
     /// - `cache_read_tokens`: 缓存读取 Token 数量
     /// - `reasoning_tokens`: 推理 Token 数量
     ///
@@ -311,6 +312,7 @@ impl PricingManager {
         input_tokens: i64,
         output_tokens: i64,
         cache_creation_tokens: i64,
+        cache_creation_1h_tokens: i64,
         cache_read_tokens: i64,
         reasoning_tokens: i64,
     ) -> Result<CostBreakdown> {
@@ -329,9 +331,20 @@ impl PricingManager {
         // 3. 计算各部分价格
         let input_price = input_tokens as f64 * model_price.input_price_per_1m / 1_000_000.0;
         let output_price = output_tokens as f64 * model_price.output_price_per_1m / 1_000_000.0;
-        let cache_write_price = cache_creation_tokens as f64
+
+        // 缓存写入分别计价：5m 和 1h 使用不同价格
+        let cache_5m_tokens = cache_creation_tokens - cache_creation_1h_tokens;
+        let cache_write_5m_price = cache_5m_tokens as f64
             * model_price.cache_write_price_per_1m.unwrap_or(0.0)
             / 1_000_000.0;
+        let cache_write_1h_price = cache_creation_1h_tokens as f64
+            * model_price
+                .cache_write_1h_price_per_1m
+                .or(model_price.cache_write_price_per_1m) // 无 1h 价格时回退到 5m
+                .unwrap_or(0.0)
+            / 1_000_000.0;
+        let cache_write_price = cache_write_5m_price + cache_write_1h_price;
+
         let cache_read_price = cache_read_tokens as f64
             * model_price.cache_read_price_per_1m.unwrap_or(0.0)
             / 1_000_000.0;
@@ -394,6 +407,9 @@ impl PricingManager {
                                 * inherited.multiplier,
                             cache_write_price_per_1m: base_price
                                 .cache_write_price_per_1m
+                                .map(|p| p * inherited.multiplier),
+                            cache_write_1h_price_per_1m: base_price
+                                .cache_write_1h_price_per_1m
                                 .map(|p| p * inherited.multiplier),
                             cache_read_price_per_1m: base_price
                                 .cache_read_price_per_1m
@@ -479,7 +495,8 @@ mod tests {
                 "claude-sonnet-4.5",
                 1000, // input
                 500,  // output
-                100,  // cache write
+                100,  // cache write (total 5m + 1h)
+                0,    // cache_creation_1h_tokens
                 200,  // cache read
                 0,    // reasoning_tokens
             )
@@ -492,7 +509,7 @@ mod tests {
         // output: 500 * 15.0 / 1_000_000 = 0.0075
         assert_eq!(breakdown.output_price, 0.0075);
 
-        // cache write: 100 * 3.75 / 1_000_000 = 0.000375
+        // cache write: 100 * 3.75 / 1_000_000 = 0.000375 (全部为 5m)
         assert_eq!(breakdown.cache_write_price, 0.000375);
 
         // cache read: 200 * 0.3 / 1_000_000 = 0.00006
@@ -566,6 +583,7 @@ mod tests {
                 1000,
                 500,
                 0,
+                0, // cache_creation_1h_tokens
                 0,
                 0,
             )

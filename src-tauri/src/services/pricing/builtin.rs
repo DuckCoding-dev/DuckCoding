@@ -16,6 +16,7 @@ pub fn builtin_openai_official_template() -> PricingTemplate {
             3.0,
             12.0,
             None,      // OpenAI 不收费缓存创建
+            None,      // OpenAI 无 1h 缓存概念
             Some(1.5), // Cache read: input * 0.5 (OpenAI 标准)
             None,      // 标准模型无推理 tokens
             vec![
@@ -55,7 +56,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             5.0,
             25.0,
-            Some(6.25), // Cache write: 5.0 * 1.25
+            Some(6.25), // Cache write 5m: 5.0 * 1.25
+            Some(10.0), // Cache write 1h: 5.0 * 2.0
             Some(0.5),  // Cache read: 5.0 * 0.1
             None,       // No reasoning tokens
             vec![
@@ -74,7 +76,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             15.0,
             75.0,
-            Some(18.75), // Cache write: 15.0 * 1.25
+            Some(18.75), // Cache write 5m: 15.0 * 1.25
+            Some(30.0),  // Cache write 1h: 15.0 * 2.0
             Some(1.5),   // Cache read: 15.0 * 0.1
             None,        // No reasoning tokens
             vec![
@@ -92,7 +95,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             15.0,
             75.0,
-            Some(18.75), // Cache write: 15.0 * 1.25
+            Some(18.75), // Cache write 5m: 15.0 * 1.25
+            Some(30.0),  // Cache write 1h: 15.0 * 2.0
             Some(1.5),   // Cache read: 15.0 * 0.1
             None,        // No reasoning tokens
             vec![
@@ -109,7 +113,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             3.0,
             15.0,
-            Some(3.75), // Cache write: 3.0 * 1.25
+            Some(3.75), // Cache write 5m: 3.0 * 1.25
+            Some(6.0),  // Cache write 1h: 3.0 * 2.0
             Some(0.3),  // Cache read: 3.0 * 0.1
             None,       // No reasoning tokens
             vec![
@@ -127,7 +132,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             3.0,
             15.0,
-            Some(3.75), // Cache write: 3.0 * 1.25
+            Some(3.75), // Cache write 5m: 3.0 * 1.25
+            Some(6.0),  // Cache write 1h: 3.0 * 2.0
             Some(0.3),  // Cache read: 3.0 * 0.1
             None,       // No reasoning tokens
             vec![
@@ -144,7 +150,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             3.0,
             15.0,
-            Some(3.75), // Cache write: 3.0 * 1.25
+            Some(3.75), // Cache write 5m: 3.0 * 1.25
+            Some(6.0),  // Cache write 1h: 3.0 * 2.0
             Some(0.3),  // Cache read: 3.0 * 0.1
             None,       // No reasoning tokens
             vec![
@@ -163,7 +170,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             1.0,
             5.0,
-            Some(1.25), // Cache write: 1.0 * 1.25
+            Some(1.25), // Cache write 5m: 1.0 * 1.25
+            Some(2.0),  // Cache write 1h: 1.0 * 2.0
             Some(0.1),  // Cache read: 1.0 * 0.1
             None,       // No reasoning tokens
             vec![
@@ -181,7 +189,8 @@ pub fn builtin_claude_official_template() -> PricingTemplate {
             "anthropic".to_string(),
             0.8,
             4.0,
-            Some(1.0),  // Cache write: 0.8 * 1.25
+            Some(1.0),  // Cache write 5m: 0.8 * 1.25
+            Some(1.6),  // Cache write 1h: 0.8 * 2.0
             Some(0.08), // Cache read: 0.8 * 0.1
             None,       // No reasoning tokens
             vec![
@@ -217,7 +226,8 @@ pub fn builtin_gemini_official_template() -> PricingTemplate {
             "google".to_string(),
             1.25,
             10.0,
-            None,
+            None,         // No cache write
+            None,         // No 1h cache
             Some(0.3125), // Cache read: $0.3125/1M
             Some(10.0),   // Reasoning (thinking) tokens
             vec!["gemini-2.5-pro".to_string(), "gemini-2-5-pro".to_string()],
@@ -231,7 +241,8 @@ pub fn builtin_gemini_official_template() -> PricingTemplate {
             "google".to_string(),
             0.15,
             0.6,
-            None,
+            None,         // No cache write
+            None,         // No 1h cache
             Some(0.0375), // Cache read
             Some(3.5),    // Thinking tokens
             vec![
@@ -248,7 +259,8 @@ pub fn builtin_gemini_official_template() -> PricingTemplate {
             "google".to_string(),
             0.1,
             0.4,
-            None,
+            None,        // No cache write
+            None,        // No 1h cache
             Some(0.025), // Cache read
             None,
             vec![
@@ -296,6 +308,7 @@ mod tests {
         assert_eq!(opus_4_5.input_price_per_1m, 5.0);
         assert_eq!(opus_4_5.output_price_per_1m, 25.0);
         assert_eq!(opus_4_5.cache_write_price_per_1m, Some(6.25));
+        assert_eq!(opus_4_5.cache_write_1h_price_per_1m, Some(10.0));
         assert_eq!(opus_4_5.cache_read_price_per_1m, Some(0.5));
         assert_eq!(opus_4_5.aliases.len(), 4);
 
@@ -304,6 +317,7 @@ mod tests {
         assert_eq!(sonnet_4_5.input_price_per_1m, 3.0);
         assert_eq!(sonnet_4_5.output_price_per_1m, 15.0);
         assert_eq!(sonnet_4_5.cache_write_price_per_1m, Some(3.75));
+        assert_eq!(sonnet_4_5.cache_write_1h_price_per_1m, Some(6.0));
         assert_eq!(sonnet_4_5.cache_read_price_per_1m, Some(0.3));
 
         // // 验证 Claude 3.5 Sonnet (旧版本) 价格
@@ -321,6 +335,7 @@ mod tests {
         assert_eq!(haiku_3_5.input_price_per_1m, 0.8);
         assert_eq!(haiku_3_5.output_price_per_1m, 4.0);
         assert_eq!(haiku_3_5.cache_write_price_per_1m, Some(1.0));
+        assert_eq!(haiku_3_5.cache_write_1h_price_per_1m, Some(1.6));
         assert_eq!(haiku_3_5.cache_read_price_per_1m, Some(0.08));
     }
 
@@ -345,15 +360,21 @@ mod tests {
     fn test_cache_price_calculations() {
         let template = builtin_claude_official_template();
 
-        // 验证缓存价格计算公式：write = input * 1.25, read = input * 0.1
+        // 验证缓存价格计算公式：write_5m = input * 1.25, write_1h = input * 2.0, read = input * 0.1
         for (_, model_price) in template.custom_models.iter() {
             let expected_cache_write =
                 (model_price.input_price_per_1m * 1.25 * 100.0).round() / 100.0;
+            let expected_cache_write_1h =
+                (model_price.input_price_per_1m * 2.0 * 100.0).round() / 100.0;
             let expected_cache_read =
                 (model_price.input_price_per_1m * 0.1 * 100.0).round() / 100.0;
 
             let actual_cache_write = model_price
                 .cache_write_price_per_1m
+                .map(|v| (v * 100.0).round() / 100.0)
+                .unwrap_or(0.0);
+            let actual_cache_write_1h = model_price
+                .cache_write_1h_price_per_1m
                 .map(|v| (v * 100.0).round() / 100.0)
                 .unwrap_or(0.0);
             let actual_cache_read = model_price
@@ -363,7 +384,12 @@ mod tests {
 
             assert_eq!(
                 actual_cache_write, expected_cache_write,
-                "Cache write price mismatch for model with input price {}",
+                "Cache write 5m price mismatch for model with input price {}",
+                model_price.input_price_per_1m
+            );
+            assert_eq!(
+                actual_cache_write_1h, expected_cache_write_1h,
+                "Cache write 1h price mismatch for model with input price {}",
                 model_price.input_price_per_1m
             );
             assert_eq!(

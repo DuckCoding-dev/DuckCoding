@@ -146,6 +146,7 @@ impl ToolProcessor for CodexProcessor {
             input_tokens,
             output_tokens,
             0, // Codex 不报告 cache_creation_tokens
+            0, // Codex 无 1h 缓存概念
             cache_read_tokens,
             reasoning_tokens,
         ))
@@ -217,6 +218,7 @@ impl ToolProcessor for CodexProcessor {
             input_tokens,
             output_tokens,
             0, // Codex 不报告 cache_creation_tokens
+            0, // Codex 无 1h 缓存概念
             cache_read_tokens,
             reasoning_tokens,
         ))

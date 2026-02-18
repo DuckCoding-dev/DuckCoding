@@ -19,6 +19,7 @@ export interface TokenLog {
   input_tokens: number;
   output_tokens: number;
   cache_creation_tokens: number;
+  cache_creation_1h_tokens?: number;
   cache_read_tokens: number;
   request_status: 'success' | 'failed'; // 请求状态
   response_type: 'sse' | 'json' | 'unknown'; // 响应类型

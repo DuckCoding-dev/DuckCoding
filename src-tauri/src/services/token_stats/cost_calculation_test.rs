@@ -25,6 +25,7 @@ mod tests {
             input_tokens,
             output_tokens,
             cache_creation_tokens,
+            0, // cache_creation_1h_tokens
             cache_read_tokens,
             0, // reasoning_tokens
         );
@@ -82,6 +83,7 @@ mod tests {
             1000,
             500,
             0,
+            0, // cache_creation_1h_tokens
             0,
             0,
         );
@@ -98,6 +100,7 @@ mod tests {
             1000,
             500,
             0,
+            0, // cache_creation_1h_tokens
             0,
             0,
         );
@@ -114,6 +117,7 @@ mod tests {
             1000,
             500,
             0,
+            0, // cache_creation_1h_tokens
             0,
             0,
         );
@@ -193,6 +197,7 @@ mod tests {
             token_info.input_tokens,
             token_info.output_tokens,
             token_info.cache_creation_tokens,
+            token_info.cache_creation_1h_tokens,
             token_info.cache_read_tokens,
             0, // reasoning_tokens
         );
@@ -288,6 +293,7 @@ mod tests {
             token_info.input_tokens,
             token_info.output_tokens,
             token_info.cache_creation_tokens,
+            token_info.cache_creation_1h_tokens,
             token_info.cache_read_tokens,
             0, // reasoning_tokens
         );

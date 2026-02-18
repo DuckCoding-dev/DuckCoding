@@ -16,8 +16,10 @@ export interface ModelPrice {
   input_price_per_1m: number;
   /** 输出价格（USD/百万 Token） */
   output_price_per_1m: number;
-  /** 缓存写入价格（USD/百万 Token，可选） */
+  /** 缓存写入价格 - 5分钟TTL（USD/百万 Token，可选） */
   cache_write_price_per_1m?: number;
+  /** 缓存写入价格 - 1小时TTL（USD/百万 Token，可选） */
+  cache_write_1h_price_per_1m?: number;
   /** 缓存读取价格（USD/百万 Token，可选） */
   cache_read_price_per_1m?: number;
   /** 货币类型（默认：USD） */
