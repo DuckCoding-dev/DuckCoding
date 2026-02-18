@@ -35,8 +35,12 @@ pub struct TokenLog {
     /// 输出Token数量
     pub output_tokens: i64,
 
-    /// 缓存创建Token数量
+    /// 缓存创建Token数量（5m + 1h 总量）
     pub cache_creation_tokens: i64,
+
+    /// 1小时缓存创建Token数量
+    #[serde(default)]
+    pub cache_creation_1h_tokens: i64,
 
     /// 缓存读取Token数量
     pub cache_read_tokens: i64,
@@ -112,6 +116,7 @@ impl TokenLog {
         input_tokens: i64,
         output_tokens: i64,
         cache_creation_tokens: i64,
+        cache_creation_1h_tokens: i64,
         cache_read_tokens: i64,
         reasoning_tokens: i64,
         request_status: String,
@@ -139,6 +144,7 @@ impl TokenLog {
             input_tokens,
             output_tokens,
             cache_creation_tokens,
+            cache_creation_1h_tokens,
             cache_read_tokens,
             reasoning_tokens,
             request_status,
@@ -291,6 +297,7 @@ mod tests {
             1000,
             500,
             100,
+            0, // cache_creation_1h_tokens
             200,
             0, // reasoning_tokens
             "success".to_string(),

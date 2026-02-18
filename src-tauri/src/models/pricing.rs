@@ -13,11 +13,16 @@ pub struct ModelPrice {
     /// 输出价格（USD/百万 Token）
     pub output_price_per_1m: f64,
 
-    /// 缓存写入价格（USD/百万 Token，可选）
+    /// 缓存写入价格 - 5分钟TTL（USD/百万 Token，可选）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_write_price_per_1m: Option<f64>,
 
-    /// 缓存读取价格（USD/百万 Token，可选）
+    /// 缓存写入价格 - 1小时TTL（USD/百万 Token，可选）
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_write_1h_price_per_1m: Option<f64>,
+
+    /// 缓存读取价格（USD/百万 Token，可选，5m和1h读取价格相同）
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_read_price_per_1m: Option<f64>,
 
@@ -42,6 +47,7 @@ impl ModelPrice {
         input_price_per_1m: f64,
         output_price_per_1m: f64,
         cache_write_price_per_1m: Option<f64>,
+        cache_write_1h_price_per_1m: Option<f64>,
         cache_read_price_per_1m: Option<f64>,
         reasoning_output_price_per_1m: Option<f64>,
         aliases: Vec<String>,
@@ -51,6 +57,7 @@ impl ModelPrice {
             input_price_per_1m,
             output_price_per_1m,
             cache_write_price_per_1m,
+            cache_write_1h_price_per_1m,
             cache_read_price_per_1m,
             reasoning_output_price_per_1m,
             currency: default_currency(),
@@ -248,6 +255,7 @@ mod tests {
             3.0,
             15.0,
             Some(3.75),
+            Some(6.0), // 1h cache write: input * 2.0
             Some(0.3),
             None, // No reasoning price
             vec![
@@ -260,6 +268,7 @@ mod tests {
         assert_eq!(price.input_price_per_1m, 3.0);
         assert_eq!(price.output_price_per_1m, 15.0);
         assert_eq!(price.cache_write_price_per_1m, Some(3.75));
+        assert_eq!(price.cache_write_1h_price_per_1m, Some(6.0));
         assert_eq!(price.cache_read_price_per_1m, Some(0.3));
         assert_eq!(price.currency, "USD");
         assert_eq!(price.aliases.len(), 2);
@@ -284,7 +293,16 @@ mod tests {
         let mut custom_models = HashMap::new();
         custom_models.insert(
             "model1".to_string(),
-            ModelPrice::new("provider1".to_string(), 1.0, 2.0, None, None, None, vec![]),
+            ModelPrice::new(
+                "provider1".to_string(),
+                1.0,
+                2.0,
+                None,
+                None,
+                None,
+                None,
+                vec![],
+            ),
         );
 
         let full_custom = PricingTemplate::new(

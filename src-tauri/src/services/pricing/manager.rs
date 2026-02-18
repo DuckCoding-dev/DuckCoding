@@ -1,8 +1,10 @@
 use crate::data::DataManager;
 use crate::models::pricing::{DefaultTemplatesConfig, ModelPrice, PricingTemplate};
 use crate::services::pricing::builtin::{
-    builtin_claude_official_template, builtin_openai_official_template,
+    builtin_claude_official_template, builtin_gemini_official_template,
+    builtin_openai_official_template,
 };
+use crate::services::pricing::remote_sync::RemoteSyncState;
 use crate::utils::precision::price_precision;
 use anyhow::{anyhow, Context, Result};
 use lazy_static::lazy_static;
@@ -107,20 +109,24 @@ impl PricingManager {
         std::fs::create_dir_all(&self.templates_dir)
             .context("Failed to create templates directory")?;
 
-        // 保存内置 Claude 官方模板
-        let builtin_claude_template = builtin_claude_official_template();
-        self.save_template(&builtin_claude_template)?;
-
-        // 保存内置 OpenAI 官方模板
-        let builtin_openai_template = builtin_openai_official_template();
-        self.save_template(&builtin_openai_template)?;
+        // 仅在模板文件不存在时才写入内置默认值，避免覆盖远程同步的数据
+        for (id, template) in [
+            ("builtin_claude", builtin_claude_official_template()),
+            ("builtin_openai", builtin_openai_official_template()),
+            ("builtin_gemini", builtin_gemini_official_template()),
+        ] {
+            let path = self.templates_dir.join(format!("{}.json", id));
+            if !path.exists() {
+                self.save_template(&template)?;
+            }
+        }
 
         // 初始化默认模板配置（如果不存在）
         if !self.default_templates_path.exists() {
             let mut config = DefaultTemplatesConfig::new();
             config.set_default("claude-code".to_string(), "builtin_claude".to_string());
             config.set_default("codex".to_string(), "builtin_openai".to_string());
-            config.set_default("gemini-cli".to_string(), "builtin_claude".to_string());
+            config.set_default("gemini-cli".to_string(), "builtin_gemini".to_string());
 
             let value = serde_json::to_value(&config)
                 .context("Failed to serialize default templates config")?;
@@ -252,6 +258,34 @@ impl PricingManager {
         serde_json::from_value(value).context("Failed to parse default templates config")
     }
 
+    /// 加载远程同步状态
+    pub fn load_sync_state(&self) -> Result<RemoteSyncState> {
+        let state_path = self.pricing_dir.join("remote_sync_state.json");
+        if !state_path.exists() {
+            return Ok(RemoteSyncState::default());
+        }
+
+        let value = self
+            .data_manager
+            .json()
+            .read(&state_path)
+            .context("Failed to read remote sync state")?;
+
+        serde_json::from_value(value).context("Failed to parse remote sync state")
+    }
+
+    /// 保存远程同步状态
+    pub fn save_sync_state(&self, state: &RemoteSyncState) -> Result<()> {
+        let state_path = self.pricing_dir.join("remote_sync_state.json");
+
+        let value = serde_json::to_value(state).context("Failed to serialize remote sync state")?;
+
+        self.data_manager
+            .json()
+            .write(&state_path, &value)
+            .context("Failed to write remote sync state")
+    }
+
     /// 计算成本（核心方法）
     ///
     /// # 参数
@@ -261,7 +295,8 @@ impl PricingManager {
     /// - `model`: 模型名称
     /// - `input_tokens`: 输入 Token 数量
     /// - `output_tokens`: 输出 Token 数量
-    /// - `cache_creation_tokens`: 缓存创建 Token 数量
+    /// - `cache_creation_tokens`: 缓存创建 Token 总量（5m + 1h）
+    /// - `cache_creation_1h_tokens`: 1小时缓存创建 Token 数量（5m = total - 1h）
     /// - `cache_read_tokens`: 缓存读取 Token 数量
     /// - `reasoning_tokens`: 推理 Token 数量
     ///
@@ -277,6 +312,7 @@ impl PricingManager {
         input_tokens: i64,
         output_tokens: i64,
         cache_creation_tokens: i64,
+        cache_creation_1h_tokens: i64,
         cache_read_tokens: i64,
         reasoning_tokens: i64,
     ) -> Result<CostBreakdown> {
@@ -295,9 +331,20 @@ impl PricingManager {
         // 3. 计算各部分价格
         let input_price = input_tokens as f64 * model_price.input_price_per_1m / 1_000_000.0;
         let output_price = output_tokens as f64 * model_price.output_price_per_1m / 1_000_000.0;
-        let cache_write_price = cache_creation_tokens as f64
+
+        // 缓存写入分别计价：5m 和 1h 使用不同价格
+        let cache_5m_tokens = cache_creation_tokens - cache_creation_1h_tokens;
+        let cache_write_5m_price = cache_5m_tokens as f64
             * model_price.cache_write_price_per_1m.unwrap_or(0.0)
             / 1_000_000.0;
+        let cache_write_1h_price = cache_creation_1h_tokens as f64
+            * model_price
+                .cache_write_1h_price_per_1m
+                .or(model_price.cache_write_price_per_1m) // 无 1h 价格时回退到 5m
+                .unwrap_or(0.0)
+            / 1_000_000.0;
+        let cache_write_price = cache_write_5m_price + cache_write_1h_price;
+
         let cache_read_price = cache_read_tokens as f64
             * model_price.cache_read_price_per_1m.unwrap_or(0.0)
             / 1_000_000.0;
@@ -360,6 +407,9 @@ impl PricingManager {
                                 * inherited.multiplier,
                             cache_write_price_per_1m: base_price
                                 .cache_write_price_per_1m
+                                .map(|p| p * inherited.multiplier),
+                            cache_write_1h_price_per_1m: base_price
+                                .cache_write_1h_price_per_1m
                                 .map(|p| p * inherited.multiplier),
                             cache_read_price_per_1m: base_price
                                 .cache_read_price_per_1m
@@ -445,7 +495,8 @@ mod tests {
                 "claude-sonnet-4.5",
                 1000, // input
                 500,  // output
-                100,  // cache write
+                100,  // cache write (total 5m + 1h)
+                0,    // cache_creation_1h_tokens
                 200,  // cache read
                 0,    // reasoning_tokens
             )
@@ -458,7 +509,7 @@ mod tests {
         // output: 500 * 15.0 / 1_000_000 = 0.0075
         assert_eq!(breakdown.output_price, 0.0075);
 
-        // cache write: 100 * 3.75 / 1_000_000 = 0.000375
+        // cache write: 100 * 3.75 / 1_000_000 = 0.000375 (全部为 5m)
         assert_eq!(breakdown.cache_write_price, 0.000375);
 
         // cache read: 200 * 0.3 / 1_000_000 = 0.00006
@@ -532,6 +583,7 @@ mod tests {
                 1000,
                 500,
                 0,
+                0, // cache_creation_1h_tokens
                 0,
                 0,
             )

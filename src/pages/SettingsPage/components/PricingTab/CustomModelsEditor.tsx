@@ -291,9 +291,9 @@ export function CustomModelsEditor({ data, onChange, readOnly = false }: CustomM
                         />
                       </div>
 
-                      {/* 缓存写入价格 */}
+                      {/* 缓存写入价格 - 5分钟 TTL */}
                       <div className="space-y-2">
-                        <Label>缓存写入价格 (可选)</Label>
+                        <Label>缓存写入价格 - 5m (可选)</Label>
                         <Input
                           type="number"
                           step="0.01"
@@ -303,6 +303,26 @@ export function CustomModelsEditor({ data, onChange, readOnly = false }: CustomM
                             handleUpdateField(
                               modelName,
                               'cache_write_price_per_1m',
+                              e.target.value ? parseFloat(e.target.value) : 0,
+                            )
+                          }
+                          placeholder="留空表示不支持"
+                          disabled={readOnly}
+                        />
+                      </div>
+
+                      {/* 缓存写入价格 - 1小时 TTL */}
+                      <div className="space-y-2">
+                        <Label>缓存写入价格 - 1h (可选)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={model.cache_write_1h_price_per_1m || ''}
+                          onChange={(e) =>
+                            handleUpdateField(
+                              modelName,
+                              'cache_write_1h_price_per_1m',
                               e.target.value ? parseFloat(e.target.value) : 0,
                             )
                           }

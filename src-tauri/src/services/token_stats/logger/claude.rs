@@ -31,6 +31,7 @@ impl ClaudeLogger {
             token_info.input_tokens,
             token_info.output_tokens,
             token_info.cache_creation_tokens,
+            token_info.cache_creation_1h_tokens,
             token_info.cache_read_tokens,
             token_info.reasoning_tokens,
         );
@@ -70,6 +71,7 @@ impl ClaudeLogger {
             token_info.input_tokens,
             token_info.output_tokens,
             token_info.cache_creation_tokens,
+            token_info.cache_creation_1h_tokens,
             token_info.cache_read_tokens,
             token_info.reasoning_tokens,
             status.as_str().to_string(),
@@ -174,6 +176,7 @@ impl TokenLogger for ClaudeLogger {
             0,    // input_tokens
             0,    // output_tokens
             0,    // cache_creation_tokens
+            0,    // cache_creation_1h_tokens
             0,    // cache_read_tokens
             0,    // reasoning_tokens
             LogStatus::Failed.as_str().to_string(),

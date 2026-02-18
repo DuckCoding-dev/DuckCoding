@@ -31,6 +31,7 @@ impl ToolProcessor for ClaudeProcessor {
         let mut input_tokens = 0i64;
         let mut output_tokens = 0i64;
         let mut cache_creation_tokens = 0i64;
+        let mut cache_creation_1h_tokens = 0i64;
         let mut cache_read_tokens = 0i64;
 
         for chunk in sse_chunks {
@@ -84,24 +85,25 @@ impl ToolProcessor for ClaudeProcessor {
                                 .unwrap_or(0);
 
                             // 提取缓存创建 token：优先读取扁平字段，回退到嵌套对象
-                            cache_creation_tokens = usage
+                            if let Some(flat_val) = usage
                                 .get("cache_creation_input_tokens")
                                 .and_then(|v| v.as_i64())
-                                .unwrap_or_else(|| {
-                                    if let Some(cache_obj) = usage.get("cache_creation") {
-                                        let ephemeral_5m = cache_obj
-                                            .get("ephemeral_5m_input_tokens")
-                                            .and_then(|v| v.as_i64())
-                                            .unwrap_or(0);
-                                        let ephemeral_1h = cache_obj
-                                            .get("ephemeral_1h_input_tokens")
-                                            .and_then(|v| v.as_i64())
-                                            .unwrap_or(0);
-                                        ephemeral_5m + ephemeral_1h
-                                    } else {
-                                        0
-                                    }
-                                });
+                            {
+                                // 扁平字段：无法区分 5m/1h，全部视为 5m
+                                cache_creation_tokens = flat_val;
+                                cache_creation_1h_tokens = 0;
+                            } else if let Some(cache_obj) = usage.get("cache_creation") {
+                                let ephemeral_5m = cache_obj
+                                    .get("ephemeral_5m_input_tokens")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or(0);
+                                let ephemeral_1h = cache_obj
+                                    .get("ephemeral_1h_input_tokens")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or(0);
+                                cache_creation_tokens = ephemeral_5m + ephemeral_1h;
+                                cache_creation_1h_tokens = ephemeral_1h;
+                            }
 
                             cache_read_tokens = usage
                                 .get("cache_read_input_tokens")
@@ -112,6 +114,7 @@ impl ToolProcessor for ClaudeProcessor {
                                 model = %model,
                                 message_id = ?message_id,
                                 input_tokens = input_tokens,
+                                cache_creation_1h_tokens = cache_creation_1h_tokens,
                                 "Claude message_start 提取成功"
                             );
                         }
@@ -126,24 +129,24 @@ impl ToolProcessor for ClaudeProcessor {
                             .and_then(|v| v.as_i64())
                             .unwrap_or(output_tokens);
 
-                        cache_creation_tokens = usage
+                        if let Some(flat_val) = usage
                             .get("cache_creation_input_tokens")
                             .and_then(|v| v.as_i64())
-                            .unwrap_or_else(|| {
-                                if let Some(cache_obj) = usage.get("cache_creation") {
-                                    let ephemeral_5m = cache_obj
-                                        .get("ephemeral_5m_input_tokens")
-                                        .and_then(|v| v.as_i64())
-                                        .unwrap_or(0);
-                                    let ephemeral_1h = cache_obj
-                                        .get("ephemeral_1h_input_tokens")
-                                        .and_then(|v| v.as_i64())
-                                        .unwrap_or(0);
-                                    ephemeral_5m + ephemeral_1h
-                                } else {
-                                    cache_creation_tokens
-                                }
-                            });
+                        {
+                            cache_creation_tokens = flat_val;
+                            // 扁平字段无法区分 5m/1h，保持之前的 1h 值
+                        } else if let Some(cache_obj) = usage.get("cache_creation") {
+                            let ephemeral_5m = cache_obj
+                                .get("ephemeral_5m_input_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            let ephemeral_1h = cache_obj
+                                .get("ephemeral_1h_input_tokens")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or(0);
+                            cache_creation_tokens = ephemeral_5m + ephemeral_1h;
+                            cache_creation_1h_tokens = ephemeral_1h;
+                        }
 
                         cache_read_tokens = usage
                             .get("cache_read_input_tokens")
@@ -153,6 +156,7 @@ impl ToolProcessor for ClaudeProcessor {
                         tracing::debug!(
                             output_tokens = output_tokens,
                             cache_creation_tokens = cache_creation_tokens,
+                            cache_creation_1h_tokens = cache_creation_1h_tokens,
                             cache_read_tokens = cache_read_tokens,
                             "Claude message_delta 提取成功"
                         );
@@ -172,6 +176,7 @@ impl ToolProcessor for ClaudeProcessor {
             input_tokens,
             output_tokens,
             cache_creation_tokens,
+            cache_creation_1h_tokens,
             cache_read_tokens,
             0, // Claude 不使用 reasoning tokens
         ))
@@ -218,24 +223,25 @@ impl ToolProcessor for ClaudeProcessor {
             .unwrap_or(0);
 
         // 提取缓存创建 token：优先读取扁平字段，回退到嵌套对象
-        let cache_creation_tokens = usage
+        let (cache_creation_tokens, cache_creation_1h_tokens) = if let Some(flat_val) = usage
             .get("cache_creation_input_tokens")
             .and_then(|v| v.as_i64())
-            .unwrap_or_else(|| {
-                if let Some(cache_obj) = usage.get("cache_creation") {
-                    let ephemeral_5m = cache_obj
-                        .get("ephemeral_5m_input_tokens")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(0);
-                    let ephemeral_1h = cache_obj
-                        .get("ephemeral_1h_input_tokens")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(0);
-                    ephemeral_5m + ephemeral_1h
-                } else {
-                    0
-                }
-            });
+        {
+            // 扁平字段：无法区分 5m/1h，全部视为 5m
+            (flat_val, 0)
+        } else if let Some(cache_obj) = usage.get("cache_creation") {
+            let ephemeral_5m = cache_obj
+                .get("ephemeral_5m_input_tokens")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let ephemeral_1h = cache_obj
+                .get("ephemeral_1h_input_tokens")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            (ephemeral_5m + ephemeral_1h, ephemeral_1h)
+        } else {
+            (0, 0)
+        };
 
         let cache_read_tokens = usage
             .get("cache_read_input_tokens")
@@ -249,6 +255,7 @@ impl ToolProcessor for ClaudeProcessor {
             input_tokens,
             output_tokens,
             cache_creation_tokens,
+            cache_creation_1h_tokens,
             cache_read_tokens,
             0, // Claude 不使用 reasoning tokens
         ))
@@ -279,6 +286,7 @@ mod tests {
         assert_eq!(result.input_tokens, 1000);
         assert_eq!(result.output_tokens, 12); // message_delta 的最终值
         assert_eq!(result.cache_creation_tokens, 100);
+        assert_eq!(result.cache_creation_1h_tokens, 0); // 扁平字段无法区分，全部视为 5m
         assert_eq!(result.cache_read_tokens, 200);
         assert_eq!(result.reasoning_tokens, 0);
     }
@@ -311,6 +319,7 @@ mod tests {
         assert_eq!(result.input_tokens, 1000);
         assert_eq!(result.output_tokens, 500);
         assert_eq!(result.cache_creation_tokens, 100);
+        assert_eq!(result.cache_creation_1h_tokens, 0); // 扁平字段全部视为 5m
         assert_eq!(result.cache_read_tokens, 200);
         assert_eq!(result.reasoning_tokens, 0);
     }
@@ -339,6 +348,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.cache_creation_tokens, 150); // 50 + 100
+        assert_eq!(result.cache_creation_1h_tokens, 100); // 1h 部分
         assert_eq!(result.cache_read_tokens, 200);
     }
 }
