@@ -21,8 +21,11 @@ pub struct TokenInfo {
     /// 输出 Token 数量
     pub output_tokens: i64,
 
-    /// 缓存创建 Token 数量
+    /// 缓存创建 Token 数量（5m + 1h 总量）
     pub cache_creation_tokens: i64,
+
+    /// 1小时缓存创建 Token 数量（5m 部分 = cache_creation_tokens - cache_creation_1h_tokens）
+    pub cache_creation_1h_tokens: i64,
 
     /// 缓存读取 Token 数量
     pub cache_read_tokens: i64,
@@ -33,12 +36,14 @@ pub struct TokenInfo {
 
 impl TokenInfo {
     /// 创建新的 TokenInfo 实例
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         model: String,
         message_id: String,
         input_tokens: i64,
         output_tokens: i64,
         cache_creation_tokens: i64,
+        cache_creation_1h_tokens: i64,
         cache_read_tokens: i64,
         reasoning_tokens: i64,
     ) -> Self {
@@ -48,6 +53,7 @@ impl TokenInfo {
             input_tokens,
             output_tokens,
             cache_creation_tokens,
+            cache_creation_1h_tokens,
             cache_read_tokens,
             reasoning_tokens,
         }
@@ -74,7 +80,8 @@ mod tests {
             "msg_123".to_string(),
             1000,
             500,
-            100,
+            100, // total cache creation (5m + 1h)
+            30,  // 1h cache creation
             200,
             50,
         );
@@ -84,6 +91,7 @@ mod tests {
         assert_eq!(info.input_tokens, 1000);
         assert_eq!(info.output_tokens, 500);
         assert_eq!(info.cache_creation_tokens, 100);
+        assert_eq!(info.cache_creation_1h_tokens, 30);
         assert_eq!(info.cache_read_tokens, 200);
         assert_eq!(info.reasoning_tokens, 50);
     }
@@ -96,6 +104,7 @@ mod tests {
             1000,
             500,
             100,
+            0, // no 1h cache
             200,
             50,
         );

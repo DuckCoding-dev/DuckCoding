@@ -189,6 +189,11 @@ pub async fn initialize_app() -> Result<InitializationContext, Box<dyn std::erro
         .await;
     });
 
+    // 8. 启动远程价格同步调度器
+    tauri::async_runtime::spawn(async {
+        duckcoding::services::pricing::remote_sync::start_sync_scheduler().await;
+    });
+
     Ok(InitializationContext {
         proxy_manager,
         tool_registry: Arc::new(TokioMutex::new(tool_registry)),

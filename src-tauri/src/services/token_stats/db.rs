@@ -127,6 +127,9 @@ impl TokenStatsDb {
         // 这是为了兼容旧版本数据库
         self.migrate_add_reasoning_fields()?;
 
+        // 数据库迁移：添加 cache_creation_1h_tokens 字段（区分 5m/1h 缓存）
+        self.migrate_add_cache_1h_field()?;
+
         Ok(())
     }
 
@@ -171,6 +174,39 @@ impl TokenStatsDb {
         Ok(())
     }
 
+    /// 迁移：添加 cache_creation_1h_tokens 字段（区分 5m/1h 缓存写入）
+    fn migrate_add_cache_1h_field(&self) -> Result<()> {
+        let manager = DataManager::global()
+            .sqlite(&self.db_path)
+            .context("Failed to get SQLite manager for cache_1h migration")?;
+
+        let check_query = "SELECT COUNT(*) FROM pragma_table_info('token_logs') WHERE name='cache_creation_1h_tokens'";
+        let rows = manager
+            .query(check_query, &[])
+            .context("Failed to check cache_creation_1h_tokens column")?;
+
+        let exists = rows
+            .first()
+            .and_then(|row| row.values.first())
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0)
+            > 0;
+
+        if !exists {
+            eprintln!("Migrating database: adding cache_creation_1h_tokens column");
+
+            manager
+                .execute_raw(
+                    "ALTER TABLE token_logs ADD COLUMN cache_creation_1h_tokens INTEGER NOT NULL DEFAULT 0",
+                )
+                .context("Failed to add cache_creation_1h_tokens column")?;
+
+            eprintln!("Database cache_1h migration completed successfully");
+        }
+
+        Ok(())
+    }
+
     /// 插入单条日志记录
     pub fn insert_log(&self, log: &TokenLog) -> Result<i64> {
         let manager = DataManager::global()
@@ -188,6 +224,7 @@ impl TokenStatsDb {
             log.input_tokens.to_string(),
             log.output_tokens.to_string(),
             log.cache_creation_tokens.to_string(),
+            log.cache_creation_1h_tokens.to_string(),
             log.cache_read_tokens.to_string(),
             log.reasoning_tokens.to_string(),
             log.request_status.clone(),
@@ -219,11 +256,11 @@ impl TokenStatsDb {
                 "INSERT INTO token_logs (
                     tool_type, timestamp, client_ip, session_id, config_name,
                     model, message_id, input_tokens, output_tokens,
-                    cache_creation_tokens, cache_read_tokens, reasoning_tokens,
+                    cache_creation_tokens, cache_creation_1h_tokens, cache_read_tokens, reasoning_tokens,
                     request_status, response_type, error_type, error_detail,
                     response_time_ms, input_price, output_price, cache_write_price, cache_read_price, reasoning_price,
                     total_cost, pricing_template_id
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
                 &params_refs,
             )
             .context("Failed to insert token log")?;
@@ -265,6 +302,7 @@ impl TokenStatsDb {
             log.input_tokens.to_string(),
             log.output_tokens.to_string(),
             log.cache_creation_tokens.to_string(),
+            log.cache_creation_1h_tokens.to_string(),
             log.cache_read_tokens.to_string(),
             log.reasoning_tokens.to_string(),
             log.request_status.clone(),
@@ -296,11 +334,11 @@ impl TokenStatsDb {
                 "INSERT INTO token_logs (
                     tool_type, timestamp, client_ip, session_id, config_name,
                     model, message_id, input_tokens, output_tokens,
-                    cache_creation_tokens, cache_read_tokens, reasoning_tokens,
+                    cache_creation_tokens, cache_creation_1h_tokens, cache_read_tokens, reasoning_tokens,
                     request_status, response_type, error_type, error_detail,
                     response_time_ms, input_price, output_price, cache_write_price, cache_read_price, reasoning_price,
                     total_cost, pricing_template_id
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25)",
                 &params_refs,
             )
             .context("Failed to insert token log")?;
@@ -412,7 +450,7 @@ impl TokenStatsDb {
         let list_sql = format!(
             "SELECT id, tool_type, timestamp, client_ip, session_id, config_name,
                     model, message_id, input_tokens, output_tokens,
-                    cache_creation_tokens, cache_read_tokens, reasoning_tokens,
+                    cache_creation_tokens, cache_creation_1h_tokens, cache_read_tokens, reasoning_tokens,
                     request_status, response_type, error_type, error_detail,
                     response_time_ms, input_price, output_price, cache_write_price, cache_read_price, reasoning_price,
                     total_cost, pricing_template_id
@@ -472,40 +510,45 @@ impl TokenStatsDb {
                     input_tokens: row.values.get(8).and_then(|v| v.as_i64()).unwrap_or(0),
                     output_tokens: row.values.get(9).and_then(|v| v.as_i64()).unwrap_or(0),
                     cache_creation_tokens: row.values.get(10).and_then(|v| v.as_i64()).unwrap_or(0),
-                    cache_read_tokens: row.values.get(11).and_then(|v| v.as_i64()).unwrap_or(0),
-                    reasoning_tokens: row.values.get(12).and_then(|v| v.as_i64()).unwrap_or(0),
+                    cache_creation_1h_tokens: row
+                        .values
+                        .get(11)
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0),
+                    cache_read_tokens: row.values.get(12).and_then(|v| v.as_i64()).unwrap_or(0),
+                    reasoning_tokens: row.values.get(13).and_then(|v| v.as_i64()).unwrap_or(0),
                     request_status: row
                         .values
-                        .get(13)
+                        .get(14)
                         .and_then(|v| v.as_str())
                         .unwrap_or("success")
                         .to_string(),
                     response_type: row
                         .values
-                        .get(14)
+                        .get(15)
                         .and_then(|v| v.as_str())
                         .unwrap_or("unknown")
                         .to_string(),
                     error_type: row
                         .values
-                        .get(15)
+                        .get(16)
                         .and_then(|v| v.as_str())
                         .map(String::from),
                     error_detail: row
                         .values
-                        .get(16)
+                        .get(17)
                         .and_then(|v| v.as_str())
                         .map(String::from),
-                    response_time_ms: row.values.get(17).and_then(|v| v.as_i64()),
-                    input_price: row.values.get(18).and_then(|v| v.as_f64()),
-                    output_price: row.values.get(19).and_then(|v| v.as_f64()),
-                    cache_write_price: row.values.get(20).and_then(|v| v.as_f64()),
-                    cache_read_price: row.values.get(21).and_then(|v| v.as_f64()),
-                    reasoning_price: row.values.get(22).and_then(|v| v.as_f64()),
-                    total_cost: row.values.get(23).and_then(|v| v.as_f64()).unwrap_or(0.0),
+                    response_time_ms: row.values.get(18).and_then(|v| v.as_i64()),
+                    input_price: row.values.get(19).and_then(|v| v.as_f64()),
+                    output_price: row.values.get(20).and_then(|v| v.as_f64()),
+                    cache_write_price: row.values.get(21).and_then(|v| v.as_f64()),
+                    cache_read_price: row.values.get(22).and_then(|v| v.as_f64()),
+                    reasoning_price: row.values.get(23).and_then(|v| v.as_f64()),
+                    total_cost: row.values.get(24).and_then(|v| v.as_f64()).unwrap_or(0.0),
                     pricing_template_id: row
                         .values
-                        .get(24)
+                        .get(25)
                         .and_then(|v| v.as_str())
                         .map(String::from),
                 })
@@ -671,6 +714,7 @@ mod tests {
             1000,
             500,
             100,
+            0, // cache_creation_1h_tokens
             200,
             0, // reasoning_tokens
             "success".to_string(),
@@ -714,6 +758,7 @@ mod tests {
                 100,
                 50,
                 10,
+                0, // cache_creation_1h_tokens
                 20,
                 0, // reasoning_tokens
                 "success".to_string(),
@@ -769,6 +814,7 @@ mod tests {
             100,
             50,
             0,
+            0, // cache_creation_1h_tokens
             0,
             0, // reasoning_tokens
             "success".to_string(),
@@ -797,6 +843,7 @@ mod tests {
             200,
             100,
             0,
+            0, // cache_creation_1h_tokens
             0,
             0, // reasoning_tokens
             "success".to_string(),

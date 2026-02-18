@@ -273,6 +273,7 @@ mod tests {
                 100,
                 50,
                 10,
+                0, // cache_creation_1h_tokens
                 20,
                 0, // reasoning_tokens
                 "success".to_string(),
@@ -339,6 +340,7 @@ mod tests {
                         100,
                         50,
                         10,
+                        0, // cache_creation_1h_tokens
                         20,
                         0, // reasoning_tokens
                         "success".to_string(),
