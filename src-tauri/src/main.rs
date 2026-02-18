@@ -143,8 +143,7 @@ fn setup_app_hooks(app: &mut tauri::App) -> tauri::Result<()> {
     #[cfg(not(target_os = "macos"))]
     setup::tray::setup_system_tray(app)?;
 
-    // 5. 处理窗口关闭事件
-    #[cfg(not(target_os = "macos"))]
+    // 5. 处理窗口关闭事件（跨平台：关闭按钮最小化到托盘/状态栏而非退出）
     setup::tray::setup_window_close_handler(app)?;
 
     // 6. 创建应用菜单栏（仅 macOS）
