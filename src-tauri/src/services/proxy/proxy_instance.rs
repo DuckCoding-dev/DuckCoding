@@ -362,10 +362,10 @@ async fn handle_request_inner(
 
     // 本地工具处理：dc-local:// 协议标记的请求直接返回 body
     if processed.target_url.starts_with("dc-local://") {
-        tracing::info!(
+        tracing::debug!(
             tool_id = %tool_id,
-            local_tool = %processed.target_url,
-            "本地工具响应"
+            source = %processed.target_url,
+            "直接返回预构建响应"
         );
         let mut response = Response::builder()
             .status(StatusCode::OK)
@@ -419,7 +419,16 @@ async fn handle_request_inner(
                 .unwrap_or_else(|| "default".to_string());
             let proxy_pricing_template_id_clone = proxy_config.pricing_template_id.clone();
             let request_body_clone = processed.body.clone();
-            let error_msg = e.to_string();
+            // 展开完整错误链（reqwest 的 source chain 包含底层原因如 DNS/TLS/超时等）
+            let error_msg = {
+                let mut msg = e.to_string();
+                let mut source = std::error::Error::source(&e);
+                while let Some(cause) = source {
+                    msg.push_str(&format!(" → {}", cause));
+                    source = std::error::Error::source(cause);
+                }
+                msg
+            };
 
             // 从请求体中判断是否为流式请求
             let is_sse = serde_json::from_slice::<serde_json::Value>(&processed.body)
@@ -471,8 +480,9 @@ async fn handle_request_inner(
 
         // SSE 流式响应：收集响应体并调用 processor.record_request_log
         use futures_util::StreamExt;
-        use regex::Regex;
         use std::sync::{Arc, Mutex};
+
+        use super::headers::strip_mcp_name_prefix_bytes;
 
         let config_name = proxy_config
             .real_profile_name
@@ -492,7 +502,6 @@ async fn handle_request_inner(
 
         // amp-code 需要移除工具名前缀
         let is_amp_code = tool_id == "amp-code";
-        let prefix_regex = Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).ok();
 
         // 拦截流数据并收集
         let mapped_stream = stream
@@ -511,13 +520,7 @@ async fn handle_request_inner(
                 result
                     .map(|bytes| {
                         if is_amp_code {
-                            if let Some(ref re) = prefix_regex {
-                                let text = String::from_utf8_lossy(&bytes);
-                                let cleaned = re.replace_all(&text, r#""name": "$1""#);
-                                Frame::data(Bytes::from(cleaned.into_owned()))
-                            } else {
-                                Frame::data(bytes)
-                            }
+                            Frame::data(strip_mcp_name_prefix_bytes(&bytes))
                         } else {
                             Frame::data(bytes)
                         }
@@ -534,15 +537,17 @@ async fn handle_request_inner(
                     as Box<dyn std::error::Error + Send + Sync>)
             }))
             // 过滤掉结束标记
-            .filter(|item| {
-                let is_end_marker = item
-                    .as_ref()
-                    .err()
-                    .and_then(|e| e.downcast_ref::<std::io::Error>())
-                    .map(|e| e.to_string().contains("__stream_end_marker__"))
-                    .unwrap_or(false);
-                futures_util::future::ready(!is_end_marker)
-            });
+            .filter(
+                |item: &Result<Frame<Bytes>, Box<dyn std::error::Error + Send + Sync>>| {
+                    let is_end_marker = item
+                        .as_ref()
+                        .err()
+                        .and_then(|e| e.downcast_ref::<std::io::Error>())
+                        .map(|e| e.to_string().contains("__stream_end_marker__"))
+                        .unwrap_or(false);
+                    futures_util::future::ready(!is_end_marker)
+                },
+            );
 
         // 在流真正结束后异步记录日志
         let processor_clone = Arc::clone(&processor);
@@ -556,7 +561,7 @@ async fn handle_request_inner(
             // 等待流完全消费的信号(无超时,真正等待流结束)
             match stream_end_rx.await {
                 Ok(_) => {
-                    tracing::info!("✓ 收到 SSE 流完成信号,流已完全消费");
+                    tracing::debug!("✓ 收到 SSE 流完成信号,流已完全消费");
                 }
                 Err(_) => {
                     tracing::warn!("✗ 未收到 SSE 流完成信号(sender 被 drop),可能流被提前取消");
@@ -574,7 +579,7 @@ async fn handle_request_inner(
                 }
             };
 
-            tracing::info!(
+            tracing::debug!(
                 chunks_count = chunks.len(),
                 "开始处理 SSE chunks 进行 token 统计"
             );
@@ -614,10 +619,7 @@ async fn handle_request_inner(
 
         // amp-code 需要清理响应体中的工具名前缀
         let final_body = if tool_id == "amp-code" {
-            let text = String::from_utf8_lossy(&body_bytes);
-            let re = regex::Regex::new(r#""name"\s*:\s*"mcp_([^"]+)""#).unwrap();
-            let cleaned = re.replace_all(&text, r#""name": "$1""#);
-            Bytes::from(cleaned.into_owned())
+            super::headers::strip_mcp_name_prefix_bytes(&body_bytes)
         } else {
             body_bytes.clone()
         };

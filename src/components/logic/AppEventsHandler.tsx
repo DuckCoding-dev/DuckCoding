@@ -117,17 +117,48 @@ export function AppEventsHandler() {
       }
     });
 
+    // 监听从菜单栏激活 Profile 的事件
+    const unlistenProfileActivated = listen<{ tool_id: string; profile_name: string }>(
+      'profile-activated-from-menu',
+      (event) => {
+        const { tool_id, profile_name } = event.payload;
+        toast({
+          title: '配置已切换',
+          description: `${tool_id} 已切换到 "${profile_name}"`,
+        });
+      },
+    );
+
+    // 监听菜单栏导航事件
+    const unlistenNavigateTo = listen<string>('navigate-to', (event) => {
+      const path = event.payload;
+      if (path === '/profile') {
+        setActiveTab('profile-management');
+      } else if (path === '/settings') {
+        setActiveTab('settings');
+      } else if (path.startsWith('/transparent-proxy/')) {
+        const toolId = path.replace('/transparent-proxy/', '').trim();
+        if (toolId === 'claude-code' || toolId === 'codex' || toolId === 'gemini-cli') {
+          setSelectedProxyToolId(toolId);
+        }
+        setActiveTab('transparent-proxy');
+      }
+    });
+
     return () => {
       unlistenUpdateAvailable.then((fn) => fn());
       unlistenRequestCheck.then((fn) => fn());
       unlistenNotFound.then((fn) => fn());
       unlistenOpenSettings.then((fn) => fn());
       unlistenAppNavigate.then((fn) => fn());
+      unlistenProfileActivated.then((fn) => fn());
+      unlistenNavigateTo.then((fn) => fn());
     };
   }, [
     setActiveTab,
     setSettingsInitialTab,
     setSettingsRestrictToTab,
+    setSelectedProxyToolId,
     setIsUpdateDialogOpen,
     setUpdateInfo,
     setTokenStatsParams,

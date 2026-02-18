@@ -1,10 +1,14 @@
+use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
+
+#[cfg(not(target_os = "macos"))]
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, Runtime, WebviewWindow,
+    Emitter,
 };
 
 /// 创建系统托盘菜单
+#[cfg(not(target_os = "macos"))]
 pub fn create_tray_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
     let check_update_item = MenuItem::with_id(app, "check_update", "检查更新", true, None::<&str>)?;
@@ -85,6 +89,7 @@ pub fn restore_window_state<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 /// 隐藏窗口到系统托盘
+#[cfg(not(target_os = "macos"))]
 pub fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
     tracing::info!("隐藏窗口到系统托盘");
     if let Err(e) = window.hide() {
@@ -110,6 +115,7 @@ pub fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
 }
 
 /// 设置系统托盘（包含事件处理）
+#[cfg(not(target_os = "macos"))]
 pub fn setup_system_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     let tray_menu = create_tray_menu(app.handle())?;
     let app_handle2 = app.handle().clone();
@@ -160,9 +166,11 @@ pub fn setup_system_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
 const CLOSE_CONFIRM_EVENT: &str = "duckcoding://request-close-action";
 
 /// 设置窗口关闭处理（最小化到托盘而不是退出）
+#[cfg(not(target_os = "macos"))]
 pub fn setup_window_close_handler<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window("main") {
         let window_clone = window.clone();
