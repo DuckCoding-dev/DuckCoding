@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Building2, Pencil, Trash2, Coins, Globe, User, Clock, CalendarCheck } from 'lucide-react';
 import type { Provider } from '@/lib/tauri-commands';
-import { isCheckinSupported } from '@/services/checkin';
+import { isCheckinEnabled } from '@/services/checkin';
 
 interface ProviderCardProps {
   provider: Provider;
@@ -18,15 +18,23 @@ interface ProviderCardProps {
   onDelete: (provider: Provider) => void;
   onViewTokens: (providerId: string) => void;
   onCheckin?: (provider: Provider) => void;
+  /** 后端是否支持签到（undefined=未检测） */
+  checkinSupported?: boolean;
 }
 
-export function ProviderCard({ provider, onEdit, onDelete, onViewTokens, onCheckin }: ProviderCardProps) {
+export function ProviderCard({
+  provider,
+  onEdit,
+  onDelete,
+  onViewTokens,
+  onCheckin,
+  checkinSupported,
+}: ProviderCardProps) {
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString('zh-CN');
   };
 
-  // 检查是否支持签到
-  const supportsCheckin = isCheckinSupported(provider);
+  const checkinEnabled = isCheckinEnabled(provider);
 
   // 检查今天是否已签到
   const hasCheckedInToday = () => {
@@ -106,16 +114,25 @@ export function ProviderCard({ provider, onEdit, onDelete, onViewTokens, onCheck
           查看令牌
         </Button>
 
-        {onCheckin && supportsCheckin && (
+        {onCheckin && (
           <Button
             size="sm"
-            variant={checkedInToday ? 'secondary' : 'default'}
+            variant={checkedInToday ? 'secondary' : 'outline'}
             className="h-8 text-xs"
+            disabled={checkinSupported !== true}
             onClick={() => onCheckin(provider)}
-            title={checkedInToday ? '今日已签到' : '签到管理'}
+            title={
+              checkinSupported !== true
+                ? '该供应商不支持签到'
+                : !checkinEnabled
+                  ? '点击配置签到'
+                  : checkedInToday
+                    ? '今日已签到'
+                    : '签到管理'
+            }
           >
             <CalendarCheck className="h-3 w-3 mr-1.5" />
-            {checkedInToday ? '已签' : '签到'}
+            {checkinEnabled ? (checkedInToday ? '已签' : '签到') : '签到'}
           </Button>
         )}
 

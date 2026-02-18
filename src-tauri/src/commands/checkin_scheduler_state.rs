@@ -2,7 +2,7 @@
 //
 // 签到调度器全局状态
 
-use crate::services::CheckinScheduler;
+use duckcoding::services::CheckinScheduler;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 

@@ -11,9 +11,16 @@ pub struct CheckinConfig {
     pub enabled: bool,
     /// 签到 API 端点
     pub endpoint: String,
-    /// 签到时间 (小时, 0-23)
-    #[serde(default = "default_checkin_hour")]
-    pub checkin_hour: u8,
+    /// 签到时间范围 - 开始小时 (0-23，默认 0)
+    #[serde(default)]
+    pub checkin_hour_start: u8,
+    /// 签到时间范围 - 结束小时 (0-23，默认 0)
+    /// start == end 或 start > end 时视为全天 (0-23)
+    #[serde(default)]
+    pub checkin_hour_end: u8,
+    /// 下次计划签到时间 (Unix timestamp)，由调度器生成随机时间
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_checkin_at: Option<i64>,
     /// 最后签到时间
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_checkin_at: Option<i64>,
@@ -31,8 +38,16 @@ pub struct CheckinConfig {
     pub total_quota: i64,
 }
 
-fn default_checkin_hour() -> u8 {
-    9 // 默认早上 9 点
+impl CheckinConfig {
+    /// 获取有效的签到时间范围 (start_hour, end_hour)
+    /// start < end 时返回实际范围，否则返回全天 (0, 23)
+    pub fn effective_range(&self) -> (u8, u8) {
+        if self.checkin_hour_start < self.checkin_hour_end {
+            (self.checkin_hour_start, self.checkin_hour_end)
+        } else {
+            (0, 23)
+        }
+    }
 }
 
 impl Default for CheckinConfig {
@@ -40,7 +55,9 @@ impl Default for CheckinConfig {
         Self {
             enabled: false,
             endpoint: "/api/user/checkin".to_string(),
-            checkin_hour: 9,
+            checkin_hour_start: 0,
+            checkin_hour_end: 0,
+            next_checkin_at: None,
             last_checkin_at: None,
             last_checkin_status: None,
             last_checkin_message: None,
@@ -106,6 +123,7 @@ impl Default for ProviderStore {
                 is_default: true,
                 created_at: now,
                 updated_at: now,
+                checkin_config: None,
             }],
             updated_at: now,
         }
@@ -139,6 +157,7 @@ mod tests {
             is_default: false,
             created_at: 1234567890,
             updated_at: 1234567890,
+            checkin_config: None,
         };
 
         let json = serde_json::to_string(&provider).unwrap();

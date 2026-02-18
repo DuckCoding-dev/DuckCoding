@@ -38,8 +38,12 @@ export interface CheckinConfig {
   enabled: boolean;
   /** 签到 API 端点（相对路径，如 "/api/user/checkin"） */
   endpoint: string;
-  /** 签到时间（小时，0-23，默认 9） */
-  checkin_hour?: number;
+  /** 签到时间范围 - 开始小时（0-23，默认 0） */
+  checkin_hour_start?: number;
+  /** 签到时间范围 - 结束小时（0-23，默认 0）；start==end 或 start>end 时为全天 */
+  checkin_hour_end?: number;
+  /** 下次计划签到时间（Unix timestamp），由后端调度器生成 */
+  next_checkin_at?: number;
   /** 最后签到时间（Unix timestamp） */
   last_checkin_at?: number;
   /** 最后签到状态 */

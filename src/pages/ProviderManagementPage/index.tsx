@@ -9,8 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Building2, Plus, Pencil, Trash2, Loader2, Coins } from 'lucide-react';
-import { useState } from 'react';
+import { Building2, Plus, Pencil, Trash2, Loader2, Coins, CalendarCheck } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Provider } from '@/lib/tauri-commands';
 import { useToast } from '@/hooks/use-toast';
 import { useProviderManagement } from './hooks/useProviderManagement';
@@ -20,6 +20,7 @@ import { TokenManagementTab } from './components/TokenManagementTab';
 import { ProviderCard } from './components/ProviderCard';
 import { ViewToggle, ViewMode } from '@/components/common/ViewToggle';
 import { CheckinDialog } from './components/CheckinDialog';
+import { hasProviderAuth, getCheckinStatus } from '@/services/checkin';
 
 /**
  * 供应商管理页面
@@ -40,6 +41,36 @@ export function ProviderManagementPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [checkinDialogOpen, setCheckinDialogOpen] = useState(false);
   const [checkinProvider, setCheckinProvider] = useState<Provider | null>(null);
+  // 记录各供应商签到支持状态: true=支持, false=不支持, undefined=未检测
+  const [checkinSupportMap, setCheckinSupportMap] = useState<Record<string, boolean>>({});
+
+  // 页面加载后，对有认证信息的供应商并行检测签到支持
+  const checkCheckinSupport = useCallback(async (providerList: Provider[]) => {
+    const authProviders = providerList.filter(hasProviderAuth);
+    if (authProviders.length === 0) return;
+
+    const results = await Promise.allSettled(
+      authProviders.map(async (p) => {
+        const result = await getCheckinStatus(p);
+        // 只有 API 明确返回 success: true 才视为支持签到
+        return { id: p.id, supported: result.success };
+      }),
+    );
+
+    const map: Record<string, boolean> = {};
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        map[r.value.id] = r.value.supported;
+      }
+    }
+    setCheckinSupportMap(map);
+  }, []);
+
+  useEffect(() => {
+    if (providers.length > 0) {
+      checkCheckinSupport(providers);
+    }
+  }, [providers, checkCheckinSupport]);
 
   /**
    * 打开新增对话框
@@ -209,7 +240,7 @@ export function ProviderManagementPage() {
                     }}
                     onViewTokens={handleViewTokens}
                     onCheckin={handleCheckin}
-                  />
+                    checkinSupported={checkinSupportMap[provider.id]}
                   />
                 ))}
               </div>
@@ -261,6 +292,15 @@ export function ProviderManagementPage() {
                             >
                               <Coins className="mr-2 h-4 w-4" />
                               查看令牌
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={checkinSupportMap[provider.id] !== true}
+                              onClick={() => handleCheckin(provider)}
+                            >
+                              <CalendarCheck className="mr-2 h-4 w-4" />
+                              签到
                             </Button>
                             <Button size="sm" variant="ghost" onClick={() => handleEdit(provider)}>
                               <Pencil className="h-4 w-4" />

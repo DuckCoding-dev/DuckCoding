@@ -349,6 +349,7 @@ mod tests {
             is_default: false,
             created_at: 0,
             updated_at: 0,
+            checkin_config: None,
         };
 
         let client = NewApiClient::new(provider);
@@ -368,6 +369,7 @@ mod tests {
             is_default: false,
             created_at: 0,
             updated_at: 0,
+            checkin_config: None,
         };
 
         let client = NewApiClient::new(provider).unwrap();

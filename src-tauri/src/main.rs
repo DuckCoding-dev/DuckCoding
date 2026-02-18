@@ -183,15 +183,17 @@ fn main() {
 
     // 初始化签到调度器
     let checkin_scheduler_state = {
-        use duckcoding::services::{CheckinScheduler, provider_manager::ProviderManager};
+        use duckcoding::services::{provider_manager::ProviderManager, CheckinScheduler};
         use std::sync::Arc;
         use tokio::sync::RwLock;
-        
-        let provider_manager = Arc::new(RwLock::new(ProviderManager::new().expect("初始化 ProviderManager 失败")));
+
+        let provider_manager = Arc::new(RwLock::new(
+            ProviderManager::new().expect("初始化 ProviderManager 失败"),
+        ));
         let scheduler = CheckinScheduler::new(provider_manager);
         CheckinSchedulerState::new(scheduler)
     };
-    
+
     // 启动签到调度器
     {
         let scheduler_clone = checkin_scheduler_state.scheduler.clone();

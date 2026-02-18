@@ -107,6 +107,7 @@ impl ProviderManager {
         provider.user_id = updated.user_id;
         provider.access_token = updated.access_token;
         provider.username = updated.username;
+        provider.checkin_config = updated.checkin_config;
         provider.updated_at = chrono::Utc::now().timestamp();
 
         let updated_at = provider.updated_at;
