@@ -1,10 +1,9 @@
-use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
+use tauri::{AppHandle, Emitter, Manager, Runtime, WebviewWindow};
 
 #[cfg(not(target_os = "macos"))]
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter,
 };
 
 /// 创建系统托盘菜单
@@ -88,32 +87,6 @@ pub fn restore_window_state<R: Runtime>(window: &WebviewWindow<R>) {
     }
 }
 
-/// 隐藏窗口到系统托盘
-#[cfg(not(target_os = "macos"))]
-pub fn hide_window_to_tray<R: Runtime>(window: &WebviewWindow<R>) {
-    tracing::info!("隐藏窗口到系统托盘");
-    if let Err(e) = window.hide() {
-        tracing::error!(error = ?e, "隐藏窗口失败");
-    }
-
-    #[cfg(target_os = "macos")]
-    #[allow(deprecated)]
-    {
-        use cocoa::appkit::NSApplication;
-        use cocoa::base::nil;
-        use cocoa::foundation::NSAutoreleasePool;
-
-        unsafe {
-            let _pool = NSAutoreleasePool::new(nil);
-            let app_macos = NSApplication::sharedApplication(nil);
-            app_macos.setActivationPolicy_(
-                cocoa::appkit::NSApplicationActivationPolicy::NSApplicationActivationPolicyAccessory,
-            );
-        }
-        tracing::debug!("macOS Dock 图标已隐藏");
-    }
-}
-
 /// 设置系统托盘（包含事件处理）
 #[cfg(not(target_os = "macos"))]
 pub fn setup_system_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
@@ -166,11 +139,9 @@ pub fn setup_system_tray<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_os = "macos"))]
 const CLOSE_CONFIRM_EVENT: &str = "duckcoding://request-close-action";
 
-/// 设置窗口关闭处理（最小化到托盘而不是退出）
-#[cfg(not(target_os = "macos"))]
+/// 设置窗口关闭处理（最小化到托盘而不是退出，跨平台）
 pub fn setup_window_close_handler<R: Runtime>(app: &tauri::App<R>) -> tauri::Result<()> {
     if let Some(window) = app.get_webview_window("main") {
         let window_clone = window.clone();
@@ -185,7 +156,7 @@ pub fn setup_window_close_handler<R: Runtime>(app: &tauri::App<R>) -> tauri::Res
                         error = ?err,
                         "发送关闭确认事件失败，降级为隐藏窗口"
                     );
-                    hide_window_to_tray(&window_clone);
+                    ::duckcoding::ui::hide_window_to_tray(&window_clone);
                 }
             }
         });
