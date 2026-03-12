@@ -1,51 +1,110 @@
 import { useEffect, useState } from 'react';
 import { Theme, ThemeContext } from './theme-context';
+import {
+  applyThemeToRoot,
+  createCustomPaletteUpdate,
+  resolveActivePalette,
+  resolveActualTheme,
+  ThemeTokens,
+} from './theme-palette';
+import {
+  readStoredPalette,
+  readStoredThemeMode,
+  readStoredThemePreset,
+  THEME_STORAGE_KEYS,
+} from './theme-storage';
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // 从 localStorage 读取主题设置，默认为 system
   const [theme, setThemeState] = useState<Theme>(() => {
-    const stored = localStorage.getItem('duckcoding-theme');
-    return (stored as Theme) || 'system';
+    return readStoredThemeMode((key) => localStorage.getItem(key));
   });
 
-  // 获取系统主题偏好
+  const [preset, setPresetState] = useState(() =>
+    readStoredThemePreset((key) => localStorage.getItem(key)),
+  );
+
+  const [customPalette, setCustomPalette] = useState(() =>
+    readStoredPalette((key) => localStorage.getItem(key)),
+  );
+
   const getSystemTheme = (): 'light' | 'dark' => {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   };
 
-  // 计算实际应用的主题
-  const actualTheme: 'light' | 'dark' = theme === 'system' ? getSystemTheme() : theme;
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => getSystemTheme());
 
-  // 设置主题
+  const actualTheme = resolveActualTheme(theme, systemTheme);
+  const palette = resolveActivePalette(preset, customPalette);
+
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
-    localStorage.setItem('duckcoding-theme', newTheme);
   };
 
-  // 应用主题到 DOM
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(actualTheme);
-  }, [actualTheme]);
+  const setPreset = (newPreset: typeof preset) => {
+    setPresetState(newPreset);
+  };
 
-  // 监听系统主题变化
-  useEffect(() => {
-    if (theme !== 'system') return;
+  const updatePaletteToken = (mode: 'light' | 'dark', token: keyof ThemeTokens, value: string) => {
+    const next = createCustomPaletteUpdate({
+      preset,
+      customPalette,
+      mode,
+      token,
+      value,
+    });
+    setPresetState(next.preset);
+    setCustomPalette(next.palette);
+  };
 
+  const resetPalette = () => {
+    setPresetState('default');
+    setCustomPalette(null);
+  };
+
+  useEffect(() => {
+    applyThemeToRoot(window.document.documentElement, actualTheme, palette[actualTheme]);
+  }, [actualTheme, palette]);
+
+  useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
-      const root = window.document.documentElement;
-      root.classList.remove('light', 'dark');
-      root.classList.add(getSystemTheme());
+      setSystemTheme(getSystemTheme());
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEYS.mode, theme);
   }, [theme]);
 
+  useEffect(() => {
+    localStorage.setItem(THEME_STORAGE_KEYS.preset, preset);
+  }, [preset]);
+
+  useEffect(() => {
+    if (customPalette) {
+      localStorage.setItem(THEME_STORAGE_KEYS.palette, JSON.stringify(customPalette));
+      return;
+    }
+    localStorage.removeItem(THEME_STORAGE_KEYS.palette);
+  }, [customPalette]);
+
   return (
-    <ThemeContext.Provider value={{ theme, actualTheme, setTheme }}>
+    <ThemeContext.Provider
+      value={{
+        theme,
+        actualTheme,
+        preset,
+        palette,
+        hasCustomPalette: customPalette !== null,
+        setTheme,
+        setPreset,
+        updatePaletteToken,
+        resetPalette,
+      }}
+    >
       {children}
     </ThemeContext.Provider>
   );

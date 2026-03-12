@@ -1,6 +1,6 @@
 ---
 agents: Codex, Claude-Code, Gemini-Cli
-last-updated: 2025-12-16
+last-updated: 2026-03-12
 ---
 
 # DuckCoding 开发协作规范
@@ -16,6 +16,7 @@ last-updated: 2025-12-16
 - `npm run tauri dev`：本地启动 Tauri 应用进行端到端手动验证。
 - `npm run tauri build`: 本地构建 Tauri 应用安装包。
 - `npm run test` / `npm run test:rs`：后端 Rust 单测（当前无前端测试，test 等同 test:rs）。
+- `npm run test:theme`：前端主题调色盘单测（Vitest），覆盖预设解析、localStorage 回读、CSS 变量映射、颜色转换和自定义调色盘升级逻辑。
 - `cargo test --locked`：Rust 单测执行器；缺乏覆盖时请补测试后再运行。
 - `npm run coverage:rs`：后端覆盖率检查（基于 cargo-llvm-cov，默认行覆盖阈值 90%，需先安装 llvm-tools-preview 与 cargo-llvm-cov，可运行 `npm run coverage:rs:setup` 自动安装依赖）。
 
@@ -331,6 +332,14 @@ last-updated: 2025-12-16
   - `AppContext` 统一管理全局状态（工具状态、配置、更新检查、导航等）
   - `App.tsx` 拆分为 `AppContent`、`AppEventsHandler`、`ConfigWatchHandler`、`UpdateManager`、`OnboardingManager`，引入 `MainLayout` 统一布局
   - 新增复用组件：`ViewToggle`、`BalanceTable`、`HelpDialog`、`ProfileTable`、`ProviderCard`、`TokenCard`、`ToolInstanceCard`
+- **侧边栏主题调色盘（2026-03-12）**：
+  - 主题系统拆分为两层状态：`theme mode`（`light | dark | system`）和 `theme preset`（`default | green | custom`）
+  - `ThemeProvider` 升级为主题管理器：除根节点 `light` / `dark` class 外，还会把活动调色盘写入 CSS 变量，状态持久化到 `localStorage`
+  - 新增存储键：`duckcoding-theme`、`duckcoding-theme-preset`、`duckcoding-theme-palette`
+  - 主题核心逻辑位于 `src/hooks/theme-palette.ts` 与 `src/hooks/theme-storage.ts`，支持内置绿色预设、HSL/Hex 转换、自定义调色盘继承当前预设后再编辑
+  - 侧边栏主题菜单（`AppSidebar`）新增两段式交互：显示模式切换 + 配色方案切换，并提供 `自定义主题...` Dialog 入口
+  - `ThemeCustomizerDialog` 在侧边栏内完成全部主题操作：默认、绿色、自定义切换，以及浅色 / 深色两套 token 的实时编辑和预览
+  - `MainLayout` 的背景渐变改为基于 `background` / `muted` / `accent` token，保证主题骨架能立刻跟随调色盘变化
 - **余额监控页面（BalancePage）**：
   - 后端提供通用 `fetch_api` 命令（位于 `commands/api_commands.rs`），支持 GET/POST、自定义 headers、超时控制
   - 前端使用 JavaScript `Function` 构造器执行用户自定义的 extractor 脚本（位于 `utils/extractor.ts`）

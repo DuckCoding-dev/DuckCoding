@@ -15,6 +15,7 @@ import {
   Monitor,
   Info,
   BarChart3,
+  Palette,
 } from 'lucide-react';
 import DuckLogo from '@/assets/duck-logo.png';
 import { useToast } from '@/hooks/use-toast';
@@ -24,10 +25,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { ThemeCustomizerDialog } from './ThemeCustomizerDialog';
 
 interface AppSidebarProps {
   activeTab: string;
@@ -78,7 +85,7 @@ export function AppSidebar({
   allowedPage,
 }: AppSidebarProps) {
   const { toast } = useToast();
-  const { actualTheme, setTheme } = useTheme();
+  const { actualTheme, preset, setPreset, setTheme, theme } = useTheme();
 
   // 用户是否手动操作过侧边栏（优先级高于自动折叠）
   const [userHasInteracted, setUserHasInteracted] = useState(() => {
@@ -93,6 +100,7 @@ export function AppSidebar({
     }
     return stored === 'true';
   });
+  const [isThemeDialogOpen, setIsThemeDialogOpen] = useState(false);
 
   // 持久化折叠状态
   useEffect(() => {
@@ -271,16 +279,36 @@ export function AppSidebar({
               <DropdownMenuContent
                 align="start"
                 side={isCollapsed ? 'right' : 'top'}
-                className="w-32"
+                className="w-52"
               >
-                <DropdownMenuItem onClick={() => setTheme('light')}>
-                  <Sun className="mr-2 h-3.5 w-3.5" /> 浅色
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('dark')}>
-                  <Moon className="mr-2 h-3.5 w-3.5" /> 深色
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('system')}>
-                  <Monitor className="mr-2 h-3.5 w-3.5" /> 系统
+                <DropdownMenuLabel>显示模式</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={theme}
+                  onValueChange={(value) => setTheme(value as typeof theme)}
+                >
+                  <DropdownMenuRadioItem value="light">
+                    <Sun className="mr-2 h-3.5 w-3.5" /> 浅色
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">
+                    <Moon className="mr-2 h-3.5 w-3.5" /> 深色
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="system">
+                    <Monitor className="mr-2 h-3.5 w-3.5" /> 系统
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>配色方案</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={preset === 'green' ? 'green' : 'default'}
+                  onValueChange={(value) => setPreset(value as 'default' | 'green')}
+                >
+                  <DropdownMenuRadioItem value="default">默认</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="green">绿色</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setIsThemeDialogOpen(true)}>
+                  <Palette className="mr-2 h-3.5 w-3.5" /> 自定义主题...
+                  {preset === 'custom' && <DropdownMenuShortcut>当前</DropdownMenuShortcut>}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -306,6 +334,8 @@ export function AppSidebar({
           </div>
         </div>
       </aside>
+
+      <ThemeCustomizerDialog open={isThemeDialogOpen} onOpenChange={setIsThemeDialogOpen} />
     </TooltipProvider>
   );
 }
